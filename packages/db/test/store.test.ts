@@ -105,7 +105,7 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-006, 008, and 010-012. 007 and 009 are reserved.
+      // 001-006, 008, 010-011, and 013. 012 is allocated to PR #17.
       expect(versions.versions).toBe(10);
     } finally {
       db.close();

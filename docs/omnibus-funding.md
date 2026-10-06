@@ -18,7 +18,10 @@ The ledger debits that business when it funds a deal.
 One business cannot spend another business's credit.
 
 `PaperOmnibusFunding` uses the shared `AgentStore` connection.
-Migration `012_paper_omnibus_funding.sql` adds pools, deposits, and allocations.
+Migration `013_paper_omnibus_funding.sql` adds pools, deposits, and allocations.
+Migration `012` is allocated to the contract lifecycle in pull request #17.
+The funding scaffold can merge before that pull request.
+The migration runner applies missing versions, including a lower version added later.
 The existing escrow adapter and lifecycle routes keep their current behavior.
 There is no funding HTTP route.
 
