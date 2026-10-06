@@ -12,7 +12,7 @@ The target state uses these rules.
 - Repeat transactions between the same pair have diminishing returns. That limit reduces repeated score gains from the same pair.
 - KYC verification is part of the marketplace.
 
-The KYC document arrives with [pull request #8](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/8).
+Read [mock KYC](docs/kyc.md) for the onboarding states and tier rules.
 
 Read the [MVP target state](docs/reliability-lanes.md#mvp-target-state) for the status of each rule.
 
@@ -36,13 +36,15 @@ Read [Reliability module boundaries](docs/reliability-modules.md) before extendi
 | `services/cardano-agents-ts` | Payment lifecycle, settlement worker, protocol evidence, simulated and preprod adapters, and offline fixture tests |
 | `services/score-provider.ts` | Mock third-party x402-protected fair-value API (1 ADA per call) |
 | `services/market-feed.ts` | Polls Polymarket and Kalshi every 30s in the background and serves the latest snapshot; refuses data older than 90s |
-| `ui` | Display-only operator desk: state/audit parsing in `model.js`, HTML in `render.js`, and shared display formatting in `format.js` |
+| `ui` | Local display-only reliability operator: transactions, receipts, buyer/seller scores, mock KYC, and listings. See [UI instructions](ui/README.md). |
 
 ## Reliability routes
 
 The control API serves these routes. The default port is 8787.
 
-The read routes serve seed fixtures. `GET /reliability/scores` calls the scoring stub. `GET /reliability/receipts` calls the scoring stub and the fee stub.
+The entity, listing, transaction, and receipt read routes serve seed fixtures.
+`GET /reliability/scores` combines stored states with fixtures and calls the scoring stub.
+`GET /reliability/receipts` calls the scoring stub and the fee stub.
 
 The lifecycle routes use the shared `AgentStore`. The lifecycle view calls the scoring stub, the pair-decay stub, and the fee stub.
 
@@ -68,7 +70,7 @@ The lifecycle routes use the shared `AgentStore`. The lifecycle view calls the s
 
 Read [Transaction lifecycle](docs/reliability-lifecycle.md) for the lifecycle actions.
 
-Lane C builds the operator UI against these routes. The operator UI sends no orders. The operator UI edits no policy.
+The operator UI reads these routes. It shows the current seed fixtures and labels scoring and fee stubs. It reads stored mock KYC and lifecycle views by ID. The operator UI sends no orders. The operator UI edits no policy.
 
 ## Marketplace status
 
@@ -90,8 +92,9 @@ Agent runtime for prediction-market strategies. See [PLAN.md](PLAN.md).
 
 The payment, workflow, and store entry points preserve their existing exports.
 Payment serialization stays in `PaymentRuntime`. SQLite query modules share the
-store's connection and transaction. The desk reads `GET /agent/state` and
-`GET /audit`. Its renderer receives a prepared view and sends no requests.
+store's connection and transaction. The reliability operator reads
+`GET /reliability/*`. It keeps the legacy state and audit read proxies.
+Its renderer receives a prepared view and sends no requests.
 
 ## Run
 
