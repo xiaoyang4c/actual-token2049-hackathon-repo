@@ -5,7 +5,7 @@ Read this file before you start a lane.
 ## Lanes
 
 - Math lane owns scoring and fees/terms. Files: `packages/reliability/src/scoring.ts`, `packages/reliability/src/pair-decay.ts`, `packages/reliability/src/fees-policy.ts`.
-- Lane A (agents) owns the generic transaction lifecycle, the escrow state machine, and mock KYC. Files: `packages/reliability/src/lifecycle.ts`, `packages/reliability/src/kyc.ts`. See [Lane A lifecycle](#lane-a-lifecycle).
+- Lane A (agents) owns the generic transaction lifecycle, the escrow state machine, and mock KYC. Files: `packages/reliability/src/lifecycle.ts`, `packages/reliability/src/kyc.ts`. See [Lane A lifecycle](#lane-a-lifecycle). Read `docs/kyc.md` for the mock KYC contract.
 - Lane C owns the UI. It builds against `GET /reliability/*` and the fixtures.
 - Lane D owns B2B payment evidence and demo fixtures. Files: `packages/reliability/src/evidence-payment.ts`, `packages/reliability/src/fixtures/`.
 

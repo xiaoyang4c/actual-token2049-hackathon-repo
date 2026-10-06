@@ -14,10 +14,13 @@ import * as agentBook from './agent-book';
 import * as cycleRecords from './cycle-records';
 import * as paymentReceipts from './payment-receipts';
 import * as paymentSettlements from './payment-settlements';
+import * as kycRecords from './kyc-records';
 import * as lifecycleRecords from './lifecycle-records';
 import * as reliabilityRecords from './reliability';
+import type {KycProfile, KycStatusRecord} from '../../reliability/src/kyc';
 import type {
-  Entity, EntityRole, JsonValue, MarketplaceTransaction, Outcome,
+  Entity, EntityRole, JsonValue, KycStatus, KycTier, MarketplaceTransaction,
+  Outcome,
   ReliabilityCategory, ReliabilityEvent, ReliabilityState, TermsDecision,
   TermsVersion,
 } from '../../reliability/src/types';
@@ -390,5 +393,50 @@ export class AgentStore {
     lifecycleRecords.setTransactionCompletedAt(
       this.db, transactionId, completedAt,
     );
+  }
+
+  /**
+   * KYC onboarding rows. Lane A mock KYC writes through these
+   * accessors. Reliability scores are not part of this section.
+   */
+
+  /** Updates the frozen KYC status and tier. Wallets and roles stay. */
+  updateEntityKyc(id: string, status: KycStatus, tier: KycTier): Entity {
+    return kycRecords.updateEntityKyc(this.db, id, status, tier);
+  }
+
+  /** Returns the entity that owns a wallet, or undefined. */
+  getWalletEntityId(wallet: string): string|undefined {
+    return kycRecords.getWalletEntityId(this.db, wallet);
+  }
+
+  /** Inserts or replaces the KYC profile for one entity. */
+  saveKycProfile(profile: KycProfile): KycProfile {
+    return kycRecords.saveKycProfile(this.db, profile);
+  }
+
+  /** Returns the profile, or undefined when the entity has none. */
+  getKycProfile(entityId: string): KycProfile|undefined {
+    return kycRecords.getKycProfile(this.db, entityId);
+  }
+
+  /** Profiles whose mocked document matches, ordered by entity id. */
+  listKycProfilesByDocument(documentId: string): KycProfile[] {
+    return kycRecords.listKycProfilesByDocument(this.db, documentId);
+  }
+
+  /** Profiles with this registration number, ordered by entity id. */
+  listKycProfilesByRegistration(registrationNumber: string): KycProfile[] {
+    return kycRecords.listKycProfilesByRegistration(this.db, registrationNumber);
+  }
+
+  /** Appends one status record. Ids are unique. */
+  insertKycStatusRecord(record: KycStatusRecord): void {
+    kycRecords.insertKycStatusRecord(this.db, record);
+  }
+
+  /** Status records for one entity, oldest first. */
+  listKycStatusRecords(entityId: string): KycStatusRecord[] {
+    return kycRecords.listKycStatusRecords(this.db, entityId);
   }
 }

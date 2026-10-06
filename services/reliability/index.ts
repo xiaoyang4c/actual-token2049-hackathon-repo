@@ -5,6 +5,7 @@
  * without changing existing behavior.
  */
 
+import {laneAKycRoutes} from './routes-lane-a-kyc';
 import {laneARoutes} from './routes-lane-a';
 import {plumbingRoutes, type ReliabilityRoute} from './routes-plumbing';
 
@@ -17,4 +18,5 @@ export type {ReliabilityRoute};
 export const reliabilityRoutes: ReliabilityRoute[] = [
   ...plumbingRoutes,
   ...laneARoutes,
+  ...laneAKycRoutes,
 ];

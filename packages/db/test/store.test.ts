@@ -80,6 +80,8 @@ describe('AgentStore', () => {
         'position_events',
         'reliability_entities',
         'reliability_events',
+        'reliability_kyc_profiles',
+        'reliability_kyc_status_records',
         'reliability_lifecycle_transitions',
         'reliability_outcomes',
         'reliability_state',
@@ -99,7 +101,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      expect(versions.versions).toBe(8);
+      // 001-006, 008, 010, and 011. 007 and 009 are reserved.
+      expect(versions.versions).toBe(9);
     } finally {
       db.close();
     }
