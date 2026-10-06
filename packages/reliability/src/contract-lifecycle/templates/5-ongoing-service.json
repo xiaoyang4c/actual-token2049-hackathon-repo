@@ -1,0 +1,37 @@
+{
+  "id": "ongoing-service",
+  "version": 1,
+  "category": "ongoing_service",
+  "transactionType": "service",
+  "status": "design_only",
+  "description": "Ongoing service billed per period, with one milestone per period. Evidence: SLA metrics. Judge: signed monitoring data.",
+  "deliverableSpecSchema": {
+    "type": "object",
+    "required": ["slaSpecSha256", "periodStart", "periodEnd"],
+    "properties": {
+      "slaSpecSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "periodStart": {"type": "string"},
+      "periodEnd": {"type": "string"}
+    }
+  },
+  "delivery": {"requiredEvidence": [{"type": "sla_report", "min": 1, "signedBy": "whitelisted_inspector"}]},
+  "dispute": {"buyerEvidence": [{"type": "sla_report", "min": 0, "signedBy": "whitelisted_inspector"}, {"type": "note", "min": 0}], "tiers": [2, 3], "tier3TimeoutWinner": "seller"},
+  "judge": {"type": "monitoring", "signer": "named_monitor", "reportEvidenceType": "sla_report"},
+  "windows": {
+    "fundingWindowMs": 86400000,
+    "deliveryWindowMs": 2678400000,
+    "inspectionWindowMs": 259200000,
+    "disputeResolutionWindowMs": 1209600000,
+    "tier1WindowMs": 172800000,
+    "tier2WindowMs": 172800000,
+    "tier3WindowMs": 259200000,
+    "returnWindowMs": 604800000,
+    "redoWindowMs": 604800000,
+    "redoInspectionWindowMs": 259200000,
+    "rulingComplianceWindowMs": 172800000
+  },
+  "remedy": {"default": {"type": "partial_release", "sellerShareBps": 8000}, "allowed": ["partial_release"]},
+  "fees": {"rule": "loser_pays", "perTierAtomic": {"tier1": "0", "tier2": "0", "tier3": "2000000"}},
+  "milestones": {"fundingSchedule": "sequential", "maxMilestones": 24},
+  "notes": {"status": "Draft. monitoring is signed_report with a monitor key. Enable it after the SLA verdict format exists. tier3TimeoutWinner is seller because the service ran unless monitoring proves otherwise. The team must confirm."}
+}

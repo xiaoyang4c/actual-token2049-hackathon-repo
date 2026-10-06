@@ -1,0 +1,63 @@
+{
+  "id": "physical-objective-spec",
+  "version": 1,
+  "category": "physical_objective_spec",
+  "transactionType": "goods",
+  "status": "enabled",
+  "description": "Physical goods with an objective specification, such as commodities or electronics. Evidence: inspection and lab reports signed by a pre-agreed inspector, dispatch photos, and a seal id. Judge: the named inspector.",
+  "deliverableSpecSchema": {
+    "type": "object",
+    "required": ["specDocumentSha256", "description", "quantity", "unit"],
+    "additionalProperties": false,
+    "properties": {
+      "specDocumentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "description": {"type": "string"},
+      "quantity": {"type": "number", "minimum": 0},
+      "unit": {"type": "string"},
+      "grade": {"type": "string"},
+      "incoterm": {"type": "string"}
+    }
+  },
+  "delivery": {
+    "requiredEvidence": [
+      {"type": "inspection_certificate", "min": 1, "signedBy": "whitelisted_inspector"},
+      {"type": "dispatch_photo", "min": 1},
+      {"type": "seal_id", "min": 1, "max": 1}
+    ]
+  },
+  "dispute": {
+    "buyerEvidence": [
+      {"type": "lab_report", "min": 0, "signedBy": "whitelisted_inspector"},
+      {"type": "arrival_photo", "min": 0},
+      {"type": "note", "min": 0}
+    ],
+    "tiers": [1, 2, 3],
+    "tier3TimeoutWinner": "buyer"
+  },
+  "judge": {"type": "signed_report", "signer": "named_inspector", "reportEvidenceType": "lab_report"},
+  "windows": {
+    "fundingWindowMs": 172800000,
+    "deliveryWindowMs": 1814400000,
+    "inspectionWindowMs": 259200000,
+    "disputeResolutionWindowMs": 2592000000,
+    "tier1WindowMs": 172800000,
+    "tier2WindowMs": 432000000,
+    "tier3WindowMs": 259200000,
+    "returnWindowMs": 1209600000,
+    "redoWindowMs": 1209600000,
+    "redoInspectionWindowMs": 259200000,
+    "rulingComplianceWindowMs": 172800000
+  },
+  "remedy": {
+    "default": {"type": "partial_release", "sellerShareBps": 7000},
+    "allowed": ["partial_release", "full_refund_with_return", "full_refund_no_return", "redo_or_replace"]
+  },
+  "fees": {"rule": "loser_pays", "perTierAtomic": {"tier1": "0", "tier2": "0", "tier3": "5000000"}},
+  "milestones": {"fundingSchedule": "sequential", "maxMilestones": 10},
+  "notes": {
+    "windows": "Funding 48 h, delivery 21 d for shipping, inspection 72 h after arrival. Tier 1 48 h, Tier 2 lab report 5 d, Tier 3 72 h, return 14 d. The 30 d dispute window covers the worst case.",
+    "remedy": "Default: off-spec goods pay 70 percent. The 30 percent holdback goes back to the buyer. Two escrows, because a Masumi escrow releases all or nothing.",
+    "judge": "The contract names one whitelisted inspector as the judge. At Tier 2, a lab_report signed by that inspector and bound to this contract and milestone decides. FAIL: the buyer wins. PASS: the seller wins. Conflicting or missing reports go to Tier 3.",
+    "fees": "Tiers 1 and 2 are free. The party that orders the lab pays the lab outside escrow. Tier 3 costs 5 test USDM. The loser pays."
+  }
+}
