@@ -78,6 +78,14 @@ describe('AgentStore', () => {
         'payment_settlements',
         'policy',
         'position_events',
+        'reliability_entities',
+        'reliability_events',
+        'reliability_outcomes',
+        'reliability_state',
+        'reliability_terms_decisions',
+        'reliability_terms_versions',
+        'reliability_transactions',
+        'reliability_wallets',
         'runs',
         'schema_migrations',
       ]);
@@ -90,7 +98,7 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      expect(versions.versions).toBe(5);
+      expect(versions.versions).toBe(6);
     } finally {
       db.close();
     }

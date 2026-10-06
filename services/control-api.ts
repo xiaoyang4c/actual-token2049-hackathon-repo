@@ -7,6 +7,7 @@ import { AgentRequestError, createAgentRuntime, type AgentRuntimeOptions } from 
 import kalshiFixture from "./fixtures/kalshi-events.json"
 import polymarketFixture from "./fixtures/polymarket-markets.json"
 import { json, readJson, serve, type Handler } from "./lib/http"
+import { reliabilityRoutes } from "./reliability/index"
 
 const AUDIT_FILE = new URL("./.data/audit.jsonl", import.meta.url)
 type AuditMode = "paper" | "live"
@@ -141,6 +142,13 @@ export function start(port: number, options: ControlOptions = {}) {
       // Offline stand-ins for the venue read APIs.
       "GET /fixtures/polymarket/markets": () => json(polymarketFixture),
       "GET /fixtures/kalshi/events": () => json(kalshiFixture),
+
+      // Reliability marketplace reads (plumbing for the UI lane). Each
+      // lane registers its own routes through services/reliability. The
+      // trading routes above stay unchanged.
+      ...Object.fromEntries(
+        reliabilityRoutes.map((route) => [`${route.method} ${route.path}`, route.handler]),
+      ),
     })
     return {
       port: server.port!,

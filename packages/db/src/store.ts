@@ -14,6 +14,11 @@ import * as agentBook from './agent-book';
 import * as cycleRecords from './cycle-records';
 import * as paymentReceipts from './payment-receipts';
 import * as paymentSettlements from './payment-settlements';
+import * as reliabilityRecords from './reliability';
+import type {
+  Entity, EntityRole, MarketplaceTransaction, Outcome, ReliabilityCategory,
+  ReliabilityEvent, ReliabilityState, TermsDecision, TermsVersion,
+} from '../../reliability/src/types';
 import type {
   PaymentSettlementRecord, SettlementObservationInput, SettlementObservationRecord,
   SettlementStatus,
@@ -236,5 +241,113 @@ export class AgentStore {
     return paymentSettlements.getLastVerifiedPaymentSettlementObservation(
       this.db, receiptId, status,
     );
+  }
+
+  /**
+   * Reliability marketplace tables. Listings stay fixtures only; the
+   * store keeps entities, transactions, outcomes, events, states, and
+   * terms decisions. Lane D owns the fixtures.
+   */
+
+  /** Inserts an entity and its wallets. Wallets must be new. */
+  insertEntity(record: Entity): Entity {
+    return reliabilityRecords.insertEntity(this.db, record);
+  }
+
+  /** Returns the entity, or undefined when `id` is absent. */
+  getEntity(id: string): Entity|undefined {
+    return reliabilityRecords.getEntity(this.db, id);
+  }
+
+  /** Lists entities in id order. */
+  listEntities(): Entity[] {
+    return reliabilityRecords.listEntities(this.db);
+  }
+
+  /** Links one wallet to an entity. */
+  addWallet(entityId: string, wallet: string, addedAt: string): void {
+    reliabilityRecords.addWallet(this.db, entityId, wallet, addedAt);
+  }
+
+  /** Inserts a transaction with its first terms version. */
+  insertTransaction(record: MarketplaceTransaction): MarketplaceTransaction {
+    return reliabilityRecords.insertTransaction(this.db, record);
+  }
+
+  /** Returns the transaction with versions, or undefined when absent. */
+  getTransaction(id: string): MarketplaceTransaction|undefined {
+    return reliabilityRecords.getTransaction(this.db, id);
+  }
+
+  /** Lists transactions with versions in id order. */
+  listTransactions(): MarketplaceTransaction[] {
+    return reliabilityRecords.listTransactions(this.db);
+  }
+
+  /** Appends one terms version. Terms never change without a version. */
+  insertTermsVersion(transactionId: string, version: TermsVersion): void {
+    reliabilityRecords.insertTermsVersion(this.db, transactionId, version);
+  }
+
+  /** Stores the outcome of a transaction. One outcome per transaction. */
+  saveOutcome(record: Outcome): Outcome {
+    return reliabilityRecords.saveOutcome(this.db, record);
+  }
+
+  /** Returns the outcome, or undefined when the transaction has none. */
+  getOutcome(transactionId: string): Outcome|undefined {
+    return reliabilityRecords.getOutcome(this.db, transactionId);
+  }
+
+  /** Inserts one reliability event. Event ids are unique. */
+  insertReliabilityEvent(record: ReliabilityEvent): void {
+    reliabilityRecords.insertReliabilityEvent(this.db, record);
+  }
+
+  /** Lists events of one transaction in id order. */
+  listReliabilityEventsForTransaction(transactionId: string): ReliabilityEvent[] {
+    return reliabilityRecords.listReliabilityEventsForTransaction(
+      this.db, transactionId,
+    );
+  }
+
+  /** Lists events of one entity, category, and role in id order. */
+  listReliabilityEventsForState(
+    entityId: string, category: ReliabilityCategory, role: EntityRole,
+  ): ReliabilityEvent[] {
+    return reliabilityRecords.listReliabilityEventsForState(
+      this.db, entityId, category, role,
+    );
+  }
+
+  /** Stores one per-role posterior. Replaces the previous triple. */
+  saveReliabilityState(record: ReliabilityState): ReliabilityState {
+    return reliabilityRecords.saveReliabilityState(this.db, record);
+  }
+
+  /** Returns one posterior, or undefined when the triple is absent. */
+  getReliabilityState(
+    entityId: string, category: ReliabilityCategory, role: EntityRole,
+  ): ReliabilityState|undefined {
+    return reliabilityRecords.getReliabilityState(
+      this.db, entityId, category, role,
+    );
+  }
+
+  /** Lists posteriors in entity, category, and role order. */
+  listReliabilityStates(): ReliabilityState[] {
+    return reliabilityRecords.listReliabilityStates(this.db);
+  }
+
+  /** Inserts one terms and fee decision and returns its row id. */
+  insertTermsDecision(record: TermsDecision): number {
+    return reliabilityRecords.insertTermsDecision(this.db, record);
+  }
+
+  /** Lists decisions for one entity and category, oldest first. */
+  listTermsDecisions(
+    entityId: string, category: ReliabilityCategory,
+  ): TermsDecision[] {
+    return reliabilityRecords.listTermsDecisions(this.db, entityId, category);
   }
 }
