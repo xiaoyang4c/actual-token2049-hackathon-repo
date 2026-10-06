@@ -83,9 +83,19 @@ A new wallet does not inherit reliability.
 
 A new entity does not inherit reliability.
 
-The same mocked document sets a re-registration flag. The same registration number sets the same kind of flag.
+A shared mocked identifier sets a re-registration flag. The `signal` field names the shared identifier:
 
-The new entity is stored with that flag. The flag stays on later status changes.
+- `document`: two persons have the same identity document.
+- `registration_number`: two businesses have the same registration number.
+- `beneficial_owner`: two businesses have the same beneficial owner document.
+
+A person document never matches a beneficial owner document. A person who owns a company is not a re-registration of that company.
+
+The provider keeps every identifier that an entity submits. A changed document still matches the earlier one.
+
+The entity created first is the original. Every other entity in the match is flagged as a re-registration of the original. This can flag an entity that registered before the current call.
+
+The flag stays on later status changes.
 
 Keep the reliability rows of the earlier entity. Leave the new entity with no reliability rows.
 
@@ -112,6 +122,7 @@ Use these fields as decision inputs:
 - `badge`
 - `countsAsVerified`
 - `reRegistrationOf`
+- `reRegistrationSignal`
 - `rulesVersion`
 
 `fetchStatus` returns the frozen status and tier only. After expiry, `fetchStatus` returns `unverified` and `none`. The badge on `policyInput` is `expired`.
@@ -120,7 +131,9 @@ Use these fields as decision inputs:
 
 Do not copy reliability from `reRegistrationOf`.
 
-Pass `kycTier` to the existing terms input. Put `badge`, `countsAsVerified`, and `reRegistrationOf` in the decision `inputs` when you implement the fee curve.
+Pass `kycTier` to the existing terms input. Put `badge`, `countsAsVerified`, `reRegistrationOf`, and `reRegistrationSignal` in the decision `inputs` when you implement the fee curve.
+
+A `beneficial_owner` match means the same owner. It does not prove the same business. Decide its weight separately from `document` and `registration_number`.
 
 ## UI lane
 

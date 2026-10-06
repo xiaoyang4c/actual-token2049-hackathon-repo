@@ -111,13 +111,23 @@ export interface KycProfile {
   updatedAt: string;
 }
 
-export type KycReRegistrationSignal = 'document'|'registration_number';
+/**
+ * What two entities share. `document` is a person identity document.
+ * `registration_number` is a business registration number.
+ * `beneficial_owner` is a business beneficial owner document. A person
+ * document never matches a beneficial owner document.
+ */
+export type KycReRegistrationSignal =
+  'document'|'registration_number'|'beneficial_owner';
 
 export const KYC_RE_REGISTRATION_SIGNALS: readonly KycReRegistrationSignal[] = [
-  'document', 'registration_number',
+  'document', 'registration_number', 'beneficial_owner',
 ];
 
-/** Same mocked document or registration number. Not a wallet match. */
+/**
+ * Same mocked identifier as an entity created earlier. Not a wallet
+ * match.
+ */
 export interface KycReRegistration {
   ofEntityId: string;
   signal: KycReRegistrationSignal;
@@ -135,6 +145,7 @@ export interface KycPolicyInput {
   badge: KycBadge;
   countsAsVerified: boolean;
   reRegistrationOf: string|null;
+  reRegistrationSignal: KycReRegistrationSignal|null;
   rulesVersion: string;
 }
 
@@ -168,8 +179,15 @@ export interface KycRecordStore {
   getWalletEntityId(wallet: string): string|undefined;
   saveKycProfile(profile: KycProfile): KycProfile;
   getKycProfile(entityId: string): KycProfile|undefined;
-  listKycProfilesByDocument(documentId: string): KycProfile[];
-  listKycProfilesByRegistration(registrationNumber: string): KycProfile[];
+  recordKycIdentifier(
+    entityId: string,
+    signal: KycReRegistrationSignal,
+    value: string,
+    at: string,
+  ): void;
+  listKycIdentifierEntityIds(
+    signal: KycReRegistrationSignal, value: string,
+  ): string[];
   insertKycStatusRecord(record: KycStatusRecord): void;
   listKycStatusRecords(entityId: string): KycStatusRecord[];
 }
@@ -277,8 +295,8 @@ export class MockKycProvider implements KycProvider {
         roles,
         createdAt: at,
       });
-      const profile = this.withFlag(
-        store, blankProfile(entity.id, input, at, this.rules.version),
+      const profile = this.flagReRegistrations(
+        store, blankProfile(entity.id, input, at, this.rules.version), at,
       );
       store.saveKycProfile(profile);
       this.append(store, entity.id, profile, {
@@ -341,7 +359,7 @@ export class MockKycProvider implements KycProvider {
         );
       }
       const verified = entity.kycStatus === 'verified';
-      const profile = this.withFlag(store, {
+      const profile = this.flagReRegistrations(store, {
         ...submittedProfile(entityId, input),
         reRegistrationOf: current?.reRegistrationOf,
         reRegistrationSignal: current?.reRegistrationSignal,
@@ -350,7 +368,7 @@ export class MockKycProvider implements KycProvider {
         verifiedAt: verified ? current?.verifiedAt : undefined,
         pendingSince: at,
         updatedAt: at,
-      });
+      }, at);
       const status = verified ? 'verified' : 'pending';
       return this.finish(store, entityId, profile, {
         status,
@@ -555,6 +573,7 @@ export class MockKycProvider implements KycProvider {
       badge,
       countsAsVerified: verified,
       reRegistrationOf: reRegistration?.ofEntityId ?? null,
+      reRegistrationSignal: reRegistration?.signal ?? null,
       rulesVersion: this.rules.version,
     };
     return {
@@ -575,20 +594,44 @@ export class MockKycProvider implements KycProvider {
   }
 
   /**
-   * Flags the same mocked document or registration number.
-   * Does not read wallets and does not copy reliability.
-   * Keeps an existing flag.
+   * Records the profile identifiers and flags re-registrations.
+   * Matches use every identifier an entity has submitted, not only
+   * the current ones. In each match group the entity created first is
+   * the original. Each other entity in the group is flagged as a
+   * re-registration of it, which can flag an entity created earlier
+   * than this one. Returns the profile with its own flag. Does not
+   * read wallets and does not copy reliability. Keeps an existing flag.
    */
-  private withFlag(store: KycRecordStore, profile: KycProfile): KycProfile {
-    if (profile.reRegistrationOf !== undefined) return profile;
-    const flag = detectReRegistration(store, profile);
-    if (!flag) return profile;
-    return {
-      ...profile,
-      reRegistrationOf: flag.ofEntityId,
-      reRegistrationSignal: flag.signal,
-      reRegistrationValue: flag.matchedValue,
-    };
+  private flagReRegistrations(
+    store: KycRecordStore, profile: KycProfile, at: string,
+  ): KycProfile {
+    let current = profile;
+    for (const [signal, value] of identifiersOf(profile)) {
+      store.recordKycIdentifier(profile.entityId, signal, value, at);
+      const members = store.listKycIdentifierEntityIds(signal, value);
+      const original = earliestEntity(store, members);
+      if (original === undefined) continue;
+      for (const memberId of members) {
+        if (memberId === original) continue;
+        const flag = {
+          reRegistrationOf: original,
+          reRegistrationSignal: signal,
+          reRegistrationValue: value,
+        };
+        if (memberId === current.entityId) {
+          if (current.reRegistrationOf === undefined) {
+            current = {...current, ...flag};
+          }
+          continue;
+        }
+        const other = store.getKycProfile(memberId);
+        if (other === undefined || other.reRegistrationOf !== undefined) {
+          continue;
+        }
+        store.saveKycProfile({...other, ...flag, updatedAt: at});
+      }
+    }
+    return current;
   }
 
   private requireStore(): KycRecordStore {
@@ -716,43 +759,49 @@ function blankProfile(
   return profile;
 }
 
-function detectReRegistration(
-  store: KycRecordStore, profile: KycProfile,
-): KycReRegistration|undefined {
-  const document = firstOther(
-    store, profile.entityId, profile.documentId, 'document',
-  );
-  if (document) return document;
-  const ownerDocument = firstOther(
-    store, profile.entityId, profile.beneficialOwnerDocumentId, 'document',
-  );
-  if (ownerDocument) return ownerDocument;
-  if (profile.registrationNumber === undefined) return undefined;
-  const matches = store.listKycProfilesByRegistration(
-    profile.registrationNumber,
-  )
-    .filter((row) => row.entityId !== profile.entityId);
-  const match = matches[0];
-  if (!match) return undefined;
-  return {
-    ofEntityId: match.entityId,
-    signal: 'registration_number',
-    matchedValue: profile.registrationNumber,
-  };
+/**
+ * Identifiers that can match another entity, strongest first. A
+ * person matches on the identity document. A business matches on the
+ * registration number, then on the beneficial owner document.
+ */
+function identifiersOf(
+  profile: KycProfile,
+): Array<[KycReRegistrationSignal, string]> {
+  const out: Array<[KycReRegistrationSignal, string]> = [];
+  if (profile.subjectKind === 'person') {
+    if (profile.documentId !== undefined) {
+      out.push(['document', profile.documentId]);
+    }
+    return out;
+  }
+  if (profile.registrationNumber !== undefined) {
+    out.push(['registration_number', profile.registrationNumber]);
+  }
+  if (profile.beneficialOwnerDocumentId !== undefined) {
+    out.push(['beneficial_owner', profile.beneficialOwnerDocumentId]);
+  }
+  return out;
 }
 
-function firstOther(
-  store: KycRecordStore,
-  entityId: string,
-  documentId: string|undefined,
-  signal: 'document',
-): KycReRegistration|undefined {
-  if (documentId === undefined) return undefined;
-  const matches = store.listKycProfilesByDocument(documentId)
-    .filter((row) => row.entityId !== entityId);
-  const match = matches[0];
-  if (!match) return undefined;
-  return {ofEntityId: match.entityId, signal, matchedValue: documentId};
+/**
+ * The entity created first. The ids arrive sorted, so a tie keeps the
+ * smaller id.
+ */
+function earliestEntity(
+  store: KycRecordStore, entityIds: readonly string[],
+): string|undefined {
+  let earliest: Entity|undefined;
+  for (const id of entityIds) {
+    const entity = store.getEntity(id);
+    if (entity === undefined) continue;
+    if (
+      earliest === undefined ||
+      Date.parse(entity.createdAt) < Date.parse(earliest.createdAt)
+    ) {
+      earliest = entity;
+    }
+  }
+  return earliest?.id;
 }
 
 function reRegistrationOf(profile: KycProfile): KycReRegistration|null {

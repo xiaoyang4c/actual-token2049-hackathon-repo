@@ -1,4 +1,4 @@
--- Lane A mock KYC onboarding: profiles and status history.
+-- Lane A mock KYC onboarding: profiles, identifiers, and status history.
 -- The lifecycle tables are in 011_lane_a_lifecycle.sql.
 
 CREATE TABLE reliability_kyc_profiles (
@@ -11,7 +11,9 @@ CREATE TABLE reliability_kyc_profiles (
   re_registration_of TEXT REFERENCES reliability_entities (id),
   re_registration_signal TEXT CHECK (
     re_registration_signal IS NULL OR
-    re_registration_signal IN ('document', 'registration_number')
+    re_registration_signal IN (
+      'document', 'registration_number', 'beneficial_owner'
+    )
   ),
   re_registration_value TEXT,
   rules_version TEXT NOT NULL,
@@ -32,14 +34,18 @@ CREATE TABLE reliability_kyc_profiles (
   )
 );
 
-CREATE INDEX reliability_kyc_profiles_by_document
-  ON reliability_kyc_profiles (document_id);
-
-CREATE INDEX reliability_kyc_profiles_by_registration
-  ON reliability_kyc_profiles (registration_number);
-
-CREATE INDEX reliability_kyc_profiles_by_beneficial_owner
-  ON reliability_kyc_profiles (beneficial_owner_document_id);
+-- Every mocked identifier that an entity has submitted. A later
+-- submission replaces the profile values, so re-registration checks
+-- read this table instead.
+CREATE TABLE reliability_kyc_identifiers (
+  signal TEXT NOT NULL CHECK (
+    signal IN ('document', 'registration_number', 'beneficial_owner')
+  ),
+  value TEXT NOT NULL,
+  entity_id TEXT NOT NULL REFERENCES reliability_entities (id),
+  first_seen_at TEXT NOT NULL,
+  PRIMARY KEY (signal, value, entity_id)
+);
 
 CREATE TABLE reliability_kyc_status_records (
   id TEXT PRIMARY KEY,
