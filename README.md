@@ -20,6 +20,8 @@ Read [Reliability marketplace: lane ownership](docs/reliability-lanes.md).
 
 Read [Transaction lifecycle](docs/reliability-lifecycle.md).
 
+Read [Reliability module boundaries](docs/reliability-modules.md) before extending a lane.
+
 ## Layout
 
 | Path | What |
@@ -29,7 +31,7 @@ Read [Transaction lifecycle](docs/reliability-lifecycle.md).
 | `packages/reliability` | Domain package for the transaction reliability marketplace. It holds frozen types, lane seams, and stubs. |
 | `cre/agent-loop` | Chainlink CRE workflow: config/schema, HTTP steps, and one cron-triggered cycle (state → markets per enabled venue → x402 pay → score → strategy → policy → orders → audit) |
 | `services/control-api.ts` | Control API: durable policy/portfolio, paper executor, audit log, offline Polymarket and Kalshi fixtures |
-| `services/reliability` | Reliability read routes, lifecycle routes, the seed helper, and the Masumi escrow port. The control API registers these routes. |
+| `services/reliability` | Reliability routes, HTTP parsing, lifecycle service, policy composition, seed helper, and Masumi escrow port. The control API registers these routes. |
 | `services/cardano-agent.ts` | Offline-first payment service with Cardano/Masumi adapters, score receipts, and durable settlement reconciliation |
 | `services/cardano-agents-ts` | Payment lifecycle, settlement worker, protocol evidence, simulated and preprod adapters, and offline fixture tests |
 | `services/score-provider.ts` | Mock third-party x402-protected fair-value API (1 ADA per call) |

@@ -1,217 +1,40 @@
 /**
- * @fileoverview Transaction lifecycle and paper escrow state machine.
- *
- * A sale moves from offer accepted to escrow funded, delivery confirmed,
- * and payment settled. Cancel, refund, and dispute are side paths.
- * Pending is not successful. Disputed is not a final failure.
- *
- * A successful outcome has no fault. A resolver refund sets fault to
- * seller. A buyer-caused failure sets fault to buyer. A mutual end sets
- * fault to none.
- *
- * Delivery evidence has three tiers, strongest first: carrier proof,
- * buyer confirmation, and silent release after the dispute window.
- * A self-reported claim stays pending and cannot settle escrow.
- *
- * An open dispute names a resolver and a deadline. After that deadline
- * the outcome is unresolved and the paper escrow stays held.
- *
- * Terms are copied at creation. A later change appends a version.
- * Escrow funding, release, and refund call the escrow port. The port
- * must be simulated. This file does not broadcast a live order.
+ * @fileoverview Coordinates transaction stages, escrow actions, and persistence.
+ * Contracts, stored-value codecs, escrow evidence, and outcome projection
+ * live in lifecycle/. Public imports from this module remain available.
  */
 
 import {createHash} from 'node:crypto';
-import type {
-  EscrowFundRequest, EscrowPort, EscrowSession,
-} from './escrow-port';
+import type {EscrowFundRequest, EscrowPort, EscrowSession} from './escrow-port';
 import type {
   JsonValue, MarketplaceTransaction, Outcome, OutcomeState, TermsVersion,
-  TransactionType, VerificationMethod,
+  TransactionType,
 } from './types';
+import {
+  assertEvidence, assertJson, contractEnd, copyTerms, copyTransition,
+  parseEvidenceJson, parseStage, parseTime, readTier,
+} from './lifecycle/codecs';
+import {
+  LIFECYCLE_NEXT_STAGES, LIFECYCLE_VERSION, LifecycleError,
+  type DeliveryTier, type DisputeDecision, type FundEscrowInput,
+  type LifecycleStage, type LifecycleStore, type LifecycleTransition,
+  type OpenDisputeInput, type OpenTransactionInput, type RefundEscrowInput,
+  type ReleaseEscrowInput, type ResolveDisputeInput, type TransactionLifecycle,
+} from './lifecycle/contracts';
+import {sessionEvidence, sessionFromEvidence} from './lifecycle/escrow-evidence';
+import {disputeRecord, findStage, projectLifecycleOutcome} from './lifecycle/outcome';
 
-export const LIFECYCLE_VERSION = 'lifecycle-v1';
-
-/** Resolver review confidence. A named resolver is not a self-report. */
-export const RESOLVER_CONFIDENCE = 0.85;
-
-/** Confidence for a paper refund request with no fault finding. */
-export const VOLUNTARY_REFUND_CONFIDENCE = 0.9;
-
-const CANCEL_CONFIDENCE = 1;
-const TIMEOUT_CONFIDENCE = 1;
-
-/** Delivery tiers. The first three can settle. Self-report cannot. */
-export const DELIVERY_TIERS = [
-  'carrier_proof', 'buyer_confirmation', 'silent_release', 'self_report',
-] as const;
-
-export type DeliveryTier = typeof DELIVERY_TIERS[number];
-
-export type DisputeDecision = 'uphold_seller'|'uphold_buyer';
-
-/**
- * Verification for each delivery tier.
- * Carrier proof is strongest. Silent release is the weakest success.
- * Self-report is unverified and must not settle.
- */
-export const DELIVERY_TIER_VERIFICATION: Record<DeliveryTier, {
-  method: VerificationMethod;
-  confidence: number;
-}> = {
-  carrier_proof: {method: 'lifecycle', confidence: 0.95},
-  buyer_confirmation: {method: 'lifecycle', confidence: 0.7},
-  silent_release: {method: 'lifecycle', confidence: 0.4},
-  self_report: {method: 'unverified', confidence: 0.1},
-};
-
-/** One stage of a generic sale. */
-export type LifecycleStage =
-  'offer_accepted'|'escrow_funded'|'delivery_confirmed'|'payment_settled'|
-  'dispute_opened'|'dispute_resolved'|'refunded'|'cancelled';
-
-/** Allowed next stages. */
-export const LIFECYCLE_NEXT_STAGES: Record<
-  LifecycleStage, readonly LifecycleStage[]
-> = {
-  offer_accepted: ['escrow_funded', 'cancelled'],
-  escrow_funded: ['delivery_confirmed', 'dispute_opened', 'refunded'],
-  // `refunded` from delivery is mutual termination only. One-sided refund stays on escrow_funded.
-  delivery_confirmed: ['payment_settled', 'dispute_opened', 'refunded'],
-  payment_settled: ['dispute_opened'],
-  dispute_opened: ['dispute_resolved'],
-  dispute_resolved: ['payment_settled', 'refunded'],
-  refunded: [],
-  cancelled: [],
-};
-
-/** One verified stage transition with its evidence. */
-export interface LifecycleTransition {
-  transactionId: string;
-  from: LifecycleStage|undefined;
-  to: LifecycleStage;
-  evidence: {[key: string]: string|number|boolean|null};
-  at: string;
-}
-
-/** Row shape stored by the lifecycle history table. */
-export interface StoredLifecycleTransition {
-  transactionId: string;
-  fromStage: string|null;
-  toStage: string;
-  evidenceJson: string;
-  at: string;
-}
-
-/**
- * Store seam for lifecycle state, terms versions, and outcomes.
- * `AgentStore` implements this shape. The lifecycle does not import it.
- */
-export interface LifecycleStore {
-  insertTransaction(record: MarketplaceTransaction): MarketplaceTransaction;
-  getTransaction(id: string): MarketplaceTransaction|undefined;
-  insertTermsVersion(transactionId: string, version: TermsVersion): void;
-  updateTransactionTerms(
-    transactionId: string,
-    terms: {[key: string]: JsonValue},
-    termsHash: string|undefined,
-  ): void;
-  setTransactionCompletedAt(transactionId: string, completedAt: string): void;
-  saveOutcome(record: Outcome): Outcome;
-  insertLifecycleTransition(record: StoredLifecycleTransition): void;
-  listLifecycleTransitions(transactionId: string): StoredLifecycleTransition[];
-}
-
-/** Inputs for a new transaction. Version 1 is recorded here. */
-export interface OpenTransactionInput {
-  id: string;
-  type: TransactionType;
-  buyerId: string;
-  sellerId: string;
-  terms: {[key: string]: JsonValue};
-  value?: number;
-  termsHash?: string;
-  /** UTC end of the contract term. Mutual termination must happen before this time. */
-  contractEnds?: string;
-  at: string;
-}
-
-/** Inputs for paper escrow funding. */
-export interface FundEscrowInput {
-  transactionId: string;
-  amountLovelace: number;
-  sellerReturnAddress: string;
-  disputeWindowEnds: string;
-  at: string;
-}
-
-/** Inputs for paper escrow release. */
-export interface ReleaseEscrowInput {
-  transactionId: string;
-  at: string;
-  /**
-   * Required only when the stage is still `escrow_funded`.
-   * That path is silent release. Set `deliveryTier` to `silent_release`.
-   */
-  evidence?: LifecycleTransition['evidence'];
-}
-
-/** Inputs for a paper refund request. */
-export interface RefundEscrowInput {
-  transactionId: string;
-  at: string;
-  reason?: string;
-  /** Buyer-caused refund. A dispute refund stays a seller fault. */
-  fault?: 'buyer';
-}
-
-/** Inputs for opening a dispute. */
-export interface OpenDisputeInput {
-  transactionId: string;
-  resolver: string;
-  resolveBy: string;
-  at: string;
-  reason?: string;
-}
-
-/** Inputs for a resolver decision. The money move follows in the same call. */
-export interface ResolveDisputeInput {
-  transactionId: string;
-  resolver: string;
-  decision: DisputeDecision;
-  at: string;
-}
-
-/**
- * Lifecycle seam. `advance` records a stage change.
- * Funding, release, and refund stay on the async methods so they can
- * call the escrow port. `advance` rejects those stages on its own.
- */
-export interface TransactionLifecycle {
-  readonly version: string;
-  advance(transition: LifecycleTransition): LifecycleTransition;
-  currentStage(transactionId: string): LifecycleStage|undefined;
-  outcomeFor(
-    transactionId: string, options: {
-      resolver?: string;
-      resolveBy?: string;
-      now: string;
-    },
-  ): Outcome;
-}
-
-/** Rejected lifecycle input or illegal stage change. */
-export class LifecycleError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'LifecycleError';
-  }
-}
-
-const STAGES: readonly LifecycleStage[] = [
-  'offer_accepted', 'escrow_funded', 'delivery_confirmed', 'payment_settled',
-  'dispute_opened', 'dispute_resolved', 'refunded', 'cancelled',
-];
+export {
+  DELIVERY_TIER_VERIFICATION, DELIVERY_TIERS, LIFECYCLE_NEXT_STAGES,
+  LIFECYCLE_VERSION, LifecycleError, RESOLVER_CONFIDENCE,
+  VOLUNTARY_REFUND_CONFIDENCE,
+} from './lifecycle/contracts';
+export type {
+  DeliveryTier, DisputeDecision, FundEscrowInput, LifecycleStage,
+  LifecycleStore, LifecycleTransition, OpenDisputeInput, OpenTransactionInput,
+  RefundEscrowInput, ReleaseEscrowInput, ResolveDisputeInput,
+  StoredLifecycleTransition, TransactionLifecycle,
+} from './lifecycle/contracts';
 
 const TRANSACTION_TYPES: readonly TransactionType[] = [
   'goods', 'service', 'invoice',
@@ -224,8 +47,6 @@ const MONEY_STAGES: readonly LifecycleStage[] = [
 const TERMINAL_OUTCOMES: readonly OutcomeState[] = [
   'successful', 'failed', 'cancelled', 'unresolved',
 ];
-
-const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 type Evidence = LifecycleTransition['evidence'];
 
@@ -712,150 +533,11 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     },
   ): Outcome {
     parseTime(options.now, 'now');
-    const history = this.history(transactionId);
-    const stage = history.length === 0 ?
-      undefined :
-      history[history.length - 1]?.to;
-    const latest = history[history.length - 1];
-    const evidence: {[key: string]: JsonValue} = {
-      ...(latest ? {...latest.evidence} : {}),
-      stage: stage ?? 'none',
-      transitions: history.length,
-      producer: this.version,
-    };
-    const outcome = this.buildOutcome(
-      transactionId, stage, evidence, options,
+    const outcome = projectLifecycleOutcome(
+      transactionId, this.history(transactionId), options, this.version,
     );
     this.persist(outcome);
     return outcome;
-  }
-
-  private buildOutcome(
-    transactionId: string,
-    stage: LifecycleStage|undefined,
-    evidence: {[key: string]: JsonValue},
-    options: {resolver?: string; resolveBy?: string; now: string},
-  ): Outcome {
-    const base = {
-      transactionId,
-      evidence,
-      decidedAt: options.now,
-    };
-    if (stage === 'payment_settled') {
-      return this.settledOutcome(transactionId, base);
-    }
-    if (stage === 'refunded') return this.refundedOutcome(transactionId, base);
-    if (stage === 'cancelled') {
-      return {
-        ...base,
-        state: 'cancelled',
-        ...(evidence.termination === 'mutual' ? {fault: 'none' as const} : {}),
-        verificationMethod: 'lifecycle',
-        verificationConfidence: CANCEL_CONFIDENCE,
-      };
-    }
-    if (stage === 'dispute_opened') {
-      return this.disputedOutcome(transactionId, base, options);
-    }
-    if (stage === 'delivery_confirmed') {
-      const tier = this.requiredTier(evidence.deliveryTier);
-      const verification = DELIVERY_TIER_VERIFICATION[tier];
-      return {
-        ...base,
-        state: 'pending',
-        verificationMethod: verification.method,
-        verificationConfidence: verification.confidence,
-      };
-    }
-    return {...base, state: 'pending', verificationMethod: 'lifecycle'};
-  }
-
-  private settledOutcome(
-    transactionId: string,
-    base: {transactionId: string; evidence: {[key: string]: JsonValue}; decidedAt: string},
-  ): Outcome {
-    const settlement = this.findStage(transactionId, 'payment_settled');
-    if (settlement?.evidence.resolution === 'uphold_seller') {
-      return {
-        ...base,
-        state: 'successful',
-        verificationMethod: 'manual-review',
-        verificationConfidence: RESOLVER_CONFIDENCE,
-      };
-    }
-    const tierValue = settlement?.evidence.deliveryTier;
-    const tier = this.requiredTier(tierValue);
-    if (tier === 'self_report') {
-      throw new LifecycleError('a self-reported delivery cannot settle');
-    }
-    const verification = DELIVERY_TIER_VERIFICATION[tier];
-    return {
-      ...base,
-      state: 'successful',
-      verificationMethod: verification.method,
-      verificationConfidence: verification.confidence,
-    };
-  }
-
-  private refundedOutcome(
-    transactionId: string,
-    base: {transactionId: string; evidence: {[key: string]: JsonValue}; decidedAt: string},
-  ): Outcome {
-    const refunded = this.findStage(transactionId, 'refunded');
-    const fault = refunded?.evidence.fault;
-    if (fault === 'seller' || fault === 'buyer') {
-      return {
-        ...base,
-        state: 'failed',
-        fault,
-        verificationMethod: fault === 'seller' ? 'manual-review' : 'lifecycle',
-        verificationConfidence: fault === 'seller' ?
-          RESOLVER_CONFIDENCE : VOLUNTARY_REFUND_CONFIDENCE,
-      };
-    }
-    if (fault === 'none') {
-      return {
-        ...base,
-        state: 'cancelled',
-        fault: 'none',
-        verificationMethod: 'lifecycle',
-        verificationConfidence: VOLUNTARY_REFUND_CONFIDENCE,
-      };
-    }
-    throw new LifecycleError('refund evidence is missing a fault');
-  }
-
-  private disputedOutcome(
-    transactionId: string,
-    base: {transactionId: string; evidence: {[key: string]: JsonValue}; decidedAt: string},
-    options: {resolver?: string; resolveBy?: string; now: string},
-  ): Outcome {
-    const dispute = this.disputeRecord(transactionId);
-    if (options.resolver !== undefined && options.resolver !== dispute.resolver) {
-      throw new LifecycleError('the resolver is already set');
-    }
-    if (options.resolveBy !== undefined && options.resolveBy !== dispute.resolveBy) {
-      throw new LifecycleError('the dispute deadline is already set');
-    }
-    if (parseTime(options.now, 'now') > parseTime(dispute.resolveBy, 'resolveBy')) {
-      base.evidence.timeoutResult = 'unresolved';
-      base.evidence.escrowDisposition = 'held';
-      return {
-        ...base,
-        state: 'unresolved',
-        verificationMethod: 'lifecycle',
-        verificationConfidence: TIMEOUT_CONFIDENCE,
-        resolver: dispute.resolver,
-        resolveBy: dispute.resolveBy,
-      };
-    }
-    return {
-      ...base,
-      state: 'disputed',
-      verificationMethod: 'lifecycle',
-      resolver: dispute.resolver,
-      resolveBy: dispute.resolveBy,
-    };
   }
 
   private validateMove(
@@ -1098,22 +780,13 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
   private findStage(
     transactionId: string, stage: LifecycleStage,
   ): LifecycleTransition|undefined {
-    const history = this.history(transactionId);
-    for (let index = history.length - 1; index >= 0; index -= 1) {
-      const item = history[index];
-      if (item?.to === stage) return item;
-    }
-    return undefined;
+    return findStage(this.history(transactionId), stage);
   }
 
   private optionalTier(transactionId: string): DeliveryTier|undefined {
     const delivery = this.findStage(transactionId, 'delivery_confirmed');
     if (!delivery) return undefined;
     return readTier(delivery.evidence.deliveryTier, true);
-  }
-
-  private requiredTier(value: JsonValue|undefined): DeliveryTier {
-    return readTier(value, true);
   }
 
   private requireDecision(transactionId: string): DisputeDecision {
@@ -1130,13 +803,7 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
   private disputeRecord(
     transactionId: string,
   ): {resolver: string; resolveBy: string} {
-    const opened = this.findStage(transactionId, 'dispute_opened');
-    const resolver = opened?.evidence.resolver;
-    const resolveBy = opened?.evidence.resolveBy;
-    if (typeof resolver !== 'string' || resolver === '' || typeof resolveBy !== 'string') {
-      throw new LifecycleError('a dispute names a resolver and a deadline');
-    }
-    return {resolver, resolveBy};
+    return disputeRecord(this.history(transactionId));
   }
 
   private disputeWindow(transactionId: string): string {
@@ -1164,178 +831,6 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
       throw new LifecycleError(`${label} must be a non-empty string`);
     }
   }
-}
-
-function copyTransition(transition: LifecycleTransition): LifecycleTransition {
-  return {
-    transactionId: transition.transactionId,
-    from: transition.from,
-    to: transition.to,
-    at: transition.at,
-    evidence: {...transition.evidence},
-  };
-}
-
-function sessionEvidence(
-  session: EscrowSession, extra: Evidence,
-): Evidence {
-  return {
-    simulated: session.simulated,
-    mode: session.mode,
-    blockchainIdentifier: session.blockchainIdentifier,
-    txHash: session.txHash,
-    escrowAddress: session.escrowAddress,
-    amountLovelace: session.amountLovelace,
-    onChainState: session.onChainState,
-    inputHash: session.inputHash,
-    agentIdentifier: session.agentIdentifier,
-    purchaserId: session.purchaserId,
-    identifierFromPurchaser: session.identifierFromPurchaser,
-    sellerVkey: session.sellerVkey,
-    paymentSourceType: session.paymentSourceType,
-    payByTime: session.payByTime,
-    submitResultTime: session.submitResultTime,
-    unlockTime: session.unlockTime,
-    externalDisputeUnlockTime: session.externalDisputeUnlockTime,
-    sellerReturnAddress: session.sellerReturnAddress,
-    ...extra,
-  };
-}
-
-function sessionFromEvidence(evidence: Evidence): EscrowSession {
-  const text = (key: string): string => {
-    const value = evidence[key];
-    if (typeof value !== 'string' || value === '') {
-      throw new LifecycleError('escrow session evidence is incomplete');
-    }
-    return value;
-  };
-  const amount = evidence.amountLovelace;
-  if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0) {
-    throw new LifecycleError('escrow session evidence is incomplete');
-  }
-  const simulated = evidence.simulated === true;
-  const live = evidence.simulated === false && evidence.mode === 'live';
-  if (!simulated && !live) {
-    throw new LifecycleError('escrow session evidence is incomplete');
-  }
-  if (simulated && evidence.mode !== 'paper') {
-    throw new LifecycleError('escrow must stay simulated; live broadcast is disabled');
-  }
-  return {
-    simulated,
-    mode: simulated ? 'paper' : 'live',
-    blockchainIdentifier: text('blockchainIdentifier'),
-    txHash: text('txHash'),
-    escrowAddress: text('escrowAddress'),
-    amountLovelace: amount,
-    onChainState: text('onChainState'),
-    inputHash: text('inputHash'),
-    agentIdentifier: text('agentIdentifier'),
-    purchaserId: text('purchaserId'),
-    identifierFromPurchaser: text('identifierFromPurchaser'),
-    sellerVkey: text('sellerVkey'),
-    paymentSourceType: text('paymentSourceType'),
-    payByTime: text('payByTime'),
-    submitResultTime: text('submitResultTime'),
-    unlockTime: text('unlockTime'),
-    externalDisputeUnlockTime: text('externalDisputeUnlockTime'),
-    sellerReturnAddress: text('sellerReturnAddress'),
-  };
-}
-
-function readTier(value: unknown, required: true): DeliveryTier;
-function readTier(value: unknown, required: false): DeliveryTier|undefined;
-function readTier(value: unknown, required: boolean): DeliveryTier|undefined {
-  if (value === undefined || value === null) {
-    if (required) throw new LifecycleError('delivery confirmation needs a delivery tier');
-    return undefined;
-  }
-  for (const tier of DELIVERY_TIERS) {
-    if (tier === value) return tier;
-  }
-  throw new LifecycleError('unknown delivery tier');
-}
-
-function parseStage(value: string): LifecycleStage {
-  for (const stage of STAGES) {
-    if (stage === value) return stage;
-  }
-  throw new LifecycleError(`unknown lifecycle stage ${value}`);
-}
-
-function parseTime(value: string, label: string): number {
-  if (!TIMESTAMP.test(value)) {
-    throw new LifecycleError(`${label} must be a UTC timestamp`);
-  }
-  const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) {
-    throw new LifecycleError(`${label} must be a UTC timestamp`);
-  }
-  return parsed;
-}
-
-function assertEvidence(evidence: Evidence): void {
-  for (const value of Object.values(evidence)) {
-    if (value === null || typeof value === 'string' || typeof value === 'boolean') {
-      continue;
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) continue;
-    throw new LifecycleError('evidence values must be scalars');
-  }
-}
-
-function parseEvidenceJson(raw: string): Evidence {
-  const parsed: unknown = JSON.parse(raw);
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new LifecycleError('evidence must be an object');
-  }
-  const evidence: Evidence = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (value === null || typeof value === 'string' || typeof value === 'boolean' ||
-        (typeof value === 'number' && Number.isFinite(value))) {
-      evidence[key] = value;
-      continue;
-    }
-    throw new LifecycleError('evidence values must be scalars');
-  }
-  return evidence;
-}
-
-function copyTerms(
-  terms: {[key: string]: JsonValue},
-): {[key: string]: JsonValue} {
-  const parsed: unknown = JSON.parse(JSON.stringify(terms));
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new LifecycleError('terms must be an object');
-  }
-  return parsed as {[key: string]: JsonValue};
-}
-
-function assertJson(value: JsonValue, label: string): void {
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) {
-      throw new LifecycleError(`${label} must be finite`);
-    }
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) assertJson(item, label);
-    return;
-  }
-  if (value !== null && typeof value === 'object') {
-    for (const item of Object.values(value)) assertJson(item, label);
-  }
-}
-
-function contractEnd(explicit: unknown, fromTerms: unknown): string|undefined {
-  const value = explicit ?? fromTerms;
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string') {
-    throw new LifecycleError('contractEnds must be a UTC timestamp');
-  }
-  parseTime(value, 'contractEnds');
-  return value;
 }
 
 function sha256(value: string): string {
