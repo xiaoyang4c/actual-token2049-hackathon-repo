@@ -1,4 +1,11 @@
-# Cardano and Masumi payment scaffolding
+# Shared Cardano and Masumi payment adapters
+
+These adapters and the settlement observer support shared payment code.
+The paid-score demo is an adapter test fixture from the retired runtime.
+Its forecast scores are separate from buyer and seller reliability scores.
+The marketplace lifecycle uses its own escrow adapter.
+It does not yet use the payment runtime's confirmation checks.
+Read [Implementation status](implementation-status.md) for that gap.
 
 The payment service uses simulation by default. It does not call Cardano or
 Masumi APIs in this mode. It does not load wallet secrets.
@@ -14,7 +21,7 @@ bun run payments:typecheck
 The demo pays, confirms the simulated transaction, prepares scores, and commits
 the receipt. It stores the receipt in `services/.data/cardano.sqlite`. Run it
 again to replay the same receipt and response. It uses a fixed demo key.
-It does not start the market feed or call an external API.
+It does not call an external API.
 
 The tests run the **preprod adapters** against local protocol fixtures.
 Fixture receipts have `simulated: true`. These tests verify integration behavior.
@@ -97,8 +104,9 @@ The service reconciles result submission, withdrawal, disputes, and refunds in
 the background. See [Masumi settlement reconciliation](masumi-settlement.md)
 for evidence requirements, state mappings, and retry behavior.
 
-The demo retains its `X-PAYMENT` envelope for workflow compatibility. This is a
-local receipt reference, not a standard Cardano x402 rail or a signed chain proof.
+The adapter demo uses an `X-PAYMENT` envelope.
+This envelope contains a local receipt reference.
+It does not contain a signed chain proof.
 Masumi's upstream [x402 guide](https://github.com/masumi-network/masumi-payment-service/blob/69297f308f603bffbdfd4efccb54398eaff1bd87/docs/x402.md)
 describes its separate EVM rail. Use the demo services within a trusted local
 environment. They do not implement public authentication or caller isolation.
@@ -117,9 +125,8 @@ environment. They do not implement public authentication or caller isolation.
    its hash, queues the Masumi result, then commits `delivered` before returning
    scores. Repeated requests return the stored response.
 
-CRE preserves the quote's `inputHash` when it calls `POST /pay`.
+Payment callers must preserve the quote's `inputHash` when they call `POST /pay`.
 Paid quotes must include a SHA256 digest with 64 lowercase hex characters.
-CRE audits and rejects missing or malformed hashes before it pays.
 
 `delivered` means that the response is committed for return. It does not prove
 that the client received it or that Masumi withdrew the funds. Result submission
@@ -144,5 +151,5 @@ Run one payment service writer for each database. Separate simulation and prepro
 databases. Keep the database file between restarts. The background worker drains
 before the service closes SQLite. Await `PaymentRuntime.close()` when using the
 runtime directly. Legacy escrow receipts remain readable but cannot
-authorize the new flow. The CRE workflow still writes its historical
-`(escrowed)` audit label; use the receipt state for the current lifecycle.
+authorize the new flow. Use the receipt state and settlement evidence
+to assess payment completion.

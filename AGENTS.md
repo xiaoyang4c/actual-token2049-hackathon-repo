@@ -39,6 +39,15 @@ Also follow the [Google developer documentation best practices](https://google.g
 
 ## Repo facts
 
+The product scope is the B2B and B2C marketplace with its reliability checker.
+
+`main` holds the product plan in `PLAN.md`.
+
+The prediction-market runtime and capital-allocation plans are retired.
+
+Shared legacy code still supplies storage and payment dependencies.
+Refactor these dependencies before deleting their source files or migrations.
+
 Send product changes to `main` through a pull request.
 
 Do not push directly to `main`.
@@ -49,9 +58,9 @@ Do not edit `services/market-feed.ts` unless the task names that path.
 
 The operator UI is display-only. The operator UI is not a public site.
 
-The operator UI reads `GET /agent/state` and `GET /audit`.
+The operator UI reads `GET /reliability/*`. Lane C builds the UI against these routes.
 
-The operator UI may also read `GET /reliability/*`. Lane C builds the UI against these routes.
+The UI server also retains the legacy `GET /agent/state` and `GET /audit` read proxies.
 
 The operator UI does not edit policy. The operator UI does not send orders.
 

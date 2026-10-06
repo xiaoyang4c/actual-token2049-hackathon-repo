@@ -20,7 +20,8 @@ One business cannot spend another business's credit.
 `PaperOmnibusFunding` uses the shared `AgentStore` connection.
 Migration `013_paper_omnibus_funding.sql` adds pools, deposits, and allocations.
 Migration `012` is allocated to the contract lifecycle in pull request #17.
-The funding scaffold can merge before that pull request.
+The funding scaffold is on main.
+The contract lifecycle remains in that open pull request.
 The migration runner applies missing versions, including a lower version added later.
 The existing escrow adapter and lifecycle routes keep their current behavior.
 There is no funding HTTP route.
@@ -59,6 +60,11 @@ Each credit and allocation commits in one SQLite transaction.
 The transaction takes the write lock before it reads the balance.
 Balances come from deposit and allocation records.
 Records persist across restarts.
+
+Available credit equals deposits minus deal allocations.
+Cancellation and refund actions do not return credit to this ledger.
+The paper adapter has no withdrawal operation or operation to credit a refund.
+The paper adapter still needs lifecycle integration and return accounting.
 
 Each operation needs an idempotency key.
 An exact retry returns the original record.
@@ -101,3 +107,5 @@ A live implementation needs these components:
 
 Keep the paper allocation tables separate from live settlement records.
 Do not treat a paper allocation as a confirmed chain payment.
+
+Read [Implementation status](implementation-status.md) for the other marketplace limits.

@@ -10,7 +10,9 @@ A live preprod order is sent only when `CARDANO_MODE` is `preprod` and `CARDANO_
 
 Read [Reliability marketplace: lane ownership](reliability-lanes.md) for lane boundaries.
 
-Read [Cardano and Masumi payment scaffolding](cardano-payments.md) for the Masumi adapter.
+Read [Shared Cardano and Masumi payment adapters](cardano-payments.md) for the Masumi adapter.
+
+Read [Implementation status](implementation-status.md) for features and known limits.
 
 ## States
 
@@ -33,9 +35,10 @@ Use the next stage from this list.
 
 `refunded` from `delivery_confirmed` is mutual termination.
 
-A one-sided refund stays on `escrow_funded`.
+The lifecycle accepts a voluntary refund from `escrow_funded`.
 
-`advance` rejects those three stages.
+Direct calls to `advance` reject those three stages.
+The async escrow methods record them after the adapter call.
 
 An invalid transition throws `LifecycleError`.
 
@@ -76,7 +79,12 @@ Use the tiers in this order. The first tier is the strongest.
 
 A seller claim is not carrier proof.
 
+The current carrier check validates strings only.
+It does not call a carrier API.
+
 `buyer_confirmation` needs `confirmedBy` equal to the buyer id.
+
+The route does not authenticate the caller as that buyer.
 
 `silent_release` waits until `disputeWindowEnds`.
 
@@ -98,7 +106,8 @@ Name `resolver` and `resolveBy` when you open a dispute.
 
 Before the deadline, the outcome is `disputed`.
 
-The resolver can uphold the seller. That releases escrow.
+The resolver can uphold the seller.
+That queues a Masumi result submission and records `payment_settled`.
 
 The outcome is `successful`.
 
@@ -114,9 +123,12 @@ The outcome is `failed`.
 
 `Outcome.fault` is `seller`.
 
-A buyer-caused refund is `failed`.
+A direct domain refund with `fault: buyer` produces `failed`.
 
 `Outcome.fault` is `buyer`.
+
+The demo HTTP refund action does not forward `fault`.
+A voluntary refund through that route records `fault: none` and produces `cancelled`.
 
 After the deadline, the outcome is `unresolved`.
 
@@ -130,7 +142,9 @@ The lifecycle does not release it.
 
 The lifecycle does not refund it.
 
-A later resolve throws `the dispute deadline has passed; the result is unresolved`.
+A resolve with `at` after the deadline throws `the dispute deadline has passed; the result is unresolved`.
+The current code uses the supplied `at` for this check.
+It does not reject a backdated request after a timeout read.
 
 ## Terms
 
@@ -146,7 +160,8 @@ Call `amendTerms` to change terms.
 
 A terminal stage freezes terms.
 
-An unresolved dispute freezes terms.
+`amendTerms` rejects an amendment with `at` after the dispute deadline.
+The current code does not enforce timestamp order across requests.
 
 Set `contractEnds` on `open` or in the terms object.
 
@@ -166,9 +181,10 @@ The termination time is before `contractEnds`.
 
 The lifecycle records both consents, both timestamps, `contractStart`, and `contractEnds` on the evidence.
 
-A funded escrow is returned through `mutualTerminate` on the escrow port.
+A funded transaction calls `mutualTerminate` on the escrow port.
 
 That call uses the Masumi refund request today.
+It does not prove that the buyer received a refund.
 
 The consent record is the seam for a later on-chain check.
 
@@ -185,6 +201,16 @@ A one-sided `cancel` does not record both consents.
 ## Chain evidence
 
 Each escrow step records `txHash`, `escrowState`, and `blockTime` when the chain has a block time.
+
+These fields are observations from the adapter.
+The lifecycle does not require confirmed funds locking before recording `escrow_funded`.
+It records `payment_settled` after the adapter accepts result submission.
+It records `refunded` after the adapter accepts a refund request.
+These stage names do not prove a completed payout or refund.
+
+The shared payment runtime has separate confirmation and settlement checks.
+Those checks do not govern this marketplace lifecycle.
+Read [settlement reconciliation](masumi-settlement.md) for that separate runtime.
 
 `mode` is `paper` for a simulated order.
 
@@ -234,7 +260,7 @@ Lifecycle routes use the control API store.
 
 Entity rows and lifecycle rows share that database.
 
-The KYC routes in PR #3 still open a separate store until that branch uses the same handler argument.
+The KYC routes use the same control API `AgentStore`.
 
 A simulated response sets `mode` to `paper`.
 
@@ -262,6 +288,12 @@ Send `at` as a UTC timestamp such as `2026-10-06T00:00:00.000Z`.
 `open` accepts `contractEnds`.
 
 Add `now` on the GET when you want the dispute deadline checked at a later time.
+Without `now`, the route uses the last transition time.
+It does not use the current server time.
+
+The lifecycle read saves the projected outcome.
+It uses the supplied `now` as `decidedAt`, including for a completed outcome.
+A later read can therefore change the returned decision and event timestamps.
 
 The GET runs the outcome through `outcomeToEvents` and the current terms policy.
 
@@ -284,6 +316,15 @@ The math lane can replace the policies through the shared policy composition sea
 Existing stored scores remain the starting point. A missing score is rebuilt from its recorded events under the active scoring policy. The service commits that score and its current terms together. This change does not rebuild older scores that were overwritten by the earlier per-outcome flow.
 
 An applied event keeps its transaction and role id. Reversing an applied outcome or replaying it under a new policy needs a separate history rebuild.
+
+For example, a success can credit the seller before a later dispute finds seller fault.
+The failure event then has the same id as the applied success event.
+The current projection skips that failure event.
+It does not remove the earlier success credit.
+
+Lifecycle mutation routes do not have the shared payment runtime's durable retry records.
+A retry after funding succeeds fails the stage check.
+Concurrent requests can both call the escrow adapter before one fails the stage check.
 
 The scoring projection uses local records only. It does not call Cardano, Masumi, or Chainlink. Tests use explicit simulated escrow.
 

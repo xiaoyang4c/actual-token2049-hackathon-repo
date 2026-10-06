@@ -1,6 +1,8 @@
 # Reliability marketplace: lane ownership
 
 Read this file before you start a lane.
+Read [PLAN.md](../PLAN.md) for the B2B and B2C marketplace scope.
+Read [Reliability math](reliability-math.md) for equations and parameter decisions.
 
 Read [module boundaries](reliability-modules.md) for lifecycle internals and policy composition.
 
@@ -20,18 +22,28 @@ See [Open decisions](#open-decisions).
 | KYC verification | mock verification merged on main in pull request #8 | Lane A |
 | Score change scaled by transaction value | not started | Math lane |
 | Separate buyer score and seller score | done on main | Math lane |
-| Platform fee on the buyer side and the seller side | not started | Lane B |
+| Platform fee on the buyer side and the seller side | stub rate offers; no fee collection | Lane B |
 | Diminishing returns for the same pair | not started | Math lane |
 
 Lane C builds the local operator UI against `GET /reliability/*`. It shows transactions, receipts, separate buyer and seller scores, mock KYC, and listings. Read [UI instructions](../ui/README.md). The operator UI sends no orders. The operator UI edits no policy.
 
 Pull request #8 adds mock KYC on main. Lane A owns mock KYC. Read [mock KYC](kyc.md). `KYC_TIER_RULES` contains the default tier rules. The product owner has not decided the final KYC bar.
 
-The target score weight is `w = log(1 + v / v0)`. `v` is the transaction value. `v0` is the value scale. `packages/reliability/src/scoring.ts` is a stub. The stub adds one to alpha on success and one to beta on failure.
+The target score weight is $w = \ln(1 + v / v_0)$. $v$ is the transaction value. $v_0$ is the value scale. `packages/reliability/src/scoring.ts` is a stub. The stub adds one to alpha on success and one to beta on failure.
 
-Each entity has a buyer score and a seller score on main. The score numbers come from the scoring stub. A failed outcome changes only the at-fault role.
+Each entity has a buyer score and a seller score on main.
+The score numbers come from the scoring stub.
+A new failed outcome emits a failure event for the at-fault role.
+An outcome reversal does not correct an event that was already applied.
+Read [Implementation status](implementation-status.md) for the known limits.
 
-Lane B owns fees and terms in `packages/reliability/src/fees-policy.ts`. That file is a stub. The stub charges a platform fee on the buyer side and on the seller side. A higher lower bound gives a lower fee. Lane B reads the lower bound from the math lane. The agreed fee curve is not started.
+Lane B owns fees and terms in `packages/reliability/src/fees-policy.ts`.
+That file is a stub.
+The stub returns buyer and seller fee rate offers for one entity.
+A higher lower bound gives a lower offered rate.
+The lifecycle does not collect these fees or enforce the offered terms.
+Lane B reads the lower bound from the math lane.
+The agreed fee curve is not implemented.
 
 The math lane owns `packages/reliability/src/pair-decay.ts`. That file is a stub. Repeat transactions between the same pair must give diminishing returns. That limit reduces repeated score gains from the same pair. The event flow calls the decay stub. The score change stays one. The agreed decay curve is not started.
 
@@ -63,10 +75,15 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tier
 ## Merged so far
 
 - Pull request #2 adds the reliability plumbing. It adds `packages/reliability`, migration `006_reliability_marketplace.sql`, the read routes, and this file.
-- Pull request #6 values a paper trading position from `yesPrice`. A YES mark uses `yesPrice`. A NO mark uses one minus `yesPrice`.
 - Pull request #7 stores `Outcome.fault` in migration `010_outcome_fault.sql`. A failed outcome scores only the at-fault role.
 - Pull request #9 adds the transaction lifecycle. It adds migration `011_lane_a_lifecycle.sql`, the lifecycle routes on the shared control-API `AgentStore`, and [Transaction lifecycle](reliability-lifecycle.md).
 - Pull request #8 adds mock KYC on the shared store. It adds migration `008_lane_a_kyc.sql`, badge examples, and [Mock KYC](kyc.md).
+- Pull request #15 adds cumulative score updates and recovery of missing score rows.
+- Pull request #16 adds the reliability marketplace operator display.
+- Pull request #18 adds the [paper omnibus funding](omnibus-funding.md) ledger.
+
+Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) proposes the contract lifecycle.
+Its templates, tiered disputes, and contract routes are not on main.
 
 ## Open decisions
 
@@ -96,9 +113,9 @@ Leave `fault` empty when `state` is `successful`.
 
 A success credits both roles.
 
-A `seller` fault lowers only that entity's seller score.
+A new `seller` fault updates only that entity's seller score.
 
-A `buyer` fault lowers only that entity's buyer score.
+A new `buyer` fault updates only that entity's buyer score.
 
 `none` changes no score.
 
@@ -163,3 +180,6 @@ That broadcast is a live order.
 The operator UI shows whether each order is paper or live.
 
 The docs state whether each order is paper or live.
+
+An enabled live escrow request does not prove confirmed settlement.
+Read [chain evidence](reliability-lifecycle.md#chain-evidence).
