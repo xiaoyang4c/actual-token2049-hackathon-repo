@@ -5,9 +5,19 @@ Read this file before you start a lane.
 ## Lanes
 
 - Math lane owns scoring and fees/terms. Files: `packages/reliability/src/scoring.ts`, `packages/reliability/src/pair-decay.ts`, `packages/reliability/src/fees-policy.ts`.
-- Lane A (agents) owns the generic transaction lifecycle, the escrow state machine, and mock KYC. Files: `packages/reliability/src/lifecycle.ts`, `packages/reliability/src/kyc.ts`.
+- Lane A (agents) owns the generic transaction lifecycle, the escrow state machine, and mock KYC. Files: `packages/reliability/src/lifecycle.ts`, `packages/reliability/src/kyc.ts`. See [Lane A lifecycle](#lane-a-lifecycle).
 - Lane C owns the UI. It builds against `GET /reliability/*` and the fixtures.
 - Lane D owns B2B payment evidence and demo fixtures. Files: `packages/reliability/src/evidence-payment.ts`, `packages/reliability/src/fixtures/`.
+
+### Lane A lifecycle
+
+Lane A lifecycle tables use migration `010_lane_a_lifecycle.sql`.
+
+KYC uses migration `008`.
+
+Keep migration `009` for lane D.
+
+Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tiers, and demo routes.
 
 ## Frozen file
 
@@ -21,9 +31,11 @@ Do not change types inside a lane PR.
 
 The plumbing PR adds `006_reliability_marketplace.sql`.
 
-Reserved numbers follow in this order: `007` math lane, `008` lane A, `009` lane D.
+Reserved numbers follow in this order: `007` math lane, `008` lane A KYC, `009` lane D.
 
-Take the next free number after `009` for any new lane.
+Lane A lifecycle uses `010` because KYC already took `008`.
+
+Take the next free number after `010` for any new lane.
 
 ## Shared files
 

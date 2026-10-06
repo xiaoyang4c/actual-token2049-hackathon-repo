@@ -80,6 +80,7 @@ describe('AgentStore', () => {
         'position_events',
         'reliability_entities',
         'reliability_events',
+        'reliability_lifecycle_transitions',
         'reliability_outcomes',
         'reliability_state',
         'reliability_terms_decisions',
@@ -98,7 +99,7 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      expect(versions.versions).toBe(6);
+      expect(versions.versions).toBe(7);
     } finally {
       db.close();
     }
