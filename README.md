@@ -84,6 +84,12 @@ That broadcast is a live order.
 
 Scoring and fees are stubs.
 
+Pooled deal funding has a separate paper scaffold.
+It credits business deposits to one platform pool and allocates fresh deal addresses.
+It does not send chain transactions or change the escrow flow.
+Run `bun run funding:demo`. Read [paper omnibus funding](docs/omnibus-funding.md)
+for accounting rules, privacy limits, and live custody prerequisites.
+
 ## Prediction-market trading runtime
 
 The prediction-market trading runtime remains in this repository. It runs.

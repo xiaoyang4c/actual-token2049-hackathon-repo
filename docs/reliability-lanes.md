@@ -53,7 +53,9 @@ Keep migration `009` for lane D.
 
 `010_outcome_fault.sql` stores `Outcome.fault`.
 
-The next free migration number is `012`.
+Migration `012` stores paper omnibus deposits and deal allocations.
+Read [Paper omnibus funding](omnibus-funding.md).
+The next free migration number is `013`.
 
 Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tiers, and demo routes.
 
@@ -113,7 +115,8 @@ Lane A lifecycle uses `011_lane_a_lifecycle.sql`.
 
 Take the next free migration number.
 
-The next free number is `012`.
+Paper omnibus funding uses `012`.
+The next free number is `013`.
 
 ## Shared files
 
