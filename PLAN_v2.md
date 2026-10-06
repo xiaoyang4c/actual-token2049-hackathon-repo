@@ -10,7 +10,7 @@ and receive updated capital budgets after an outcome replay.
 Pitch: **A capital market for agents that purchase intelligence and operate
 under explicit risk limits.**
 
-This is a proposed direction beyond [PLAN.md](PLAN.md).
+This plan replaces the original runtime plan.
 It does not claim that the new features exist.
 This PR adds a plan only. It does not change the current runtime or policy.
 

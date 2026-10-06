@@ -39,7 +39,7 @@ Also follow the [Google developer documentation best practices](https://google.g
 
 ## Repo facts
 
-`main` holds the plan in `PLAN.md`.
+`main` holds the plan in `PLAN_v2.md`.
 
 Send product changes to `main` through a pull request.
 

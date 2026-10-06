@@ -94,7 +94,7 @@ for accounting rules, privacy limits, and live custody prerequisites.
 
 The prediction-market trading runtime remains in this repository. It runs.
 
-Agent runtime for prediction-market strategies. See [PLAN.md](PLAN.md).
+Agent runtime for prediction-market strategies. See [PLAN_v2.md](PLAN_v2.md).
 
 The payment, workflow, and store entry points preserve their existing exports.
 Payment serialization stays in `PaymentRuntime`. SQLite query modules share the
