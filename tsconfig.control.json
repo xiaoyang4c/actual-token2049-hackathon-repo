@@ -11,6 +11,9 @@
     "services/position-lifecycle.test.ts",
     "services/paper-market-source.ts",
     "services/paper-position-demo.ts",
-    "packages/db/**/*.ts"
+    "services/reliability/**/*.ts",
+    "services/reliability-routes.test.ts",
+    "packages/db/**/*.ts",
+    "packages/reliability/**/*.ts"
   ]
 }
