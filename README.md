@@ -22,6 +22,8 @@ Read [Transaction lifecycle](docs/reliability-lifecycle.md).
 
 Read [Reliability module boundaries](docs/reliability-modules.md) before extending a lane.
 
+Read [Implementation status](docs/implementation-status.md) for current features and known limits.
+
 ## Layout
 
 | Path | What |
@@ -82,7 +84,15 @@ The escrow broadcasts a preprod transaction only when `CARDANO_MODE` is `preprod
 
 That broadcast is a live order.
 
-Scoring and fees are stubs.
+Scoring and fee calculations use stubs.
+The fee stub returns buyer and seller rate offers.
+The lifecycle does not collect platform fees or enforce the offered terms.
+KYC uses a mock provider.
+
+Lifecycle stage names describe application records.
+`payment_settled` does not prove a confirmed payout.
+`refunded` does not prove a completed refund.
+Read [chain evidence](docs/reliability-lifecycle.md#chain-evidence) before interpreting these stages.
 
 Pooled deal funding has a separate paper scaffold.
 It credits business deposits to one platform pool and allocates fresh deal addresses.
@@ -94,7 +104,10 @@ for accounting rules, privacy limits, and live custody prerequisites.
 
 The prediction-market trading runtime remains in this repository. It runs.
 
-Agent runtime for prediction-market strategies. See [PLAN.md](PLAN.md).
+[PLAN.md](PLAN.md) describes the trading runtime plan.
+[PLAN_v2.md](PLAN_v2.md) proposes capital allocation for two strategies.
+The capital allocator is not implemented.
+The [marketplace target state](docs/reliability-lanes.md#mvp-target-state) defines the reliability work.
 
 The payment, workflow, and store entry points preserve their existing exports.
 Payment serialization stays in `PaymentRuntime`. SQLite query modules share the
@@ -162,6 +175,11 @@ The scoring request and each returned signal require both `venue` and `marketId`
 
 Eligibility does not predict a signal's edge or confidence. An eligible cycle can purchase scores and still produce no approved orders.
 
+The workflow applies category, venue, and maximum bet checks before submission.
+The executor checks halt conditions, cash, and market resolution again.
+Direct `POST /orders` calls do not apply the full workflow policy gate.
+Read [runtime limits](docs/implementation-status.md#runtime-limits).
+
 ### Payment integration
 
 Run `bun run payments:demo` for the complete offline pay → confirm → scores →
@@ -187,4 +205,7 @@ retry behavior, risk stops, daily accounting, and offline tests.
 ## Trading runtime status
 
 - Orders are **paper** fills. Payments default to **simulated** Cardano transactions with a local `X-PAYMENT` envelope. Preprod adapters have offline fixture coverage; actual chain settlement has not been tested.
-- Every POST from the workflow carries an idempotency key and CRE cache settings, so repeats from multiple DON nodes take effect once.
+- Workflow POSTs use CRE response caching.
+  Payment, order, and audit writes also use stable keys.
+  Order retries return the first stored result for that key.
+  The executor does not reject a changed order body that reuses the key.

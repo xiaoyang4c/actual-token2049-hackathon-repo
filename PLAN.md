@@ -1,3 +1,12 @@
+## Plan status
+
+This file describes the prediction-market trading runtime plan.
+The [README](README.md) introduces the transaction reliability marketplace.
+Read [Implementation status](docs/implementation-status.md) for current features and limits.
+Read [lane ownership](docs/reliability-lanes.md) for the marketplace target state.
+[PLAN_v2.md](PLAN_v2.md) proposes a separate capital-allocation extension.
+That extension is not implemented.
+
 ## Product thesis
 
 We build an **agent runtime for prediction-market strategies**.

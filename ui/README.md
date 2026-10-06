@@ -38,6 +38,8 @@ Unknown IDs show an error and keep the current display.
 
 The UI polls the marketplace read routes every five seconds.
 The entity, listing, transaction, and receipt collections currently serve seed fixtures.
+New stored transactions do not appear automatically in these collections.
+Use the transaction ID field to inspect one stored transaction.
 The score route combines stored states with fixtures. A stored state takes precedence
 for the same entity, category, and role.
 The mock KYC route can return a stored entity record.
@@ -73,6 +75,7 @@ Search, filters, focus, and evidence disclosures survive refreshes.
 Read [lane ownership](../docs/reliability-lanes.md),
 [transaction lifecycle](../docs/reliability-lifecycle.md), and
 [mock KYC](../docs/kyc.md) for the contracts behind these views.
+Read [Implementation status](../docs/implementation-status.md) for current features and known limits.
 
 ## Checks
 
