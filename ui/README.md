@@ -1,7 +1,6 @@
 # Reliability operator
 
 This local display shows the transaction reliability marketplace.
-It replaces the prediction-market display at port 8791.
 It does not edit policy, accept offers, send orders, or change KYC.
 
 Start the services first. Then start the UI.

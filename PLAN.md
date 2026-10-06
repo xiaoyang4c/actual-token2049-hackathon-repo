@@ -1,122 +1,98 @@
-## Plan status
+# B2B and B2C marketplace plan
 
-This file describes the prediction-market trading runtime plan.
-The [README](README.md) introduces the transaction reliability marketplace.
-Read [Implementation status](docs/implementation-status.md) for current features and limits.
-Read [lane ownership](docs/reliability-lanes.md) for the marketplace target state.
-[PLAN_v2.md](PLAN_v2.md) proposes a separate capital-allocation extension.
-That extension is not implemented.
+The product is a marketplace for goods and services.
+It supports business-to-business (B2B) and business-to-consumer (B2C) transactions.
+Its reliability checker assesses buyers and sellers from transaction outcomes.
 
-## Product thesis
+This plan replaces the retired prediction-market runtime plan.
+Read [Implementation status](docs/implementation-status.md) for current code and known limits.
+Read [lane ownership](docs/reliability-lanes.md) for module owners and reserved migrations.
 
-We build an **agent runtime for prediction-market strategies**.
+## Product flow
 
-Humans and institutions do not trade each contract by hand. They **deploy an agent**. The agent holds funds, follows a **policy**, and runs a **strategy pack**. The agent can trade on more than one venue through one control plane.
+1. Register the buyer and seller.
+2. Check their identity, KYC status, and reliability scores.
+3. Create a listing or offer.
+4. Agree on price, delivery, payment, and dispute terms.
+5. Fund escrow when the agreement requires it.
+6. Record delivery or invoice payment evidence.
+7. Resolve acceptance, expiry, cancellation, or dispute.
+8. Confirm the payout or refund.
+9. Update the applicable buyer and seller scores.
+10. Show the outcome, evidence, and fees.
 
-[River Markets](https://www.rivermarkets.com/) is a prime-brokerage layer for **human** traders. We are the operating layer for **agents**.
+This flow is the target.
+Main has fixture reads, mock KYC, a stored lifecycle, and a local operator display.
+It does not implement the complete buyer and seller flow.
 
-**Cardano** is the agent economy layer. The demo uses a local **x402-style** payment envelope. **Masumi** manages agent registration, on-chain funds locking, queued results, disputes, and refunds. See [payment scaffolding](docs/cardano-payments.md) for the verified protocol and current integration limits.
+## Reliability rules
 
-**Chainlink CRE** is the orchestration layer. CRE reads market data, runs the strategy, checks the policy, then calls the venue adapters and the Cardano payment flow.
+Each entity has separate buyer and seller scores for each category.
+Goods update delivery reliability.
+Services update fulfillment reliability.
+Invoices update payment reliability.
 
-We do not need to win every bet. We supply the runtime. Users pay for usage and for execution.
+Scale score changes with transaction value: `w = log(1 + v / v0)`.
+`v` is the transaction value. `v0` is the value scale.
+Reduce the weight of repeat transactions between the same pair.
+Use a Beta lower bound to show uncertainty.
+Keep verification confidence and score confidence distinct.
 
----
+A success updates the applicable participant roles.
+A failure updates only the at-fault role.
+Pending, disputed, and cancelled outcomes do not imply success.
+Correct earlier score events when a final outcome changes.
 
-## Scope (hackathon)
+## Commercial rules
 
-**In scope**
-- One agent with a funded demo wallet
-- A hard policy shell (limits, allowlists, stop-loss, kill switch)
-- One strategy pack plus a thin prompt-to-parameter path
-- Two or more venue **read** APIs; one or two venue **write** paths (live or paper, labeled)
-- Cardano pay + escrow on the critical path
-- One CRE workflow that runs the loop end to end
+Charge a platform fee on the buyer side and the seller side.
+Use each participant's reliability score to select its fee.
+Higher reliability gives a lower fee.
+Store accepted terms and charges with the agreement.
+Keep them separate from later recommendations.
 
-**Out of scope**
-- Full smart order routing like River
-- Many strategy packs
-- Solana and NOWNodes unless time remains
+Use verified identity and KYC restrictions for marketplace actions.
+Keep invoice terms, due dates, and payment evidence linked to the agreement.
+Keep goods delivery evidence separate from service acceptance evidence.
 
----
+The fee bounds, pair decay rate, and final KYC bar remain open decisions.
+Delivery evidence and dispute policy also need product decisions.
+Live preprod testing needs assigned key owners.
 
-## Architecture
+## Work order
 
-```mermaid
-flowchart LR
-  UI[Operator UI] --> API[Control API]
-  API --> CRE[CRE Workflow]
-  CRE --> Pol[Policy Gate]
-  CRE --> Strat[Strategy Pack]
-  CRE --> Venues[Venue Adapters]
-  CRE --> Ada[Cardano Agent Service]
-  Ada --> X402[x402 Payments]
-  Ada --> Masumi[Masumi Escrow / Identity]
-  Venues --> PM[Polymarket]
-  Venues --> KS[Kalshi]
-  Strat --> LLM[Optional LLM Compiler]
-```
+| Priority | Work | Completion condition |
+| --- | --- | --- |
+| 1 | Correct lifecycle outcomes and payment completion | Confirm funds locks, payouts, and refunds. Correct score events after disputes. |
+| 1 | Add safe action retries and time checks | Persist command identity before external calls. Use server time. Recover after restart. |
+| 1 | Authenticate callers and authorize actions | Check participant ownership, resolver authority, and consent. |
+| 2 | Implement the reliability model | Apply value and pair weights. Calculate the Beta lower bound. Explain each score change. |
+| 2 | Apply fees, terms, and KYC restrictions | Store accepted charges. Enforce transaction limits and required verification. |
+| 2 | Add marketplace writes and stored reads | Create listings and offers. Discover stored deals and receipts. |
+| 2 | Complete B2B and B2C evidence flows | Verify invoice payment, service acceptance, and goods delivery against agreed terms. |
+| 3 | Improve the operator display | Add pagination, bounded polling, stored deal discovery, and clear evidence sources. |
+| 3 | Connect pooled funding to escrow | Reconcile allocations, payouts, refunds, cancellations, and available balances. |
 
-**Data flow (one cycle)**
-1. The operator sets policy and selects a strategy pack.
-2. CRE starts on a timer or on an event.
-3. Venue adapters fetch prices and markets.
-4. The strategy pack scores candidates and proposes orders.
-5. The policy gate accepts or rejects each proposal.
-6. If the agent must buy data or a score API, it pays on Cardano with x402.
-7. The venue adapter places a live or paper order.
-8. The control API writes the audit log and updates the UI.
+Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) proposes contract templates and a contract lifecycle.
+It is not merged into main.
+Review its changes against these requirements before merge.
 
----
+## Payment boundary
 
-## Stack
+Use paper transactions for the current demo.
+Use simulated escrow by default.
+Label enabled preprod activity as live escrow.
+Queued requests and fixture responses do not prove settlement.
+Actual preprod settlement has not been tested.
 
-| Layer | Choice | Role |
-|---|---|---|
-| Operator UI | Next.js (or simple React) | Policy form, pack select, positions, audit log |
-| Control API | TypeScript (Node) | Auth, config, demo wallet state, submission glue |
-| Orchestration | Chainlink CRE (TypeScript SDK + CLI simulate) | Core loop: fetch → decide → pay → order |
-| Agent economy | Cardano + x402 + Masumi | Pay per request, identity, escrow, refunds |
-| Strategies | TypeScript modules in-repo | Pack interface: `evaluate(markets, state) → intents` |
-| Prompt path | One LLM call (optional) | Maps short text into pack parameters only |
-| Venues | Polymarket API + Kalshi API (adapters) | Normalize markets; place or paper-fill |
-| Storage | Postgres or SQLite | Policies, runs, orders, audit events |
-| Secrets | Env / CRE secrets (TEE only if ready) | Venue keys, agent keys |
+The shared Cardano adapters and settlement observer provide useful payment components.
+The marketplace lifecycle still needs their confirmation checks.
+The paper funding pool is a separate ledger.
+It does not fund lifecycle escrow or return allocated credit after a refund.
 
-**Strategy pack interface (minimum)**
-- Inputs: normalized markets, positions, balances
-- Outputs: intents `{ venue, market_id, side, size, limit }`
-- Always filtered by the policy shell before execution
+## Source retirement
 
-**Policy shell (minimum fields)**
-- `max_bet`
-- `max_daily_loss`
-- `category_allow` / `category_deny`
-- `venues_enabled`
-- `stop_loss_pct`
-- `kill_switch`
-
----
-
-## Two microservices
-
-1. **Cardano Agent Service** — wallet/escrow view, x402 pay, Masumi identity, payment receipts  
-2. **CRE Strategy Runtime** — orchestration, policy gate, strategy packs, venue adapters  
-
-The UI talks to the control API. The control API does not replace CRE. CRE owns the trading loop.
-
----
-
-## Demo proof points
-
-- Policy blocks a “politics” market  
-- Stop-loss or kill switch stops new orders  
-- Agent pays on Cardano before it uses a paid data/score endpoint  
-- CRE simulation (or deploy) log shows the full cycle  
-- UI shows live vs paper fills clearly  
-
----
-
-## One-line pitch
-
-**Deploy strategies into agents that pay on Cardano and execute across prediction venues under a hard policy — CRE runs the loop.**
+The old trading plans and demo evidence are retired.
+Shared runtime code still supplies the control API store and payment types.
+Refactor these dependencies before deleting their source files or migrations.
+Separate marketplace startup from the legacy market feed during that refactor.

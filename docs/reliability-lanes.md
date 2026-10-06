@@ -1,6 +1,7 @@
 # Reliability marketplace: lane ownership
 
 Read this file before you start a lane.
+Read [PLAN.md](../PLAN.md) for the B2B and B2C marketplace scope.
 
 Read [module boundaries](reliability-modules.md) for lifecycle internals and policy composition.
 
@@ -73,7 +74,6 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tier
 ## Merged so far
 
 - Pull request #2 adds the reliability plumbing. It adds `packages/reliability`, migration `006_reliability_marketplace.sql`, the read routes, and this file.
-- Pull request #6 values a paper trading position from `yesPrice`. A YES mark uses `yesPrice`. A NO mark uses one minus `yesPrice`.
 - Pull request #7 stores `Outcome.fault` in migration `010_outcome_fault.sql`. A failed outcome scores only the at-fault role.
 - Pull request #9 adds the transaction lifecycle. It adds migration `011_lane_a_lifecycle.sql`, the lifecycle routes on the shared control-API `AgentStore`, and [Transaction lifecycle](reliability-lifecycle.md).
 - Pull request #8 adds mock KYC on the shared store. It adds migration `008_lane_a_kyc.sql`, badge examples, and [Mock KYC](kyc.md).

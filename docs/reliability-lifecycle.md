@@ -10,7 +10,7 @@ A live preprod order is sent only when `CARDANO_MODE` is `preprod` and `CARDANO_
 
 Read [Reliability marketplace: lane ownership](reliability-lanes.md) for lane boundaries.
 
-Read [Cardano and Masumi payment scaffolding](cardano-payments.md) for the Masumi adapter.
+Read [Shared Cardano and Masumi payment adapters](cardano-payments.md) for the Masumi adapter.
 
 Read [Implementation status](implementation-status.md) for features and known limits.
 
@@ -208,7 +208,7 @@ It records `payment_settled` after the adapter accepts result submission.
 It records `refunded` after the adapter accepts a refund request.
 These stage names do not prove a completed payout or refund.
 
-The paid-research runtime has separate confirmation and settlement checks.
+The shared payment runtime has separate confirmation and settlement checks.
 Those checks do not govern this marketplace lifecycle.
 Read [settlement reconciliation](masumi-settlement.md) for that separate runtime.
 
@@ -322,7 +322,7 @@ The failure event then has the same id as the applied success event.
 The current projection skips that failure event.
 It does not remove the earlier success credit.
 
-Lifecycle mutation routes do not have the paid-research runtime's durable retry records.
+Lifecycle mutation routes do not have the shared payment runtime's durable retry records.
 A retry after funding succeeds fails the stage check.
 Concurrent requests can both call the escrow adapter before one fails the stage check.
 

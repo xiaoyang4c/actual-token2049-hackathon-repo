@@ -1,6 +1,8 @@
 # Implementation status
 
-This page describes main at commit `a88920a`.
+This page describes main at commit `5b4b2ee`.
+The code review used commit `a88920a`.
+Later main changes removed only the old plans and their references.
 The review date is 2026-10-06.
 Update this page when a change removes a listed limit.
 
@@ -10,14 +12,15 @@ Escrow uses simulation by default.
 An enabled preprod request has `mode: live`.
 That mode does not prove confirmed settlement.
 
-## Plans
+## Product scope
 
-- [Lane ownership](reliability-lanes.md) defines the marketplace target state.
-- [PLAN.md](../PLAN.md) describes the prediction-market trading runtime plan.
-- [PLAN_v2.md](../PLAN_v2.md) proposes capital allocation for two strategies.
-  The allocator, shared-event risk gate, and outcome replay are not implemented.
-- Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) proposes the contract lifecycle.
-  Its templates, tiered disputes, and contract routes are not on main.
+The scope is the B2B and B2C marketplace with its reliability checker.
+[PLAN.md](../PLAN.md) defines the product plan.
+[Lane ownership](reliability-lanes.md) defines module owners and the target rules.
+The prediction-market runtime and capital-allocation plans are retired.
+
+Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) proposes the contract lifecycle.
+Its templates, tiered disputes, and contract routes are not on main.
 
 ## Marketplace features
 
@@ -47,12 +50,20 @@ The product owner must decide the fee bounds, pair decay rate, and KYC bar.
 The product owner must also decide delivery evidence and dispute policy.
 Preprod key ownership remains an open decision.
 
-## Runtime limits
+## Features to improve
+
+| Area | Improvement |
+| --- | --- |
+| Score explanations | Store policy version, value weight, pair count, and verification evidence. Support controlled score rebuilds. |
+| Agreement history | Keep accepted terms and charges separate from later score-based recommendations. |
+| Lifecycle recovery | Commit related local records together. Recover ambiguous external actions after a restart. |
+| Operator freshness | Add pagination, bounded requests, and a clear source label for each record. |
+| Marketplace startup | Remove the dependency on the legacy trading runtime and stop starting its market feed. Preserve shared storage and payment functions. |
+
+## Logic gaps
 
 | Area | Current limit | Source |
 | --- | --- | --- |
-| Execution policy | Direct orders do not enforce category, venue, or maximum bet rules. The workflow checks these rules before submission. | [Order executor](../services/agent-runtime.ts) |
-| Order retries | A reused key returns the first result, even if the order body changes. | [Order executor](../services/agent-runtime.ts) |
 | Outcome corrections | A dispute reversal does not replace an applied success event or rebuild its score. | [Lifecycle projection](../services/reliability/lifecycle-service.ts) |
 | Escrow completion | Result and refund requests produce final application stages without confirmed payout checks. | [Escrow lifecycle](../packages/reliability/src/lifecycle.ts) |
 | Lifecycle retries | Concurrent calls can reach escrow twice. A retry after a completed action can fail the stage check. | [Escrow lifecycle](../packages/reliability/src/lifecycle.ts) |
@@ -68,7 +79,7 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for stage names and evide
 
 ## Payment boundaries
 
-The [paid-research runtime](cardano-payments.md) confirms a funds lock before first delivery.
+The [shared payment runtime](cardano-payments.md) confirms a funds lock before first delivery.
 Its worker keeps delivery and [settlement evidence](masumi-settlement.md) separate.
 The marketplace lifecycle does not use those confirmation checks.
 
@@ -88,7 +99,8 @@ All 423 tests passed.
 The control, payment, and workflow TypeScript checks passed.
 Lint passed.
 
-Separate local checks reproduced the first nine runtime limits in the table.
+Separate local checks reproduced the first seven logic gaps in the table.
 The escrow checks used injected ports.
 They made no live chain calls.
-Browser rendering and CRE deployment were not tested.
+Browser rendering and actual preprod settlement were not tested.
+The documentation changes do not fix the listed logic gaps.

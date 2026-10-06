@@ -66,7 +66,7 @@ Fee limits, the decay rate, and the KYC bar still require product decisions.
 
 The fee policy returns rate offers.
 The lifecycle does not collect fees or enforce the offered terms.
-Read [Implementation status](implementation-status.md) for the remaining work and runtime limits.
+Read [Implementation status](implementation-status.md) for the remaining work and logic gaps.
 
 Read [lane ownership](reliability-lanes.md) before changing a lane.
 Read [transaction lifecycle](reliability-lifecycle.md) for state and escrow rules.
