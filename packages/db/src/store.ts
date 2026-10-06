@@ -435,7 +435,7 @@ export class AgentStore {
     kycRecords.insertKycStatusRecord(this.db, record);
   }
 
-  /** Status records for one entity, oldest first. */
+  /** Status records for one entity, in the order they were saved. */
   listKycStatusRecords(entityId: string): KycStatusRecord[] {
     return kycRecords.listKycStatusRecords(this.db, entityId);
   }

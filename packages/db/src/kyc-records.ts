@@ -62,6 +62,7 @@ interface ProfileRow {
   reRegistrationValue: string|null;
   rulesVersion: string;
   verifiedAt: string|null;
+  pendingSince: string|null;
   updatedAt: string;
 }
 
@@ -73,6 +74,7 @@ const SELECT_PROFILE = `SELECT
   re_registration_signal AS reRegistrationSignal,
   re_registration_value AS reRegistrationValue,
   rules_version AS rulesVersion, verified_at AS verifiedAt,
+  pending_since AS pendingSince,
   updated_at AS updatedAt
   FROM reliability_kyc_profiles`;
 
@@ -92,6 +94,7 @@ function parseProfile(row: ProfileRow): KycProfile {
     reRegistrationValue: optionalText(row.reRegistrationValue),
     rulesVersion: requireText(row.rulesVersion, 'rulesVersion'),
     verifiedAt: optionalText(row.verifiedAt),
+    pendingSince: optionalText(row.pendingSince),
     updatedAt: requireText(row.updatedAt, 'updatedAt'),
   };
 }
@@ -102,8 +105,8 @@ export function saveKycProfile(db: Database, profile: KycProfile): KycProfile {
       entity_id, subject_kind, document_id, registration_number,
       beneficial_owner_document_id, checks_json, re_registration_of,
       re_registration_signal, re_registration_value, rules_version,
-      verified_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      verified_at, pending_since, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (entity_id) DO UPDATE SET
       subject_kind = excluded.subject_kind,
       document_id = excluded.document_id,
@@ -115,6 +118,7 @@ export function saveKycProfile(db: Database, profile: KycProfile): KycProfile {
       re_registration_value = excluded.re_registration_value,
       rules_version = excluded.rules_version,
       verified_at = excluded.verified_at,
+      pending_since = excluded.pending_since,
       updated_at = excluded.updated_at`).run(
     requireText(profile.entityId, 'entityId'),
     requireOneOf(profile.subjectKind, KINDS, 'subjectKind'),
@@ -129,6 +133,7 @@ export function saveKycProfile(db: Database, profile: KycProfile): KycProfile {
     bindOptionalText(profile.reRegistrationValue),
     requireText(profile.rulesVersion, 'rulesVersion'),
     bindOptionalText(profile.verifiedAt),
+    bindOptionalText(profile.pendingSince),
     requireText(profile.updatedAt, 'updatedAt'),
   );
   return requiredRow(getKycProfile(db, profile.entityId), 'kyc profile');
@@ -205,7 +210,7 @@ export function insertKycStatusRecord(
   );
 }
 
-/** Status records for one entity, oldest first. */
+/** Status records for one entity, in the order they were saved. */
 export function listKycStatusRecords(
   db: Database, entityId: string,
 ): KycStatusRecord[] {
@@ -213,7 +218,7 @@ export function listKycStatusRecords(
       id, entity_id AS entityId, status, tier, badge, how,
       detail_json AS detailJson, provider, rules_version AS rulesVersion, at
       FROM reliability_kyc_status_records
-      WHERE entity_id = ? ORDER BY at, id`).all(entityId).map(parseStatus);
+      WHERE entity_id = ? ORDER BY rowid`).all(entityId).map(parseStatus);
 }
 
 function parseStatus(row: StatusRow): KycStatusRecord {
