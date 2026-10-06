@@ -14,10 +14,12 @@ import * as agentBook from './agent-book';
 import * as cycleRecords from './cycle-records';
 import * as paymentReceipts from './payment-receipts';
 import * as paymentSettlements from './payment-settlements';
+import * as lifecycleRecords from './lifecycle-records';
 import * as reliabilityRecords from './reliability';
 import type {
-  Entity, EntityRole, MarketplaceTransaction, Outcome, ReliabilityCategory,
-  ReliabilityEvent, ReliabilityState, TermsDecision, TermsVersion,
+  Entity, EntityRole, JsonValue, MarketplaceTransaction, Outcome,
+  ReliabilityCategory, ReliabilityEvent, ReliabilityState, TermsDecision,
+  TermsVersion,
 } from '../../reliability/src/types';
 import type {
   PaymentSettlementRecord, SettlementObservationInput, SettlementObservationRecord,
@@ -349,5 +351,44 @@ export class AgentStore {
     entityId: string, category: ReliabilityCategory,
   ): TermsDecision[] {
     return reliabilityRecords.listTermsDecisions(this.db, entityId, category);
+  }
+
+  /**
+   * Appends one lifecycle stage change.
+   * Lane A owns this history. KYC does not write these rows.
+   */
+  insertLifecycleTransition(
+    record: lifecycleRecords.LifecycleTransitionRecord,
+  ): void {
+    lifecycleRecords.insertLifecycleTransition(this.db, record);
+  }
+
+  /** Lists lifecycle stage changes for one transaction, oldest first. */
+  listLifecycleTransitions(
+    transactionId: string,
+  ): lifecycleRecords.LifecycleTransitionRecord[] {
+    return lifecycleRecords.listLifecycleTransitions(this.db, transactionId);
+  }
+
+  /**
+   * Points a transaction at new terms.
+   * Pass `undefined` for `termsHash` to clear a stale hash.
+   * Append a terms version first. This write does not edit older versions.
+   */
+  updateTransactionTerms(
+    transactionId: string,
+    terms: {[key: string]: JsonValue},
+    termsHash: string|undefined,
+  ): void {
+    lifecycleRecords.updateTransactionTerms(
+      this.db, transactionId, terms, termsHash,
+    );
+  }
+
+  /** Records the time a transaction reached a terminal outcome. */
+  setTransactionCompletedAt(transactionId: string, completedAt: string): void {
+    lifecycleRecords.setTransactionCompletedAt(
+      this.db, transactionId, completedAt,
+    );
   }
 }
