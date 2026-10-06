@@ -62,6 +62,7 @@ The scoring policy still uses unit weights.
 Value weighting and cumulative pair history are not implemented.
 The event flow calls the decay stub without using the returned weight.
 The math lane must implement those rules and pair-history persistence together.
+Read [Reliability math](reliability-math.md) for the target model and proposed policy curves.
 Fee limits, the decay rate, and the KYC bar still require product decisions.
 
 The fee policy returns rate offers.

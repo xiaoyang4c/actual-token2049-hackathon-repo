@@ -8,11 +8,12 @@ Each entity has a separate buyer score and seller score for each category.
 Read [PLAN.md](PLAN.md) for the product scope and work order.
 Read [Implementation status](docs/implementation-status.md) for implemented features and known gaps.
 Read [lane ownership](docs/reliability-lanes.md) before you change a module.
+Read [Reliability math](docs/reliability-math.md) for equations, examples, and open parameters.
 
 ## Target rules
 
-- Scale each score change with transaction value: `w = log(1 + v / v0)`.
-  `v` is the transaction value. `v0` is the value scale.
+- Scale each score change with transaction value: $w = \ln(1 + v / v_0)$.
+  $v$ is the transaction value. $v_0$ is the value scale.
 - Reduce score gains from repeat transactions between the same pair.
 - Set buyer and seller platform fees from their reliability scores.
   Higher scores give lower fees.

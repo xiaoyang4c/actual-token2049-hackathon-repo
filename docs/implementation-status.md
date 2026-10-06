@@ -36,8 +36,10 @@ Its templates, tiered disputes, and contract routes are not on main.
 | Operator display | Read-only transactions, receipts, scores, KYC, and listings | Stored collection reads and scalable pagination |
 | Pooled funding | Paper deposits and deal allocations | Escrow integration, return credits, and reconciliation |
 
-The target value weight is `w = log(1 + v / v0)`.
+The target value weight is $w = \ln(1 + v / v_0)$.
 The score stub does not use this weight.
+Read [Reliability math](reliability-math.md) for the target equations and proposed policy formulas.
+Those formulas are not implemented by this documentation PR.
 The event flow does not apply repeat-pair decay.
 The fee stub returns offers for one entity.
 Those offers are not charged totals for both transaction participants.

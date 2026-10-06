@@ -32,10 +32,12 @@ Goods update delivery reliability.
 Services update fulfillment reliability.
 Invoices update payment reliability.
 
-Scale score changes with transaction value: `w = log(1 + v / v0)`.
-`v` is the transaction value. `v0` is the value scale.
+Scale score changes with transaction value: $w = \ln(1 + v / v_0)$.
+$v$ is the transaction value. $v_0$ is the value scale.
 Reduce the weight of repeat transactions between the same pair.
-Use a Beta lower bound to show uncertainty.
+Use the fifth percentile of the Beta distribution for policy decisions.
+Use the mean for display.
+Read [Reliability math](docs/reliability-math.md) for the model and proposed commercial rules.
 Keep verification confidence and score confidence distinct.
 
 A success updates the applicable participant roles.

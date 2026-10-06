@@ -2,6 +2,7 @@
 
 Read this file before you start a lane.
 Read [PLAN.md](../PLAN.md) for the B2B and B2C marketplace scope.
+Read [Reliability math](reliability-math.md) for equations and parameter decisions.
 
 Read [module boundaries](reliability-modules.md) for lifecycle internals and policy composition.
 
@@ -28,7 +29,7 @@ Lane C builds the local operator UI against `GET /reliability/*`. It shows trans
 
 Pull request #8 adds mock KYC on main. Lane A owns mock KYC. Read [mock KYC](kyc.md). `KYC_TIER_RULES` contains the default tier rules. The product owner has not decided the final KYC bar.
 
-The target score weight is `w = log(1 + v / v0)`. `v` is the transaction value. `v0` is the value scale. `packages/reliability/src/scoring.ts` is a stub. The stub adds one to alpha on success and one to beta on failure.
+The target score weight is $w = \ln(1 + v / v_0)$. $v$ is the transaction value. $v_0$ is the value scale. `packages/reliability/src/scoring.ts` is a stub. The stub adds one to alpha on success and one to beta on failure.
 
 Each entity has a buyer score and a seller score on main.
 The score numbers come from the scoring stub.
