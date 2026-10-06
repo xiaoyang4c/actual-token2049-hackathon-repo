@@ -80,6 +80,7 @@ describe('AgentStore', () => {
         'position_events',
         'reliability_entities',
         'reliability_events',
+        'reliability_kyc_identifiers',
         'reliability_kyc_profiles',
         'reliability_kyc_status_records',
         'reliability_lifecycle_transitions',

@@ -1,5 +1,5 @@
 /**
- * @fileoverview KYC profile and status history rows.
+ * @fileoverview KYC profile, identifier, and status history rows.
  * Domain behavior lives in packages/reliability/src/kyc.ts.
  * This module only stores and reads rows.
  */
@@ -10,6 +10,7 @@ import {
   KYC_HOWS as HOWS,
   KYC_RE_REGISTRATION_SIGNALS as SIGNALS,
   type KycProfile,
+  type KycReRegistrationSignal,
   type KycStatusRecord,
   type KycSubjectKind,
 } from '../../reliability/src/kyc';
@@ -150,30 +151,36 @@ export function getKycProfile(
   return parseProfile(row);
 }
 
-/**
- * Profiles whose mocked document or beneficial owner document matches.
- * Ordered by entity id.
- */
-export function listKycProfilesByDocument(
-  db: Database, documentId: string,
-): KycProfile[] {
-  return db.query<ProfileRow, [string, string]>(
-    `${SELECT_PROFILE}
-     WHERE document_id = ? OR beneficial_owner_document_id = ?
-     ORDER BY entity_id`,
-  ).all(
-    requireText(documentId, 'documentId'),
-    requireText(documentId, 'documentId'),
-  ).map(parseProfile);
+/** Records that an entity used an identifier. Keeps the first time. */
+export function recordKycIdentifier(
+  db: Database,
+  entityId: string,
+  signal: KycReRegistrationSignal,
+  value: string,
+  at: string,
+): void {
+  db.query(`INSERT INTO reliability_kyc_identifiers (
+      signal, value, entity_id, first_seen_at
+    ) VALUES (?, ?, ?, ?)
+    ON CONFLICT (signal, value, entity_id) DO NOTHING`).run(
+    requireOneOf(signal, SIGNALS, 'signal'),
+    requireText(value, 'identifier'),
+    requireText(entityId, 'entityId'),
+    requireText(at, 'at'),
+  );
 }
 
-/** Profiles with this registration number, ordered by entity id. */
-export function listKycProfilesByRegistration(
-  db: Database, registrationNumber: string,
-): KycProfile[] {
-  return db.query<ProfileRow, [string]>(
-    `${SELECT_PROFILE} WHERE registration_number = ? ORDER BY entity_id`,
-  ).all(requireText(registrationNumber, 'registrationNumber')).map(parseProfile);
+/** Entities that have used an identifier, ordered by entity id. */
+export function listKycIdentifierEntityIds(
+  db: Database, signal: KycReRegistrationSignal, value: string,
+): string[] {
+  return db.query<{entityId: string}, [string, string]>(
+    `SELECT entity_id AS entityId FROM reliability_kyc_identifiers
+     WHERE signal = ? AND value = ? ORDER BY entity_id`,
+  ).all(
+    requireOneOf(signal, SIGNALS, 'signal'),
+    requireText(value, 'identifier'),
+  ).map((row) => row.entityId);
 }
 
 interface StatusRow {

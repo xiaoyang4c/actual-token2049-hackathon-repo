@@ -268,6 +268,7 @@ describe('person and business KYC paths', () => {
         badge: 'unverified',
         countsAsVerified: false,
         reRegistrationOf: null,
+        reRegistrationSignal: null,
         rulesVersion: KYC_TIER_RULES.version,
       });
       expectCode(() => provider.resolveCheck('ada', T1), 'not_pending');
@@ -900,8 +901,9 @@ describe('re-registration and wallets', () => {
       });
       expect(store.listReliabilityStates()).toEqual([]);
 
+      // A person who owns a company is not a re-registration of it.
       person(provider, 'owner', 'DOC-OWNER');
-      const linked = provider.registerEntity({
+      const owned = provider.registerEntity({
         id: 'co-c',
         displayName: 'Company C',
         roles: ['seller'],
@@ -911,10 +913,70 @@ describe('re-registration and wallets', () => {
         beneficialOwnerDocumentId: 'DOC-OWNER',
         at: T2,
       });
-      expect(linked.reRegistration).toEqual({
-        ofEntityId: 'owner',
-        signal: 'document',
+      expect(owned.reRegistration).toBeNull();
+      expect(provider.view('owner').reRegistration).toBeNull();
+
+      const sameOwner = provider.registerEntity({
+        id: 'co-d',
+        displayName: 'Company D',
+        roles: ['seller'],
+        wallets: ['wallet-co-d'],
+        kind: 'business',
+        registrationNumber: 'REG-OTHER',
+        beneficialOwnerDocumentId: 'DOC-OWNER',
+        at: T3,
+      });
+      expect(sameOwner.reRegistration).toEqual({
+        ofEntityId: 'co-c',
+        signal: 'beneficial_owner',
         matchedValue: 'DOC-OWNER',
+      });
+      expect(sameOwner.policyInput.reRegistrationSignal).toBe(
+        'beneficial_owner',
+      );
+    });
+  });
+
+  test('matches a document that the entity has since replaced', () => {
+    withKyc((provider) => {
+      person(provider, 'changed', 'DOC-X');
+      provider.submitCheck({
+        kind: 'person', entityId: 'changed', documentId: 'DOC-X', at: T1,
+      });
+      provider.submitCheck({
+        kind: 'person', entityId: 'changed', documentId: 'DOC-Y', at: T2,
+      });
+      const later = person(provider, 'later', 'DOC-X', T3);
+      expect(later.reRegistration).toEqual({
+        ofEntityId: 'changed',
+        signal: 'document',
+        matchedValue: 'DOC-X',
+      });
+    });
+  });
+
+  test('points every match at the entity created first', () => {
+    withKyc((provider) => {
+      person(provider, 'zed', 'DOC-1', T0);
+      expect(person(provider, 'abe', 'DOC-1', T1).reRegistration?.ofEntityId)
+        .toBe('zed');
+      expect(person(provider, 'mid', 'DOC-1', T2).reRegistration?.ofEntityId)
+        .toBe('zed');
+      expect(provider.view('zed').reRegistration).toBeNull();
+    });
+
+    withKyc((provider) => {
+      // The older entity submits the document after a newer one used it.
+      person(provider, 'older', undefined, T0);
+      person(provider, 'newer', 'DOC-2', T1);
+      const older = provider.submitCheck({
+        kind: 'person', entityId: 'older', documentId: 'DOC-2', at: T2,
+      });
+      expect(older.reRegistration).toBeNull();
+      expect(provider.view('newer').reRegistration).toEqual({
+        ofEntityId: 'older',
+        signal: 'document',
+        matchedValue: 'DOC-2',
       });
     });
   });

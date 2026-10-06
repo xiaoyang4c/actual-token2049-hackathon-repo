@@ -55,14 +55,30 @@ describe('AgentStore KYC rows', () => {
         beneficialOwnerDocumentId: 'DOC-9',
         submittedChecks: ['beneficial_owner', 'registration_number'],
         reRegistrationOf: 'p1',
-        reRegistrationSignal: 'document',
+        reRegistrationSignal: 'beneficial_owner',
         reRegistrationValue: 'DOC-9',
         verifiedAt: T1,
         updatedAt: T1,
       }));
-      expect(store.listKycProfilesByDocument('DOC-9').map((row) => row.entityId))
-        .toEqual(['b1', 'p1']);
-      expect(store.listKycProfilesByRegistration('REG-1')[0]?.entityId).toBe('b1');
+      expect(store.getKycProfile('b1')?.reRegistrationSignal).toBe(
+        'beneficial_owner',
+      );
+
+      store.recordKycIdentifier('p1', 'document', 'DOC-9', T1);
+      store.recordKycIdentifier('b1', 'beneficial_owner', 'DOC-9', T1);
+      store.recordKycIdentifier('b1', 'registration_number', 'REG-1', T1);
+      store.recordKycIdentifier('p1', 'document', 'DOC-9', T2);
+      expect(store.listKycIdentifierEntityIds('document', 'DOC-9')).toEqual([
+        'p1',
+      ]);
+      expect(store.listKycIdentifierEntityIds('beneficial_owner', 'DOC-9'))
+        .toEqual(['b1']);
+      expect(store.listKycIdentifierEntityIds('registration_number', 'REG-1'))
+        .toEqual(['b1']);
+      expect(store.listKycIdentifierEntityIds('document', 'DOC-0')).toEqual([]);
+      expect(() => store.recordKycIdentifier(
+        'missing', 'document', 'DOC-9', T1,
+      )).toThrow();
       expect(store.getWalletEntityId('wallet-p1')).toBe('p1');
       expect(store.getWalletEntityId('missing')).toBeUndefined();
 

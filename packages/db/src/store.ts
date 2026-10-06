@@ -17,7 +17,9 @@ import * as paymentSettlements from './payment-settlements';
 import * as kycRecords from './kyc-records';
 import * as lifecycleRecords from './lifecycle-records';
 import * as reliabilityRecords from './reliability';
-import type {KycProfile, KycStatusRecord} from '../../reliability/src/kyc';
+import type {
+  KycProfile, KycReRegistrationSignal, KycStatusRecord,
+} from '../../reliability/src/kyc';
 import type {
   Entity, EntityRole, JsonValue, KycStatus, KycTier, MarketplaceTransaction,
   Outcome,
@@ -420,14 +422,21 @@ export class AgentStore {
     return kycRecords.getKycProfile(this.db, entityId);
   }
 
-  /** Profiles whose mocked document matches, ordered by entity id. */
-  listKycProfilesByDocument(documentId: string): KycProfile[] {
-    return kycRecords.listKycProfilesByDocument(this.db, documentId);
+  /** Records that an entity used an identifier. Keeps the first time. */
+  recordKycIdentifier(
+    entityId: string,
+    signal: KycReRegistrationSignal,
+    value: string,
+    at: string,
+  ): void {
+    kycRecords.recordKycIdentifier(this.db, entityId, signal, value, at);
   }
 
-  /** Profiles with this registration number, ordered by entity id. */
-  listKycProfilesByRegistration(registrationNumber: string): KycProfile[] {
-    return kycRecords.listKycProfilesByRegistration(this.db, registrationNumber);
+  /** Entities that have used an identifier, ordered by entity id. */
+  listKycIdentifierEntityIds(
+    signal: KycReRegistrationSignal, value: string,
+  ): string[] {
+    return kycRecords.listKycIdentifierEntityIds(this.db, signal, value);
   }
 
   /** Appends one status record. Ids are unique. */
