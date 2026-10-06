@@ -76,6 +76,12 @@ Read [lane ownership](../docs/reliability-lanes.md),
 [mock KYC](../docs/kyc.md) for the contracts behind these views.
 Read [Implementation status](../docs/implementation-status.md) for current features and known limits.
 
+## Appearance
+
+Use the sun or moon button in the header to switch between light and dark mode.
+The first visit uses the system theme.
+Your choice is saved in this browser when local storage is available.
+
 ## Checks
 
 ```sh
