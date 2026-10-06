@@ -5,6 +5,7 @@
  */
 
 export {FIXTURE_ENTITIES} from './entities';
+export {KYC_FIXTURE_CASES, type KycFixtureCase} from './kyc-demo';
 export {FIXTURE_STATES} from './states';
 export {FIXTURE_LISTINGS} from './listings';
 export {

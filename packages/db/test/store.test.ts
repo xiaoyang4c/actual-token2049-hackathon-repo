@@ -80,6 +80,8 @@ describe('AgentStore', () => {
         'position_events',
         'reliability_entities',
         'reliability_events',
+        'reliability_kyc_profiles',
+        'reliability_kyc_status_records',
         'reliability_outcomes',
         'reliability_state',
         'reliability_terms_decisions',
@@ -98,7 +100,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      expect(versions.versions).toBe(6);
+      // 001 through 006, plus 008. 007 is reserved and is not in this branch.
+      expect(versions.versions).toBe(7);
     } finally {
       db.close();
     }
