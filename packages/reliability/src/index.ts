@@ -82,6 +82,16 @@ export type {
   EscrowReleaseResult,
   EscrowSession,
 } from './escrow-port';
+export type {
+  DealFundingRequest,
+  OmnibusBalance,
+  OmnibusFundingStore,
+  PaperDealFundingPort,
+  PaperDealFundingRecord,
+  PaperOmnibusPool,
+  PaperPoolDeposit,
+  PaperPoolTransfer,
+} from './omnibus-funding';
 export {
   STUB_PAYMENT_EVIDENCE_VERSION,
   hashInvoiceTerms,

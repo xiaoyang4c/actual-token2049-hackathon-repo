@@ -75,9 +75,10 @@ Take the next free migration number.
 
 These numbers are reserved: `007` for the math lane, `008` for KYC, and `009` for lane D.
 
-Migrations `010` and `011` are used.
+Migrations `010`, `011`, and `013` are used.
+Migration `012` is allocated to the contract lifecycle in pull request #17.
 
-The next free number is `012`.
+The next free number is `014`.
 
 Use "paper" for a simulated fill. Use "live" for a real venue order.
 

@@ -5,6 +5,8 @@
   "scripts": {
     "services": "bun run services/dev.ts",
     "paper:demo": "bun run services/paper-position-demo.ts",
+    "funding:demo": "bun run services/reliability/omnibus-funding-demo.ts",
+    "funding:test": "bun test services/reliability/omnibus-funding.test.ts packages/db/test/store.test.ts",
     "payments:demo": "bun run services/cardano-agents-ts/demo.ts",
     "payments:test": "bun test services/cardano-agents-ts services/score-provider.test.ts packages/db",
     "payments:typecheck": "tsc --noEmit -p tsconfig.payments.json",

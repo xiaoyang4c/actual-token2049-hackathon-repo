@@ -84,6 +84,9 @@ describe('AgentStore', () => {
         'reliability_kyc_profiles',
         'reliability_kyc_status_records',
         'reliability_lifecycle_transitions',
+        'reliability_omnibus_deal_funding',
+        'reliability_omnibus_deposits',
+        'reliability_omnibus_pools',
         'reliability_outcomes',
         'reliability_state',
         'reliability_terms_decisions',
@@ -102,8 +105,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-006, 008, 010, and 011. 007 and 009 are reserved.
-      expect(versions.versions).toBe(9);
+      // 001-006, 008, 010-011, and 013. 012 is allocated to PR #17.
+      expect(versions.versions).toBe(10);
     } finally {
       db.close();
     }
