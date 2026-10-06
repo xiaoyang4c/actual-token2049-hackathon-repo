@@ -11,8 +11,11 @@
  * is unverified at tier none.
  *
  * Allowed moves:
- * - unverified, rejected, or verified -> pending on submit
+ * - unverified, rejected, or pending -> pending on submit
+ * - verified stays verified on submit until the check resolves
  * - pending -> verified, rejected, or still pending on resolve
+ * - verified -> verified at the new tier on a passing resolve. A
+ *   rejected or held check keeps the current tier.
  * - verified -> unverified with badge expired
  */
 
@@ -103,6 +106,8 @@ export interface KycProfile {
   reRegistrationValue?: string;
   rulesVersion: string;
   verifiedAt?: string;
+  /** Time of the submission that waits for resolveCheck. */
+  pendingSince?: string;
   updatedAt: string;
 }
 
@@ -136,14 +141,18 @@ export interface KycPolicyInput {
 /** Read model for one entity. */
 export interface KycView {
   entity: Entity;
-  subjectKind: KycSubjectKind;
+  /** Null when the entity was created outside KYC onboarding. */
+  subjectKind: KycSubjectKind|null;
   status: KycStatus;
   tier: KycTier;
   badge: KycBadge;
   countsAsVerified: boolean;
+  /** True while a submitted check waits for resolveCheck. */
+  checkPending: boolean;
   reRegistration: KycReRegistration|null;
   rulesVersion: string;
   verifiedAt?: string;
+  /** Checks of the latest submission. Expiry clears them. */
   submittedChecks: readonly string[];
   history: KycStatusRecord[];
   policyInput: KycPolicyInput;
@@ -236,22 +245,11 @@ export class MockKycProvider implements KycProvider {
    * Frozen status and tier. An override map wins. Otherwise the
    * store row wins. An unknown id is unverified at tier none.
    * Expiry is not returned here. Read KycView.badge for that.
+   * KycView and its policyInput read the same status.
    */
   fetchStatus(entity: Entity, now: string): KycResult {
-    const known = this.table.get(entity.id);
-    if (known) return {...known, provider: this.name, checkedAt: now};
-    const stored = this.store?.getEntity(entity.id);
-    if (stored) {
-      return {
-        status: stored.kycStatus,
-        tier: stored.kycTier,
-        provider: this.name,
-        checkedAt: now,
-      };
-    }
     return {
-      status: 'unverified',
-      tier: 'none',
+      ...this.statusOf(entity.id, this.store?.getEntity(entity.id)),
       provider: this.name,
       checkedAt: now,
     };
@@ -283,7 +281,7 @@ export class MockKycProvider implements KycProvider {
         store, blankProfile(entity.id, input, at, this.rules.version),
       );
       store.saveKycProfile(profile);
-      this.append(store, profile, {
+      this.append(store, entity.id, profile, {
         status: 'unverified',
         tier: 'none',
         badge: 'unverified',
@@ -302,6 +300,7 @@ export class MockKycProvider implements KycProvider {
    */
   attachWallet(entityId: string, wallet: string, at: string): KycView {
     const store = this.requireStore();
+    const id = requireLabel(entityId, 'entityId');
     const when = requireTime(at);
     const normalized = normalizeWallets([wallet]);
     const next = normalized[0];
@@ -311,163 +310,170 @@ export class MockKycProvider implements KycProvider {
       );
     }
     return store.transaction(() => {
-      this.requireEntity(store, entityId);
+      this.requireEntity(store, id);
       const owner = store.getWalletEntityId(next);
-      if (owner === entityId) return this.readView(store, entityId);
+      if (owner === id) return this.readView(store, id);
       if (owner !== undefined) {
         throw new KycFlowError('wallet_in_use', 'wallet is already registered');
       }
-      store.addWallet(entityId, next, when);
-      return this.readView(store, entityId);
+      store.addWallet(id, next, when);
+      return this.readView(store, id);
     });
   }
 
-  /** Moves the entity to pending and records the mocked checks. */
+  /**
+   * Records one submission. It replaces the earlier checks and
+   * identifiers, so send every check for the tier you want. A
+   * verified entity keeps its status and tier until the check
+   * resolves. Any other entity moves to pending. An entity that was
+   * created outside KYC onboarding gets its profile here.
+   */
   submitCheck(input: KycCheckInput): KycView {
     const store = this.requireStore();
+    const entityId = requireLabel(input.entityId, 'entityId');
     const at = requireTime(input.at);
     return store.transaction(() => {
-      const current = this.requireProfile(store, input.entityId);
-      if (current.subjectKind !== input.kind) {
+      const entity = this.requireEntity(store, entityId);
+      const current = store.getKycProfile(entityId);
+      if (current !== undefined && current.subjectKind !== input.kind) {
         throw new KycFlowError(
           'kind_mismatch', 'check kind does not match the entity',
         );
       }
-      const checks = new Set(current.submittedChecks);
-      const next: KycProfile = {
-        ...current,
+      const verified = entity.kycStatus === 'verified';
+      const profile = this.withFlag(store, {
+        ...submittedProfile(entityId, input),
+        reRegistrationOf: current?.reRegistrationOf,
+        reRegistrationSignal: current?.reRegistrationSignal,
+        reRegistrationValue: current?.reRegistrationValue,
         rulesVersion: this.rules.version,
-        verifiedAt: undefined,
+        verifiedAt: verified ? current?.verifiedAt : undefined,
+        pendingSince: at,
         updatedAt: at,
-      };
-      if (input.kind === 'person') {
-        next.documentId = requireLabel(input.documentId, 'documentId');
-        checks.add(KYC_CHECK.personIdentity);
-        if (input.addressChecked === true) checks.add(KYC_CHECK.personAddress);
-      } else {
-        next.registrationNumber = requireLabel(
-          input.registrationNumber, 'registrationNumber',
-        );
-        checks.add(KYC_CHECK.businessRegistration);
-        if (input.beneficialOwnerDocumentId !== undefined) {
-          next.beneficialOwnerDocumentId = requireLabel(
-            input.beneficialOwnerDocumentId, 'beneficialOwnerDocumentId',
-          );
-          checks.add(KYC_CHECK.businessBeneficialOwner);
-        }
-      }
-      next.submittedChecks = [...checks].sort();
-      const profile = this.withFlag(store, next);
-      store.saveKycProfile(profile);
-      store.updateEntityKyc(profile.entityId, 'pending', 'none');
-      this.append(store, profile, {
-        status: 'pending',
-        tier: 'none',
-        badge: 'pending',
+      });
+      const status = verified ? 'verified' : 'pending';
+      return this.finish(store, entityId, profile, {
+        status,
+        tier: verified ? entity.kycTier : 'none',
+        badge: status,
         how: 'check_submitted',
         at,
         decision: undefined,
       });
-      return this.readView(store, profile.entityId);
     });
   }
 
   /**
    * Applies the scripted vendor outcome. The tier comes from the
-   * config and the submitted checks, not from the script.
+   * config and the submitted checks, not from the script. When the
+   * check does not pass, a verified entity keeps its current tier.
    */
   resolveCheck(entityId: string, at: string): KycView {
     const store = this.requireStore();
+    const id = requireLabel(entityId, 'entityId');
     const when = requireTime(at);
     return store.transaction(() => {
-      const entity = this.requireEntity(store, entityId);
-      if (entity.kycStatus !== 'pending') {
+      const entity = this.requireEntity(store, id);
+      const current = store.getKycProfile(id);
+      if (current?.pendingSince === undefined) {
         throw new KycFlowError('not_pending', 'resolve a pending check');
       }
-      const current = this.requireProfile(store, entityId);
       const decision = vendorDecisionFor(current, this.scripts);
-      if (decision === 'hold') {
-        return this.finish(store, current, {
-          status: 'pending',
-          tier: 'none',
-          badge: 'pending',
-          how: 'vendor_hold',
+      const tier = decision === 'pass' ?
+        tierForSubmittedChecks(
+          current.subjectKind, current.submittedChecks, this.rules,
+        ) :
+        'none';
+      const verified = entity.kycStatus === 'verified';
+      if (tier !== 'none') {
+        const raised = verified &&
+          kycTierRank(tier) > kycTierRank(entity.kycTier);
+        return this.finish(store, id, {
+          ...this.settled(current, when),
+          verifiedAt: when,
+        }, {
+          status: 'verified',
+          tier,
+          badge: 'verified',
+          how: raised ? 'tier_raised' : 'vendor_approved',
           at: when,
           decision,
-          verifiedAt: undefined,
         });
       }
-      if (decision === 'reject') {
-        return this.finish(store, current, {
-          status: 'rejected',
-          tier: 'none',
-          badge: 'rejected',
-          how: 'vendor_rejected',
+      const how = NOT_PASSED_HOW[decision];
+      if (verified) {
+        // The current verification stands. Only a hold stays open.
+        return this.finish(store, id, {
+          ...this.settled(current, when),
+          pendingSince: decision === 'hold' ? current.pendingSince : undefined,
+        }, {
+          status: 'verified',
+          tier: entity.kycTier,
+          badge: 'verified',
+          how,
           at: when,
           decision,
-          verifiedAt: undefined,
         });
       }
-      const tier = tierForSubmittedChecks(
-        current.subjectKind, current.submittedChecks, this.rules,
-      );
-      if (tier === 'none') {
-        return this.finish(store, current, {
-          status: 'pending',
-          tier: 'none',
-          badge: 'pending',
-          how: 'checks_short_of_tier',
-          at: when,
-          decision,
-          verifiedAt: undefined,
-        });
-      }
-      const prior = lastVerifiedTier(store.listKycStatusRecords(entityId));
-      const how = kycTierRank(tier) > kycTierRank(prior) && prior !== 'none' ?
-        'tier_raised' :
-        'vendor_approved';
-      return this.finish(store, current, {
-        status: 'verified',
-        tier,
-        badge: 'verified',
+      const status = decision === 'reject' ? 'rejected' : 'pending';
+      return this.finish(store, id, {
+        ...this.settled(current, when),
+        verifiedAt: undefined,
+        pendingSince: status === 'pending' ? current.pendingSince : undefined,
+      }, {
+        status,
+        tier: 'none',
+        badge: status,
         how,
         at: when,
         decision,
-        verifiedAt: when,
       });
     });
   }
 
   /**
    * Expires a verified entity. The entity row becomes unverified
-   * at tier none. The history badge is `expired`. Pass force to
-   * skip the config TTL. Otherwise `at` must be at or after
-   * verifiedAt plus verificationTtlMs.
+   * at tier none. The history badge is `expired`. The submitted
+   * checks and any open check are cleared, so the entity submits
+   * again. Pass force to skip the config TTL. Otherwise `at` must be
+   * at or after verifiedAt plus verificationTtlMs. An entity with no
+   * recorded verification time needs force.
    */
   expireVerification(entityId: string, at: string, force = false): KycView {
     const store = this.requireStore();
+    const id = requireLabel(entityId, 'entityId');
     const when = requireTime(at);
     return store.transaction(() => {
-      const entity = this.requireEntity(store, entityId);
-      const profile = this.requireProfile(store, entityId);
-      if (entity.kycStatus !== 'verified' || profile.verifiedAt === undefined) {
+      const entity = this.requireEntity(store, id);
+      if (entity.kycStatus !== 'verified') {
         throw new KycFlowError(
           'not_verified', 'only a verified entity can expire',
         );
       }
-      if (!force && !isDue(
-        profile.verifiedAt, when, this.rules.verificationTtlMs,
-      )) {
-        throw new KycFlowError('not_due', 'verification is not due');
+      const profile = store.getKycProfile(id);
+      const verifiedAt = profile?.verifiedAt;
+      if (!force) {
+        if (verifiedAt === undefined) {
+          throw new KycFlowError(
+            'not_due', 'verification time is unknown. Send force.',
+          );
+        }
+        if (!isDue(verifiedAt, when, this.rules.verificationTtlMs)) {
+          throw new KycFlowError('not_due', 'verification is not due');
+        }
       }
-      return this.finish(store, profile, {
+      const next = profile === undefined ? undefined : {
+        ...this.settled(profile, when),
+        submittedChecks: [],
+        verifiedAt: undefined,
+      };
+      return this.finish(store, id, next, {
         status: 'unverified',
         tier: 'none',
         badge: 'expired',
         how: 'expired',
         at: when,
         decision: undefined,
-        verifiedAt: undefined,
       });
     });
   }
@@ -475,33 +481,51 @@ export class MockKycProvider implements KycProvider {
   /** Current badge, history, and policy input. */
   view(entityId: string): KycView {
     const store = this.requireStore();
-    return this.readView(store, entityId);
+    return this.readView(store, requireLabel(entityId, 'entityId'));
+  }
+
+  /** One status source for fetchStatus and the view. */
+  private statusOf(
+    entityId: string, stored: Entity|undefined,
+  ): {status: KycStatus; tier: KycTier} {
+    const known = this.table.get(entityId);
+    if (known) return {status: known.status, tier: known.tier};
+    if (stored) return {status: stored.kycStatus, tier: stored.kycTier};
+    return {status: 'unverified', tier: 'none'};
+  }
+
+  /** Profile after a step that closes the open check. */
+  private settled(profile: KycProfile, at: string): KycProfile {
+    return {
+      ...profile,
+      rulesVersion: this.rules.version,
+      pendingSince: undefined,
+      updatedAt: at,
+    };
   }
 
   private finish(
     store: KycRecordStore,
-    profile: KycProfile,
+    entityId: string,
+    profile: KycProfile|undefined,
     step: StatusStep,
   ): KycView {
-    const next: KycProfile = {
-      ...profile,
-      rulesVersion: this.rules.version,
-      verifiedAt: step.verifiedAt,
-      updatedAt: step.at,
-    };
-    store.saveKycProfile(next);
-    store.updateEntityKyc(next.entityId, step.status, step.tier);
-    this.append(store, next, step);
-    return this.readView(store, next.entityId);
+    if (profile !== undefined) store.saveKycProfile(profile);
+    store.updateEntityKyc(entityId, step.status, step.tier);
+    this.append(store, entityId, profile, step);
+    return this.readView(store, entityId);
   }
 
   private append(
-    store: KycRecordStore, profile: KycProfile, step: StatusStep,
+    store: KycRecordStore,
+    entityId: string,
+    profile: KycProfile|undefined,
+    step: StatusStep,
   ): void {
-    const count = store.listKycStatusRecords(profile.entityId).length + 1;
+    const count = store.listKycStatusRecords(entityId).length + 1;
     const record: KycStatusRecord = {
-      id: `${profile.entityId}:kyc:${String(count).padStart(4, '0')}`,
-      entityId: profile.entityId,
+      id: `${entityId}:kyc:${String(count).padStart(4, '0')}`,
+      entityId,
       status: step.status,
       tier: step.tier,
       badge: step.badge,
@@ -516,18 +540,18 @@ export class MockKycProvider implements KycProvider {
 
   private readView(store: KycRecordStore, entityId: string): KycView {
     const entity = this.requireEntity(store, entityId);
-    const profile = this.requireProfile(store, entityId);
+    const profile = store.getKycProfile(entityId);
     const history = store.listKycStatusRecords(entityId);
-    const latest = history[history.length - 1];
-    const badge = latest?.badge ?? 'unverified';
-    const verified = countsAsVerified(
-      entity.kycStatus, entity.kycTier, this.rules,
-    );
-    const reRegistration = reRegistrationOf(profile);
+    const {status, tier} = this.statusOf(entity.id, entity);
+    const badge = badgeFor(status, history);
+    const verified = countsAsVerified(status, tier, this.rules);
+    const reRegistration = profile === undefined ?
+      null :
+      reRegistrationOf(profile);
     const policyInput: KycPolicyInput = {
       entityId: entity.id,
-      kycStatus: entity.kycStatus,
-      kycTier: entity.kycTier,
+      kycStatus: status,
+      kycTier: tier,
       badge,
       countsAsVerified: verified,
       reRegistrationOf: reRegistration?.ofEntityId ?? null,
@@ -535,15 +559,16 @@ export class MockKycProvider implements KycProvider {
     };
     return {
       entity,
-      subjectKind: profile.subjectKind,
-      status: entity.kycStatus,
-      tier: entity.kycTier,
+      subjectKind: profile?.subjectKind ?? null,
+      status,
+      tier,
       badge,
       countsAsVerified: verified,
+      checkPending: profile?.pendingSince !== undefined,
       reRegistration,
       rulesVersion: this.rules.version,
-      verifiedAt: profile.verifiedAt,
-      submittedChecks: profile.submittedChecks,
+      verifiedAt: profile?.verifiedAt,
+      submittedChecks: profile?.submittedChecks ?? [],
       history,
       policyInput,
     };
@@ -579,12 +604,6 @@ export class MockKycProvider implements KycProvider {
     return entity;
   }
 
-  private requireProfile(store: KycRecordStore, entityId: string): KycProfile {
-    const profile = store.getKycProfile(entityId);
-    if (!profile) throw new KycFlowError('unknown_entity', 'unknown entity');
-    return profile;
-  }
-
   private requireFreeWallets(
     store: KycRecordStore, wallets: readonly string[],
   ): void {
@@ -603,7 +622,66 @@ interface StatusStep {
   how: KycHow;
   at: string;
   decision: KycVendorDecision|undefined;
-  verifiedAt?: string;
+}
+
+/** History cause when a check does not reach a tier. */
+const NOT_PASSED_HOW: {[key in KycVendorDecision]: KycHow} = {
+  pass: 'checks_short_of_tier',
+  hold: 'vendor_hold',
+  reject: 'vendor_rejected',
+};
+
+type KycSubmission = Pick<
+  KycProfile,
+  'entityId'|'subjectKind'|'documentId'|'registrationNumber'|
+  'beneficialOwnerDocumentId'|'submittedChecks'
+>;
+
+/** Identifiers and checks from one submission. Older values are dropped. */
+function submittedProfile(
+  entityId: string, input: KycCheckInput,
+): KycSubmission {
+  if (input.kind === 'person') {
+    const checks: string[] = [KYC_CHECK.personIdentity];
+    if (input.addressChecked === true) checks.push(KYC_CHECK.personAddress);
+    return {
+      entityId,
+      subjectKind: 'person',
+      documentId: requireLabel(input.documentId, 'documentId'),
+      submittedChecks: checks.sort(),
+    };
+  }
+  const checks: string[] = [KYC_CHECK.businessRegistration];
+  let beneficialOwnerDocumentId: string|undefined;
+  if (input.beneficialOwnerDocumentId !== undefined) {
+    beneficialOwnerDocumentId = requireLabel(
+      input.beneficialOwnerDocumentId, 'beneficialOwnerDocumentId',
+    );
+    checks.push(KYC_CHECK.businessBeneficialOwner);
+  }
+  return {
+    entityId,
+    subjectKind: 'business',
+    registrationNumber: requireLabel(
+      input.registrationNumber, 'registrationNumber',
+    ),
+    beneficialOwnerDocumentId,
+    submittedChecks: checks.sort(),
+  };
+}
+
+/**
+ * The badge is the status, except that an unverified entity whose
+ * last step was an expiry shows `expired`. The badge cannot
+ * contradict the status.
+ */
+function badgeFor(
+  status: KycStatus, history: readonly KycStatusRecord[],
+): KycBadge {
+  if (status === 'unverified' && history.at(-1)?.how === 'expired') {
+    return 'expired';
+  }
+  return status;
 }
 
 function blankProfile(
@@ -692,26 +770,18 @@ function reRegistrationOf(profile: KycProfile): KycReRegistration|null {
   };
 }
 
-function lastVerifiedTier(history: readonly KycStatusRecord[]): KycTier {
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const row = history[index];
-    if (row !== undefined && row.status === 'verified') return row.tier;
-  }
-  return 'none';
-}
-
 function statusDetail(
-  profile: KycProfile, step: StatusStep,
+  profile: KycProfile|undefined, step: StatusStep,
 ): {[key: string]: string} {
   return stringDetail([
-    ['subjectKind', profile.subjectKind],
+    ['subjectKind', profile?.subjectKind],
     ['decision', step.decision],
-    ['documentId', profile.documentId],
-    ['registrationNumber', profile.registrationNumber],
-    ['beneficialOwnerDocumentId', profile.beneficialOwnerDocumentId],
-    ['submittedChecks', profile.submittedChecks.join(',')],
-    ['reRegistrationOf', profile.reRegistrationOf],
-    ['reRegistrationSignal', profile.reRegistrationSignal],
+    ['documentId', profile?.documentId],
+    ['registrationNumber', profile?.registrationNumber],
+    ['beneficialOwnerDocumentId', profile?.beneficialOwnerDocumentId],
+    ['submittedChecks', profile?.submittedChecks.join(',')],
+    ['reRegistrationOf', profile?.reRegistrationOf],
+    ['reRegistrationSignal', profile?.reRegistrationSignal],
   ]);
 }
 
@@ -729,14 +799,16 @@ function isDue(verifiedAt: string, at: string, ttlMs: number): boolean {
   return Date.parse(at) >= Date.parse(verifiedAt) + ttlMs;
 }
 
+/** Returns the time as UTC ISO text, so stored times compare in order. */
 function requireTime(value: string): string {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new KycFlowError('bad_time', 'at must be an ISO time');
   }
-  if (!Number.isFinite(Date.parse(value))) {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
     throw new KycFlowError('bad_time', 'at must be an ISO time');
   }
-  return value;
+  return new Date(parsed).toISOString();
 }
 
 function requireLabel(value: string, label: string): string {

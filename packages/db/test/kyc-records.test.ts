@@ -40,8 +40,13 @@ describe('AgentStore KYC rows', () => {
     try {
       store.insertEntity(entity('p1', 'wallet-p1'));
       store.insertEntity(entity('b1', 'wallet-b1'));
-      const saved = store.saveKycProfile(profile('p1', {documentId: 'DOC-9'}));
+      const saved = store.saveKycProfile(profile('p1', {
+        documentId: 'DOC-9', pendingSince: T1,
+      }));
       expect(saved.documentId).toBe('DOC-9');
+      expect(saved.pendingSince).toBe(T1);
+      expect(store.saveKycProfile({...saved, pendingSince: undefined})
+        .pendingSince).toBeUndefined();
       expect(store.getKycProfile('p1')?.subjectKind).toBe('person');
 
       store.saveKycProfile(profile('b1', {
@@ -89,12 +94,13 @@ describe('AgentStore KYC rows', () => {
         how: 'check_submitted',
         at: T1,
       };
+      // History keeps the order rows were saved. `at` comes from the caller.
       store.insertKycStatusRecord(later);
       store.insertKycStatusRecord(earlier);
       expect(store.listKycStatusRecords('p1').map((row) => row.id)).toEqual([
-        'p1:kyc:0001', 'p1:kyc:0002',
+        'p1:kyc:0002', 'p1:kyc:0001',
       ]);
-      expect(store.listKycStatusRecords('p1')[1]?.detail).toEqual({
+      expect(store.listKycStatusRecords('p1')[0]?.detail).toEqual({
         subjectKind: 'person',
       });
 

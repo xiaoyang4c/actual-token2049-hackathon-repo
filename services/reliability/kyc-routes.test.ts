@@ -115,9 +115,31 @@ describe('KYC demo routes', () => {
         expect(store.getKycProfile('route-ada-2')?.reRegistrationOf).toBe(
           'route-ada',
         );
+        // A seeded or lifecycle entity has no KYC profile.
+        store.insertEntity({
+          id: 'route-seeded',
+          displayName: 'Seeded',
+          wallets: [],
+          kycStatus: 'verified',
+          kycTier: 'basic',
+          roles: ['seller'],
+          createdAt: T0,
+        });
       } finally {
         store.close();
       }
+
+      const seeded = await fetch(
+        `${origin}/reliability/kyc?entityId=route-seeded`,
+      );
+      expect(seeded.status).toBe(200);
+      expect(await seeded.json()).toMatchObject({
+        subjectKind: null,
+        status: 'verified',
+        tier: 'basic',
+        badge: 'verified',
+        history: [],
+      });
     });
   });
 

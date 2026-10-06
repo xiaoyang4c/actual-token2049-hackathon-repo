@@ -16,6 +16,7 @@ CREATE TABLE reliability_kyc_profiles (
   re_registration_value TEXT,
   rules_version TEXT NOT NULL,
   verified_at TEXT,
+  pending_since TEXT,
   updated_at TEXT NOT NULL,
   CHECK (re_registration_of IS NULL OR re_registration_of != entity_id),
   CHECK (

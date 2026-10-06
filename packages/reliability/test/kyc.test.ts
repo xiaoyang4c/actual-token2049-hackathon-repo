@@ -112,17 +112,22 @@ describe('MockKycProvider', () => {
   });
 
   test('keeps the override ahead of the stored row', () => {
-    withKyc((provider) => {
+    withKyc((provider, store) => {
       const view = person(provider, 'override', 'DOC-100');
       provider.submitCheck({
         kind: 'person', entityId: view.entity.id, documentId: 'DOC-100', at: T1,
       });
-      const verified = provider.resolveCheck(view.entity.id, T2);
-      expect(verified.status).toBe('verified');
-      const fetched = provider.fetchStatus(verified.entity, T3);
+      const resolved = provider.resolveCheck(view.entity.id, T2);
+      expect(store.getEntity('override')?.kycStatus).toBe('verified');
+      const fetched = provider.fetchStatus(resolved.entity, T3);
       expect(fetched.status).toBe('rejected');
       expect(fetched.tier).toBe('none');
       expect(fetched.provider).toBe(provider.name);
+      // The view and the policy input read the same status as fetchStatus.
+      expect(resolved.status).toBe('rejected');
+      expect(resolved.badge).toBe('rejected');
+      expect(resolved.policyInput.kycStatus).toBe('rejected');
+      expect(resolved.policyInput.countsAsVerified).toBe(false);
     }, {
       overrides: new Map([[
         'override',
@@ -295,9 +300,12 @@ describe('person and business KYC paths', () => {
         addressChecked: true,
         at: T3,
       });
-      expect(reviewing.status).toBe('pending');
-      expect(reviewing.tier).toBe('none');
-      expect(reviewing.countsAsVerified).toBe(false);
+      // An upgrade check keeps the current verification while it waits.
+      expect(reviewing.status).toBe('verified');
+      expect(reviewing.tier).toBe('basic');
+      expect(reviewing.badge).toBe('verified');
+      expect(reviewing.countsAsVerified).toBe(true);
+      expect(reviewing.checkPending).toBe(true);
       expect(reviewing.submittedChecks).toEqual([
         KYC_CHECK.personAddress, KYC_CHECK.personIdentity,
       ]);
@@ -492,6 +500,223 @@ describe('person and business KYC paths', () => {
       });
       expect(provider.resolveCheck('open', T2).status).toBe('verified');
     }, {scripts: []});
+  });
+});
+
+describe('submissions and upgrades', () => {
+  test('replaces earlier checks and documents on each submission', () => {
+    withKyc((provider, store) => {
+      provider.registerEntity({
+        id: 'owner-retry',
+        displayName: 'Owner retry',
+        roles: ['seller'],
+        wallets: ['wallet-owner-retry'],
+        kind: 'business',
+        at: T0,
+      });
+      provider.submitCheck({
+        kind: 'business',
+        entityId: 'owner-retry',
+        registrationNumber: 'REG-700',
+        beneficialOwnerDocumentId: 'BO-REJECT-7',
+        at: T1,
+      });
+      expect(provider.resolveCheck('owner-retry', T2).status).toBe('rejected');
+
+      const retry = provider.submitCheck({
+        kind: 'business',
+        entityId: 'owner-retry',
+        registrationNumber: 'REG-700',
+        at: T3,
+      });
+      expect(retry.submittedChecks).toEqual([KYC_CHECK.businessRegistration]);
+      expect(store.getKycProfile('owner-retry')?.beneficialOwnerDocumentId)
+        .toBeUndefined();
+      const basic = provider.resolveCheck('owner-retry', T4);
+      expect(basic.status).toBe('verified');
+      expect(basic.tier).toBe('basic');
+    });
+  });
+
+  test('needs new checks after expiry', () => {
+    withKyc((provider) => {
+      person(provider, 'lapsed', 'DOC-300');
+      provider.submitCheck({
+        kind: 'person',
+        entityId: 'lapsed',
+        documentId: 'DOC-300',
+        addressChecked: true,
+        at: T1,
+      });
+      expect(provider.resolveCheck('lapsed', T2).tier).toBe('enhanced');
+      const expired = provider.expireVerification('lapsed', T3, true);
+      expect(expired.submittedChecks).toEqual([]);
+      expect(expired.checkPending).toBe(false);
+
+      provider.submitCheck({
+        kind: 'person', entityId: 'lapsed', documentId: 'DOC-300', at: T4,
+      });
+      const renewed = provider.resolveCheck('lapsed', T5);
+      expect(renewed.tier).toBe('basic');
+      expect(renewed.history.at(-1)?.how).toBe('vendor_approved');
+    });
+  });
+
+  test('keeps the current tier when an upgrade is rejected or held', () => {
+    withKyc((provider) => {
+      provider.registerEntity({
+        id: 'growing',
+        displayName: 'Growing',
+        roles: ['seller'],
+        wallets: ['wallet-growing'],
+        kind: 'business',
+        at: T0,
+      });
+      provider.submitCheck({
+        kind: 'business',
+        entityId: 'growing',
+        registrationNumber: 'REG-800',
+        at: T1,
+      });
+      const basic = provider.resolveCheck('growing', T2);
+      expect(basic.tier).toBe('basic');
+
+      const waiting = provider.submitCheck({
+        kind: 'business',
+        entityId: 'growing',
+        registrationNumber: 'REG-800',
+        beneficialOwnerDocumentId: 'BO-REJECT-8',
+        at: T3,
+      });
+      expect(waiting.status).toBe('verified');
+      expect(waiting.tier).toBe('basic');
+      expect(waiting.countsAsVerified).toBe(true);
+      expect(waiting.checkPending).toBe(true);
+
+      const refused = provider.resolveCheck('growing', T4);
+      expect(refused.status).toBe('verified');
+      expect(refused.tier).toBe('basic');
+      expect(refused.badge).toBe('verified');
+      expect(refused.countsAsVerified).toBe(true);
+      expect(refused.checkPending).toBe(false);
+      expect(refused.verifiedAt).toBe(basic.verifiedAt);
+      expect(refused.history.at(-1)?.how).toBe('vendor_rejected');
+      expectCode(() => provider.resolveCheck('growing', T5), 'not_pending');
+    });
+
+    withKyc((provider) => {
+      person(provider, 'held-upgrade', 'DOC-400');
+      provider.submitCheck({
+        kind: 'person', entityId: 'held-upgrade', documentId: 'DOC-400', at: T1,
+      });
+      provider.resolveCheck('held-upgrade', T2);
+      provider.submitCheck({
+        kind: 'person',
+        entityId: 'held-upgrade',
+        documentId: 'DOC-HOLD-4',
+        addressChecked: true,
+        at: T3,
+      });
+      const held = provider.resolveCheck('held-upgrade', T4);
+      expect(held.status).toBe('verified');
+      expect(held.tier).toBe('basic');
+      expect(held.checkPending).toBe(true);
+      expect(held.history.at(-1)?.how).toBe('vendor_hold');
+    });
+  });
+});
+
+describe('entities created outside KYC onboarding', () => {
+  test('shows and onboards seeded and lifecycle entities', () => {
+    withKyc((provider, store) => {
+      store.insertEntity(ENTITY);
+      const seeded = provider.view(ENTITY.id);
+      expect(seeded.subjectKind).toBeNull();
+      expect(seeded.status).toBe('verified');
+      expect(seeded.tier).toBe('enhanced');
+      expect(seeded.badge).toBe('verified');
+      expect(seeded.countsAsVerified).toBe(true);
+      expect(seeded.checkPending).toBe(false);
+      expect(seeded.history).toEqual([]);
+      expect(seeded.submittedChecks).toEqual([]);
+      expectCode(() => provider.expireVerification(ENTITY.id, T1), 'not_due');
+      const expired = provider.expireVerification(ENTITY.id, T1, true);
+      expect(expired.badge).toBe('expired');
+      expect(expired.status).toBe('unverified');
+      expect(store.getKycProfile(ENTITY.id)).toBeUndefined();
+
+      store.insertEntity({
+        id: 'party',
+        displayName: 'party',
+        wallets: [],
+        kycStatus: 'unverified',
+        kycTier: 'none',
+        roles: ['buyer', 'seller'],
+        createdAt: T0,
+      });
+      expect(provider.view('party').badge).toBe('unverified');
+      const pending = provider.submitCheck({
+        kind: 'person', entityId: 'party', documentId: 'DOC-500', at: T2,
+      });
+      expect(pending.subjectKind).toBe('person');
+      expect(pending.status).toBe('pending');
+      expect(provider.resolveCheck('party', T3).tier).toBe('basic');
+    });
+  });
+});
+
+describe('KYC times and ids', () => {
+  test('stores UTC times and keeps the badge in line with the status', () => {
+    withKyc((provider) => {
+      const registered = person(
+        provider, 'zone', 'DOC-600', '2026-10-06T08:30:00+08:00',
+      );
+      expect(registered.history[0]?.at).toBe('2026-10-06T00:30:00.000Z');
+      expect(registered.entity.createdAt).toBe('2026-10-06T00:30:00.000Z');
+      const pending = provider.submitCheck({
+        kind: 'person',
+        entityId: 'zone',
+        documentId: 'DOC-600',
+        at: '2026-10-06T01:00:00Z',
+      });
+      expect(pending.history.map((row) => row.how)).toEqual([
+        'registered', 'check_submitted',
+      ]);
+      expect(pending.badge).toBe('pending');
+      expectCode(() => provider.resolveCheck('zone', 'not a time'), 'bad_time');
+
+      provider.resolveCheck('zone', '2026-10-06T02:00:00Z');
+      const expired = provider.expireVerification(
+        'zone', '2027-10-07T00:00:00Z',
+      );
+      expect(expired.badge).toBe('expired');
+      // A later step with an earlier time still sets the badge.
+      const again = provider.submitCheck({
+        kind: 'person',
+        entityId: 'zone',
+        documentId: 'DOC-600',
+        at: '2026-10-07T00:00:00Z',
+      });
+      expect(again.status).toBe('pending');
+      expect(again.badge).toBe('pending');
+      expect(again.policyInput.badge).toBe('pending');
+      expect(again.history.at(-1)?.how).toBe('check_submitted');
+    });
+  });
+
+  test('trims entity ids in every call', () => {
+    withKyc((provider) => {
+      expect(person(provider, ' p4 ', 'DOC-700').entity.id).toBe('p4');
+      provider.submitCheck({
+        kind: 'person', entityId: ' p4 ', documentId: 'DOC-700', at: T1,
+      });
+      expect(provider.resolveCheck(' p4 ', T2).status).toBe('verified');
+      expect(provider.attachWallet(' p4 ', 'wallet-p4-2', T3).entity.wallets)
+        .toContain('wallet-p4-2');
+      expect(provider.view(' p4 ').status).toBe('verified');
+      expect(provider.expireVerification(' p4 ', T4, true).badge)
+        .toBe('expired');
+    });
   });
 });
 
