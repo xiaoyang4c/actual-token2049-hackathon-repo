@@ -147,7 +147,7 @@ export function start(port: number, options: ControlOptions = {}) {
       // lane registers its own routes through services/reliability. The
       // trading routes above stay unchanged.
       ...Object.fromEntries(
-        reliabilityRoutes.map((route) => [`${route.method} ${route.path}`, route.handler]),
+        reliabilityRoutes.map((route) => [`${route.method} ${route.path}`, (request: Request, url: URL) => route.handler(request, url, runtime.agentStore())]),
       ),
     })
     return {

@@ -20,14 +20,17 @@ import type {
   ScoreView,
   TermsDecision,
 } from '../../packages/reliability/src/index';
+import type {AgentStore} from '../../packages/db/src/index';
 import {json} from '../lib/http';
 import type {Handler} from '../lib/http';
 
-/** One read route. Method and path join as "METHOD /path". */
+/** One reliability route. The control API passes its shared store. */
 export interface ReliabilityRoute {
   method: string;
   path: string;
-  handler: Handler;
+  handler: (
+    request: Request, url: URL, store: AgentStore,
+  ) => ReturnType<Handler>;
 }
 
 const scoring = new StubScoringPolicy();

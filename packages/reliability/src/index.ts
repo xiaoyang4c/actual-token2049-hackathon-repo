@@ -48,12 +48,39 @@ export {
   type TermsPolicyInput,
 } from './fees-policy';
 export {
-  STUB_LIFECYCLE_VERSION,
-  StubTransactionLifecycle,
+  DELIVERY_TIER_VERIFICATION,
+  DELIVERY_TIERS,
+  EscrowTransactionLifecycle,
+  LIFECYCLE_NEXT_STAGES,
+  LIFECYCLE_VERSION,
+  LifecycleError,
+  RESOLVER_CONFIDENCE,
+  VOLUNTARY_REFUND_CONFIDENCE,
+  type DeliveryTier,
+  type DisputeDecision,
+  type FundEscrowInput,
   type LifecycleStage,
+  type LifecycleStore,
   type LifecycleTransition,
+  type OpenDisputeInput,
+  type OpenTransactionInput,
+  type RefundEscrowInput,
+  type ReleaseEscrowInput,
+  type ResolveDisputeInput,
+  type StoredLifecycleTransition,
   type TransactionLifecycle,
 } from './lifecycle';
+export {
+  flowLifecycleOutcome,
+  type LifecycleFlowResult,
+} from './lifecycle-flow';
+export type {
+  EscrowFundRequest,
+  EscrowPort,
+  EscrowRefundResult,
+  EscrowReleaseResult,
+  EscrowSession,
+} from './escrow-port';
 export {
   STUB_PAYMENT_EVIDENCE_VERSION,
   hashInvoiceTerms,

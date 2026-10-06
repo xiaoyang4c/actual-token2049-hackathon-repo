@@ -118,6 +118,14 @@ export class AgentRuntime {
     if (this.ownsStore) this.store.close();
   }
 
+  /**
+   * Shared store for marketplace routes.
+   * The caller does not close this store. `close` does that when the runtime owns it.
+   */
+  agentStore(): AgentStore {
+    return this.store;
+  }
+
   state(): {policy: Policy; portfolio: PaperPortfolio; quoteSource: QuoteSourceHealth} {
     return this.withBook((current, now) => {
       const status: QuoteSourceHealth['status'] = !this.quoteSource ? 'disabled' : this.quoteSourceErrors.length ? 'error' : 'ok';

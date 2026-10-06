@@ -242,10 +242,13 @@ export class PreprodCardanoAdapter implements CardanoAdapter {
       Promise.all(utxos.outputs.map((value) => readOutput(value, false))),
     ]);
     const fee = typeof tx.fees === 'string' && /^[0-9]+$/.test(tx.fees) ? Number(tx.fees) : undefined;
+    const blockTime = blockTimeIso(tx.block_time);
     return {
       txHash, indexed: tx.hash === txHash, validContract: tx.valid_contract === true,
       confirmations: Math.max(0, tip - tx.block_height + 1), blockHash: tx.block,
-      blockHeight: tx.block_height, feeLovelace: Number.isSafeInteger(fee) ? fee : undefined, inputs, outputs,
+      blockHeight: tx.block_height, feeLovelace: Number.isSafeInteger(fee) ? fee : undefined,
+      ...(blockTime ? {blockTime} : {}),
+      inputs, outputs,
     };
   }
 
@@ -265,6 +268,11 @@ export class PreprodCardanoAdapter implements CardanoAdapter {
     if (request.transaction.txHash) await visit(request.transaction.txHash, 0);
     return verifySettlementEvidence(request, [...evidence.values()], this.config.minimumConfirmations);
   }
+}
+
+function blockTimeIso(value: unknown): string|undefined {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return undefined;
+  return new Date(value * 1000).toISOString();
 }
 
 function amountAt(value: unknown): number {

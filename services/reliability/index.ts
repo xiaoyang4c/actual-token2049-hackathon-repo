@@ -5,6 +5,7 @@
  * without changing existing behavior.
  */
 
+import {laneARoutes} from './routes-lane-a';
 import {plumbingRoutes, type ReliabilityRoute} from './routes-plumbing';
 
 export type {ReliabilityRoute};
@@ -13,4 +14,7 @@ export type {ReliabilityRoute};
  * All reliability read routes. Lane files export their own arrays.
  * Add one entry here per lane file. Plumbing routes stay first.
  */
-export const reliabilityRoutes: ReliabilityRoute[] = [...plumbingRoutes];
+export const reliabilityRoutes: ReliabilityRoute[] = [
+  ...plumbingRoutes,
+  ...laneARoutes,
+];

@@ -24,6 +24,8 @@ export interface SettlementTransactionEvidence {
   confirmations: number;
   blockHash?: string;
   blockHeight?: number;
+  /** ISO time from the block. Absent when the chain response has no block time. */
+  blockTime?: string;
   feeLovelace?: number;
   inputs: SettlementUtxoEvidence[];
   outputs: SettlementUtxoEvidence[];
