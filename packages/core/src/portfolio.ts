@@ -47,14 +47,14 @@ export interface Settlement {
 /** Venue is part of market identity, including when IDs contain separators. */
 export const marketKey = (venue: Venue, marketId: string): string => JSON.stringify([venue, marketId]);
 
-/** Last known quotes remain usable for valuation, with explicit freshness. */
+/** YES marks use yesPrice and NO marks use one minus yesPrice. Last known quotes remain usable, with explicit freshness. */
 export function markPositions(
   positions: Position[], quotes: MarketQuote[], now: number, maxAgeMs: number,
 ): MarkedPosition[] {
   const byMarket = new Map(quotes.map((quote) => [marketKey(quote.venue, quote.marketId), quote]));
   return positions.map((position) => {
     const quote = byMarket.get(marketKey(position.venue, position.marketId));
-    const markPrice = quote ? position.side === 'yes' ? quote.bestBid : 1 - quote.bestAsk : position.avgPrice;
+    const markPrice = quote ? position.side === 'yes' ? quote.yesPrice : 1 - quote.yesPrice : position.avgPrice;
     return {
       ...position, markPrice, marketValue: position.size * markPrice,
       unrealizedPnl: position.size * (markPrice - position.avgPrice),
