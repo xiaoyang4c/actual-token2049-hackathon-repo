@@ -71,6 +71,11 @@ export const KYC_BADGES: readonly KycBadge[] = [
   'unverified', 'pending', 'verified', 'rejected', 'expired',
 ];
 
+export const KYC_HOWS: readonly KycHow[] = [
+  'registered', 'check_submitted', 'vendor_approved', 'tier_raised',
+  'vendor_rejected', 'vendor_hold', 'checks_short_of_tier', 'expired',
+];
+
 /** One stored step. The list is append-only. */
 export interface KycStatusRecord {
   id: string;
@@ -102,6 +107,10 @@ export interface KycProfile {
 }
 
 export type KycReRegistrationSignal = 'document'|'registration_number';
+
+export const KYC_RE_REGISTRATION_SIGNALS: readonly KycReRegistrationSignal[] = [
+  'document', 'registration_number',
+];
 
 /** Same mocked document or registration number. Not a wallet match. */
 export interface KycReRegistration {
@@ -140,7 +149,7 @@ export interface KycView {
   policyInput: KycPolicyInput;
 }
 
-/** Store seam. AgentStore implements it through kycRecordStore. */
+/** Store seam. AgentStore implements it. */
 export interface KycRecordStore {
   transaction<T>(work: () => T): T;
   insertEntity(entity: Entity): Entity;

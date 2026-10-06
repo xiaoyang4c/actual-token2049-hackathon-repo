@@ -75,7 +75,7 @@ A wallet that is already registered is refused. That refusal is not a KYC pass.
 
 The provider writes through `AgentStore` accessors.
 
-`kycRecordStore` in `packages/db/src/kyc-store.ts` binds those accessors.
+`AgentStore` implements `KycRecordStore`. Pass the store to `MockKycProvider` directly.
 
 KYC tables are in `packages/db/migrations/008_lane_a_kyc.sql`.
 
