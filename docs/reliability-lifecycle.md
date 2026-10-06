@@ -263,9 +263,29 @@ Send `at` as a UTC timestamp such as `2026-10-06T00:00:00.000Z`.
 
 Add `now` on the GET when you want the dispute deadline checked at a later time.
 
-The GET runs the outcome through `outcomeToEvents` and the stub terms policy.
+The GET runs the outcome through `outcomeToEvents` and the current terms policy.
 
-The math lane can replace those stub calls in its own route.
+The service loads the stored buyer and seller states for the transaction category.
+
+Each new event updates its own entity, category, and role.
+
+The service commits the event, score, and terms decision in one SQLite transaction.
+
+A failed write rolls back all scoring writes. A later read can retry the projection.
+
+Repeated reads do not apply stored events again. This also holds after a database restart.
+
+The response shows terms recalculated from the current cumulative scores. Persisted terms decisions keep the inputs used when the event was applied.
+
+`GET /reliability/scores` shows stored score rows. Fixture rows fill missing triples.
+
+The math lane can replace the policies through the shared policy composition seam.
+
+Existing stored scores remain the starting point. A missing score is rebuilt from its recorded events under the active scoring policy. The service commits that score and its current terms together. This change does not rebuild older scores that were overwritten by the earlier per-outcome flow.
+
+An applied event keeps its transaction and role id. Reversing an applied outcome or replaying it under a new policy needs a separate history rebuild.
+
+The scoring projection uses local records only. It does not call Cardano, Masumi, or Chainlink. Tests use explicit simulated escrow.
 
 Schema for the stage history is `packages/db/migrations/011_lane_a_lifecycle.sql`.
 

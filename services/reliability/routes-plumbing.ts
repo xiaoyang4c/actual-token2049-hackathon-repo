@@ -13,6 +13,7 @@ import {
   FIXTURE_TRANSACTIONS,
   outcomeToEvents,
 } from '../../packages/reliability/src/index';
+import type {AgentStore} from '../../packages/db/src/index';
 import type {
   Receipt,
   ScoreView,
@@ -31,8 +32,14 @@ export function createPlumbingRoutes(
 ): ReliabilityRoute[] {
   const {scoring, fees} = policies;
 
-  function scoreViews(entityId?: string): ScoreView[] {
-    return FIXTURE_STATES.filter(
+  function scoreViews(entityId?: string, store?: AgentStore): ScoreView[] {
+    const states = new Map(FIXTURE_STATES.map((state) => [
+      JSON.stringify([state.entityId, state.category, state.role]), state,
+    ]));
+    for (const state of store?.listReliabilityStates() ?? []) {
+      states.set(JSON.stringify([state.entityId, state.category, state.role]), state);
+    }
+    return [...states.values()].filter(
       (state) => !entityId || state.entityId === entityId,
     ).map((state) => scoring.scoreView(state));
   }
@@ -90,8 +97,8 @@ export function createPlumbingRoutes(
     {
       method: 'GET',
       path: '/reliability/scores',
-      handler: (request, url) => json(
-        scoreViews(url.searchParams.get('entityId') ?? undefined),
+      handler: (request, url, store) => json(
+        scoreViews(url.searchParams.get('entityId') ?? undefined, store),
       ),
     },
     {

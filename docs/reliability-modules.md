@@ -45,10 +45,19 @@ KYC routes can keep using the control API store and the current route registry.
 The lifecycle view reads entity tiers from that store for each request.
 The UI can keep reading the existing response shapes.
 
-This refactor does not implement value weighting or cumulative pair history.
-The event flow still starts per-outcome states and applies the current unit-weight
-scoring stub. It calls the decay stub without using the returned weight.
-The math lane must implement those rules and their persistence together.
+Lifecycle scoring starts from the stored state for each entity, category, and role.
+Stored event ids mark outcomes that have already been applied.
+The service reads that history under the SQLite write lock.
+It commits new events, score updates, and terms decisions in one transaction.
+Repeated reads return current terms without applying the event again.
+If an older write left events without a score, the service rebuilds that missing
+score from its event history under the active scoring policy.
+The score read route uses stored rows when available. Fixture rows fill missing triples.
+
+The scoring policy still uses unit weights.
+Value weighting and cumulative pair history are not implemented.
+The event flow calls the decay stub without using the returned weight.
+The math lane must implement those rules and pair-history persistence together.
 Fee limits, the decay rate, and the KYC bar still require product decisions.
 
 Read [lane ownership](reliability-lanes.md) before changing a lane.

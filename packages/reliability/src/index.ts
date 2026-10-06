@@ -72,6 +72,7 @@ export {
 } from './lifecycle';
 export {
   flowLifecycleOutcome,
+  type LifecycleFlowHistory,
   type LifecycleFlowResult,
 } from './lifecycle-flow';
 export type {
