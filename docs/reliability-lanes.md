@@ -16,16 +16,16 @@ See [Open decisions](#open-decisions).
 
 | Item | Status | Owner |
 | --- | --- | --- |
-| Good UI | not started | Lane C |
-| KYC verification | in open pull request #8 | Lane A |
+| Good UI | local display implemented; transactions, receipts, scores, mock KYC, and listings | Lane C |
+| KYC verification | mock verification merged on main in pull request #8 | Lane A |
 | Score change scaled by transaction value | not started | Math lane |
 | Separate buyer score and seller score | done on main | Math lane |
 | Platform fee on the buyer side and the seller side | not started | Lane B |
 | Diminishing returns for the same pair | not started | Math lane |
 
-Lane C has not built the marketplace UI. Lane C builds the operator UI against `GET /reliability/*`. The operator UI sends no orders. The operator UI edits no policy.
+Lane C builds the local operator UI against `GET /reliability/*`. It shows transactions, receipts, separate buyer and seller scores, mock KYC, and listings. Read [UI instructions](../ui/README.md). The operator UI sends no orders. The operator UI edits no policy.
 
-The user approved pull request #8. It is not merged. Lane A owns mock KYC. The KYC document arrives with that pull request. `KYC_TIER_RULES` and the default KYC bar ship with pull request #8.
+Pull request #8 adds mock KYC on main. Lane A owns mock KYC. Read [mock KYC](kyc.md). `KYC_TIER_RULES` contains the default tier rules. The product owner has not decided the final KYC bar.
 
 The target score weight is `w = log(1 + v / v0)`. `v` is the transaction value. `v0` is the value scale. `packages/reliability/src/scoring.ts` is a stub. The stub adds one to alpha on success and one to beta on failure.
 
@@ -63,12 +63,7 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tier
 - Pull request #6 values a paper trading position from `yesPrice`. A YES mark uses `yesPrice`. A NO mark uses one minus `yesPrice`.
 - Pull request #7 stores `Outcome.fault` in migration `010_outcome_fault.sql`. A failed outcome scores only the at-fault role.
 - Pull request #9 adds the transaction lifecycle. It adds migration `011_lane_a_lifecycle.sql`, the lifecycle routes on the shared control-API `AgentStore`, and [Transaction lifecycle](reliability-lifecycle.md).
-
-## Open
-
-Pull request #8 adds mock KYC. The user approved it. It is not merged.
-
-Migration `008` is reserved for KYC.
+- Pull request #8 adds mock KYC on the shared store. It adds migration `008_lane_a_kyc.sql`, badge examples, and [Mock KYC](kyc.md).
 
 ## Open decisions
 

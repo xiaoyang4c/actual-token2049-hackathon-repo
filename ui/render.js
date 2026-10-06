@@ -1,304 +1,177 @@
-// Renders a prepared desk view as display-only HTML.
+// Render prepared read models. Controls only select and filter local views.
 
-import { formatMoney, venueLabel } from "./format.js"
+import { formatFee, formatPct, formatValue, label, stamp } from "./format.js"
+import { evidenceRows, participantName } from "./model.js"
 
 export function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (ch) => {
-    switch (ch) {
-      case "&":
-        return "&amp;"
-      case "<":
-        return "&lt;"
-      case ">":
-        return "&gt;"
-      case '"':
-        return "&quot;"
-      default:
-        return "&#39;"
-    }
-  })
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character])
 }
 
-const chips = (items, emptyLabel, className) => {
-  if (!items.length) return `<span class="empty">${escapeHtml(emptyLabel)}</span>`
-  return items.map((item) => `<span class="${className}">${escapeHtml(item)}</span>`).join("")
+const e = escapeHtml
+const ICONS = {
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',
+  service: '<path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6"/>',
+  invoice: '<rect x="6" y="3" width="12" height="18" rx="1"/><path d="M9 7h6M9 11h6M9 15h6M9 18h3"/>',
+  goods: '<path d="m12 3 9 5v9l-9 5-9-5V8zM3 8l9 5 9-5M12 13v9M7.5 5.5l9 5"/>',
+  next: '<path d="m9 5 7 7-7 7"/>',
+  back: '<path d="m15 5-7 7 7 7"/>',
+  refresh: '<path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-3l2 3M4 16l2 3a8 8 0 0 0 13-3"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16v1"/>',
+  check: '<path d="m6 12 4 4 8-8"/>',
+}
+const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] ?? ICONS.service}</svg>`
+const badge = (state) => `<span class="status status-${e(state)}"><span class="status-dot" aria-hidden="true"></span>${e(label(state))}</span>`
+const modeBadge = (mode) => `<span class="mode-label mode-${e(mode)}">${e(mode.toUpperCase())}</span>`
+const facts = (rows) => `<dl class="facts">${rows.map(([key, value]) => `<div><dt>${e(key)}</dt><dd>${e(value)}</dd></div>`).join("")}</dl>`
+const empty = (title, detail) => `<div class="empty-state"><strong>${e(title)}</strong><p>${e(detail)}</p></div>`
+
+function renderHeader(view) {
+  const connection = { connected: "Connected", fixture: view.error ? "Offline sample" : "Loading", stale: "Connection lost" }[view.source]
+  return `<header class="app-header">
+    <a class="brand" href="/" aria-label="Reliability home"><span class="brand-mark">R</span>Reliability</a>
+    <nav aria-label="Marketplace views">${["transactions", "participants", "listings"].map((tab) =>
+      `<button type="button" id="nav-${tab}" data-tab="${tab}" ${view.tab === tab ? 'aria-current="page"' : ""}>${label(tab)}</button>`).join("")}</nav>
+    <div class="header-status"><span class="local-label">Local operator</span><span class="connection connection-${view.source}"><span class="status-dot" aria-hidden="true"></span>${connection}</span>
+    <button type="button" id="refresh-marketplace" class="icon-button" data-refresh aria-label="Refresh marketplace">${icon("refresh")}</button></div>
+  </header>`
 }
 
-const connectionCopy = (view) => {
-  if (view.source === "fixture") return { label: "Fixture", detail: "Sample data" }
-  if (view.source === "stale") return { label: "Unreachable", detail: "Last response kept" }
-  return { label: "Connected", detail: view.updatedAt.text === "—" ? "Control API" : view.updatedAt.text }
+function renderNotice(view) {
+  const status = view.source === "fixture" ?
+    `<div class="connection-notice" role="status"><strong>Saved demo snapshot</strong> ${view.error ? "The control API is unavailable." : "Waiting for the control API."} This sample is not current data. ${e(view.error)}</div>` :
+    view.source === "stale" ?
+      `<div class="connection-notice" role="status"><strong>Showing the last response</strong> Last received ${e(stamp(view.updatedAt))}. ${e(view.error)}</div>` : ""
+  return `${status}<div class="demo-notice">${icon("alert")}<strong>Demo marketplace</strong><span>Paper marketplace orders. Escrow mode is shown in each receipt. Scores and fees use stubs. KYC is mocked.</span></div>`
 }
 
-const renderHeader = (view) => {
-  const connection = connectionCopy(view)
-  return `
-    <header class="top">
-      <div>
-        <p class="eyebrow">Prediction-market agent</p>
-        <h1>Operator</h1>
-      </div>
-      <p class="connection connection-${escapeHtml(view.source)}">
-        <span class="dot" aria-hidden="true"></span>
-        <span>
-          <strong>${escapeHtml(connection.label)}</strong>
-          <span class="connection-detail">${escapeHtml(connection.detail)}</span>
-        </span>
-      </p>
-    </header>
-  `
+function renderMetrics(view) {
+  const metrics = view.metrics
+  return `<dl class="metrics">${[
+    ["Transactions", metrics.total], ["Completed", metrics.completed],
+    ["Needs attention", metrics.attention], ["Participants", metrics.participants],
+  ].map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join("")}</dl>
+  ${metrics.unknown ? `<p class="data-warning" role="status">${metrics.unknown} transaction receipt${metrics.unknown === 1 ? " is" : "s are"} unavailable. Outcomes are unknown.</p>` : ""}`
 }
 
-const renderFixture = (view) => `
-  <div class="callout callout-fixture" role="status">
-    <strong>Fixture data</strong>
-    <p>The control API did not respond. These figures are a saved sample, not the running agent.</p>
-    ${view.error ? `<p class="fine">${escapeHtml(view.error)}</p>` : ""}
-  </div>
-`
-
-const renderStale = (view) => `
-  <div class="callout callout-stale" role="status">
-    <strong>Showing the last response</strong>
-    <p>The control API is unreachable. The book below is the last one this page received${
-      view.updatedAt.iso ? ` at ${escapeHtml(view.updatedAt.text)}` : ""
-    }.</p>
-    ${view.error ? `<p class="fine">${escapeHtml(view.error)}</p>` : ""}
-  </div>
-`
-
-const countLine = (n, singular, plural) => `${n} ${n === 1 ? singular : plural}`
-
-const renderMode = (view) => {
-  const { kind, paper, live, unmarked } = view.execution
-  if (kind === "mixed") {
-    return `
-      <section class="mode mode-mixed" aria-label="Execution mode">
-        <div class="mode-half mode-half-paper">
-          <p class="kicker">In the audit log</p>
-          <strong>PAPER</strong>
-          <p>${countLine(paper, "paper event", "paper events")}. Simulated. Nothing was sent to a venue.</p>
-        </div>
-        <div class="mode-half mode-half-live">
-          <p class="kicker">In the audit log</p>
-          <strong>LIVE</strong>
-          <p>${countLine(live, "live event", "live events")}. Sent to a venue.</p>
-        </div>
-      </section>
-    `
+function renderToolbar(view) {
+  const placeholders = {
+    transactions: "Search transactions or participants", participants: "Search participants", listings: "Search listings or sellers",
   }
-  if (kind === "paper") {
-    return `
-      <section class="mode mode-paper" aria-label="Execution mode">
-        <div>
-          <p class="kicker">Execution</p>
-          <strong>PAPER</strong>
-        </div>
-        <p>Every order in this log is simulated. Nothing was sent to a venue. ${countLine(paper, "paper event", "paper events")}.</p>
-      </section>
-    `
-  }
-  if (kind === "live") {
-    return `
-      <section class="mode mode-live" aria-label="Execution mode">
-        <div>
-          <p class="kicker">Execution</p>
-          <strong>LIVE</strong>
-        </div>
-        <p>This log contains orders that were sent to a venue. ${countLine(live, "live event", "live events")}.</p>
-      </section>
-    `
-  }
-  const extra = unmarked > 0 ? ` ${countLine(unmarked, "fill", "fills")} ${unmarked === 1 ? "is" : "are"} missing a PAPER or LIVE tag.` : ""
-  return `
-    <section class="mode mode-none" aria-label="Execution mode">
-      <div>
-        <p class="kicker">Execution</p>
-        <strong>NO FILLS</strong>
-      </div>
-      <p>No paper or live fills yet. Each fill will be marked PAPER or LIVE.${extra}</p>
+  return `<div class="toolbar"><label class="search-field">${icon("search")}<span class="sr-only">${placeholders[view.tab]}</span><input id="search" type="search" value="${e(view.controls.query)}" placeholder="${placeholders[view.tab]}" autocomplete="off"></label>
+  ${view.tab === "transactions" ? `<label class="outcome-select"><span class="sr-only">Filter by outcome</span><select id="outcome"><option value="">All outcomes</option>${["successful", "pending", "failed", "disputed", "cancelled", "unresolved", "unknown"].map((state) => `<option value="${state}" ${view.controls.outcome === state ? "selected" : ""}>${label(state)}</option>`).join("")}</select></label>
+  <div class="type-filters" role="group" aria-label="Filter by transaction type">${[["", "All types"], ["goods", "Goods"], ["service", "Services"], ["invoice", "Invoices"]].map(([value, text]) => `<button type="button" id="type-${value || "all"}" data-type="${value}" aria-pressed="${view.controls.type === value}">${text}</button>`).join("")}</div>` : ""}</div>`
+}
+
+function renderLedger(view) {
+  const start = view.filteredCount ? view.page * view.pageSize + 1 : 0
+  return `<section class="panel ledger" aria-label="Transaction ledger">${renderToolbar(view)}
+    ${view.rows.length ? `<div class="table-wrap"><table><caption class="sr-only">Marketplace transactions. Select a transaction to inspect its receipt.</caption>
+    <thead><tr><th scope="col">Transaction</th><th scope="col">Counterparties</th><th scope="col">Value</th><th scope="col">Outcome</th><th scope="col">Mode</th></tr></thead>
+    <tbody>${view.rows.map((transaction) => `<tr class="${transaction.id === view.selected?.id ? "selected-row" : ""}">
+      <td><button type="button" id="select-${e(transaction.id)}" class="transaction-link" data-select-id="${e(transaction.id)}" aria-pressed="${transaction.id === view.selected?.id}" aria-controls="receipt">${icon(transaction.type)}<span><strong>${e(transaction.title)}</strong><small>${e(transaction.id)} · ${e(label(transaction.type))}</small></span></button></td>
+      <td class="counterparties">${transaction.participants.map((party) => `<span title="${e(label(party.role))}">${e(party.name)}</span>`).join("")}</td>
+      <td class="numeric">${e(transaction.valueText)}</td><td>${badge(transaction.outcome)}</td><td>${modeBadge(transaction.orderMode)}${transaction.escrow.mode === "live" ? '<small class="live-note">LIVE escrow</small>' : ""}</td>
+    </tr>`).join("")}</tbody></table></div>` : empty("No matching transactions", "Change the search or filters to see more agreements.")}
+    <footer class="ledger-footer"><span>${start}–${Math.min(view.filteredCount, (view.page + 1) * view.pageSize)} of ${view.filteredCount} transactions</span><div class="pagination"><button type="button" class="icon-button" data-page="${view.page - 1}" aria-label="Previous page" ${view.page === 0 ? "disabled" : ""}>${icon("back")}</button><button type="button" class="icon-button" data-page="${view.page + 1}" aria-label="Next page" ${view.page + 1 >= view.pages ? "disabled" : ""}>${icon("next")}</button></div></footer>
+  </section>`
+}
+
+function renderDecisions(receipt, entities) {
+  const decisions = receipt.termsDecisions ?? (receipt.termsDecision ? [receipt.termsDecision] : [])
+  if (!decisions.length) return `<section class="receipt-section"><h3>Fee decision</h3><p class="muted">No fee decision returned for this receipt.</p></section>`
+  return decisions.map((decision) => `<section class="receipt-section">
+    <div class="section-heading"><h3>Fee decision</h3><span class="subtle-label">${e(decision.policyVersion)}</span></div>
+    <p class="muted">Decision for ${e(participantName(entities, decision.entityId))} · ${e(decision.category)}</p>
+    ${facts([["Buyer fee offer", formatFee(decision.buyerFeeBps)], ["Seller fee offer", formatFee(decision.sellerFeeBps)], ["Reason", label(decision.reasonCode)]])}
+    <p class="fine">Policy offer for this entity. These rates are not recorded charges to both parties.</p>
+    <details id="decision-${e(decision.entityId)}"><summary>Decision inputs and terms</summary><pre>${e(JSON.stringify({inputs: decision.inputs, terms: decision.terms, decidedAt: decision.decidedAt}, null, 2))}</pre></details>
+  </section>`).join("")
+}
+
+function renderReceipt(view) {
+  const transaction = view.selected
+  if (!transaction) return `<aside class="panel receipt" id="receipt" aria-label="Receipt inspector">${empty("Select a transaction", "Choose an agreement in the ledger to inspect its receipt.")}</aside>`
+  const receipt = transaction.receipt
+  const outcome = receipt?.outcome
+  const evidence = evidenceRows(receipt)
+  return `<aside class="panel receipt" id="receipt" aria-labelledby="receipt-heading" tabindex="-1">
+    <div class="receipt-top"><h2 id="receipt-heading">Receipt <small>${e(transaction.id)}</small></h2><div>${badge(transaction.outcome)}${modeBadge(transaction.orderMode)}</div></div>
+    <h3 class="receipt-title">${e(transaction.title)}</h3><div class="receipt-value">${e(transaction.valueText)}</div><p class="muted">${transaction.currency ? `Transaction value · ${e(transaction.currency)}` : "Currency not provided"}</p>
+    ${!receipt ? `<div class="connection-notice" role="status"><strong>Receipt unavailable</strong> ${e(transaction.receiptError || "No receipt was returned.")}</div>` : ""}
+    <section class="receipt-section"><h3 class="sr-only">Recorded evidence</h3>
+      ${evidence.length ? `<ol class="evidence-timeline">${evidence.map((row) => `<li><span class="timeline-point">${icon("check")}</span><div><span>${e(row.title)}</span><small>${e(stamp(row.at))}${row.mode === "paper" || row.mode === "live" ? ` · ${row.mode.toUpperCase()}` : ""}</small></div></li>`).join("")}</ol>` : '<p class="muted">No lifecycle evidence returned.</p>'}
+      <p class="evidence-caption">Recorded outcome evidence</p><p class="fine">${e(transaction.escrow.text)}</p>
+      ${outcome?.resolver ? facts([["Resolver", outcome.resolver], ["Resolve by", stamp(outcome.resolveBy)], ["Escrow disposition", outcome.evidence?.escrowDisposition ?? "Not provided"]]) : ""}
     </section>
-  `
+    <section class="receipt-section">${facts(transaction.participants.map((party) => [label(party.role), party.name]))}</section>
+    <section class="receipt-section"><h3>Verification</h3>${facts([
+      ["Method", outcome ? label(outcome.verificationMethod) : "Not provided"],
+      ["Confidence", formatPct(outcome?.verificationConfidence)],
+      ["At-fault role", outcome?.fault ? label(outcome.fault) : outcome?.state === "successful" ? "None" : "Not recorded"],
+    ])}</section>
+    ${receipt ? renderDecisions(receipt, view.entities) : ""}
+    <section class="receipt-section"><details id="raw-evidence"><summary>Terms and raw evidence</summary>
+      <h4>Terms versions</h4><pre>${e(JSON.stringify(transaction.versions ?? [], null, 2))}</pre>
+      <h4>Outcome and evidence</h4><pre>${e(JSON.stringify(outcome ?? null, null, 2))}</pre>
+      <h4>Reliability events</h4><pre>${e(JSON.stringify(receipt?.events ?? [], null, 2))}</pre>
+      ${receipt?.transitions ? `<h4>Lifecycle transitions</h4><pre>${e(JSON.stringify(receipt.transitions, null, 2))}</pre>` : ""}
+    </details></section>
+  </aside>`
 }
 
-const renderKill = () => `
-  <div class="callout callout-kill" role="status">
-    <strong>Kill switch is on</strong>
-    <p>The policy will stop the loop from buying data or placing orders.</p>
-  </div>
-`
-
-const renderPolicy = (policy) => `
-  <section class="card" id="policy" aria-labelledby="policy-heading">
-    <h2 id="policy-heading">Policy</h2>
-    <div class="kill ${policy.killSwitch ? "kill-on" : "kill-off"}">
-      <span>Kill switch</span>
-      <strong>${policy.killSwitch ? "On" : "Off"}</strong>
-    </div>
-    <dl class="facts">
-      <div><dt>Max bet</dt><dd>${escapeHtml(policy.maxBet)}</dd></div>
-      <div><dt>Max daily loss</dt><dd>${escapeHtml(policy.maxDailyLoss)}</dd></div>
-      <div><dt>Stop loss</dt><dd>${escapeHtml(policy.stopLoss)}</dd></div>
-    </dl>
-    <div class="group">
-      <h3>Venues</h3>
-      <div class="chips">${chips(policy.venues.map(venueLabel), "None enabled", "chip")}</div>
-    </div>
-    <div class="group">
-      <h3>Allowed categories</h3>
-      <div class="chips">${chips(policy.allow, "Any", "chip")}</div>
-    </div>
-    <div class="group">
-      <h3>Denied categories</h3>
-      <div class="chips">${chips(policy.deny, "None", "chip chip-deny")}</div>
-    </div>
-  </section>
-`
-
-const lossMeter = (portfolio, policy) => {
-  const limit = policy.maxDailyLossValue
-  const pnl = portfolio.dailyPnlValue
-  if (limit === null || limit <= 0 || pnl === null) return ""
-  const used = Math.max(0, -pnl)
-  const ratio = Math.min(1, used / limit)
-  const width = (ratio * 100).toFixed(1)
-  const over = used >= limit
-  return `
-    <div class="meter-block">
-      <div class="meter ${over ? "meter-over" : ""}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(ratio * 100)}" aria-label="Daily loss used">
-        <span style="width: ${width}%"></span>
-      </div>
-      <p>Daily loss ${escapeHtml(formatMoney(used))} of ${escapeHtml(formatMoney(limit))} limit</p>
-    </div>
-  `
+function roleScores(entity, role) {
+  const scores = entity.scores.filter((score) => score.role === role)
+  if (!scores.length) return '<span class="muted">No score returned</span>'
+  return scores.map((score) => `<div class="role-score"><strong>${e(formatPct(score.value))}</strong><span>${e(label(score.category))}</span><small>Lower bound ${e(formatPct(score.lowerBound))} · Confidence ${e(formatPct(score.confidence))} · ${e(score.eventCount)} events</small></div>`).join("")
 }
 
-const renderPositions = (positions) => {
-  if (!positions.length) return `<p class="empty-block">No open positions.</p>`
-  const rows = positions
-    .map((position) => {
-      const sideClass = position.side === "yes" || position.side === "no" ? `side side-${position.side}` : "side"
-      return `
-        <tr>
-          <td>
-            <div class="market" title="${escapeHtml(position.marketId)}">${escapeHtml(position.marketId)}</div>
-            <div class="venue">${escapeHtml(position.venue)}</div>
-          </td>
-          <td class="${sideClass}">${escapeHtml(position.side)}</td>
-          <td>${escapeHtml(position.size)}</td>
-          <td>${escapeHtml(position.avgPrice)}</td>
-          <td>${escapeHtml(position.cost)}</td>
-        </tr>
-      `
-    })
-    .join("")
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Market</th>
-            <th scope="col">Side</th>
-            <th scope="col">Size</th>
-            <th scope="col">Avg</th>
-            <th scope="col">Cost</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `
+function renderKyc(entity) {
+  return `${badge(entity.kycBadge)}<small>${e(label(entity.kycTier))} tier · ${e(entity.kycSource)}</small>${entity.checkPending ? '<small class="data-warning">New check pending</small>' : ""}
+  ${entity.kycError ? `<small class="data-warning">${e(entity.kycError)}</small>` : ""}
+  ${entity.reRegistration ? `<p class="flag">Re-registration flag: ${e(entity.reRegistration.ofEntityId)} · ${e(label(entity.reRegistration.signal))}</p><p class="fine">Reliability does not transfer to this entity.</p>` : ""}`
 }
 
-const renderPortfolio = (portfolio, policy) => `
-  <section class="card" id="portfolio" aria-labelledby="portfolio-heading">
-    <h2 id="portfolio-heading">Portfolio</h2>
-    <div class="stats">
-      <div class="stat">
-        <span>Cash</span>
-        <strong>${escapeHtml(portfolio.cash)}</strong>
-      </div>
-      <div class="stat">
-        <span>Equity</span>
-        <strong>${escapeHtml(portfolio.equity)}</strong>
-      </div>
-      <div class="stat pnl ${portfolio.pnlClass}">
-        <span>Daily PnL</span>
-        <strong>${escapeHtml(portfolio.dailyPnl)}</strong>
-      </div>
-    </div>
-    ${lossMeter(portfolio, policy)}
-    <p class="meta">Start of day ${escapeHtml(portfolio.startOfDay)} · High water ${escapeHtml(portfolio.highWater)}</p>
-    <h3 class="positions-heading">Positions</h3>
-    ${renderPositions(portfolio.positions)}
-  </section>
-`
-
-const fillBadge = (event) => {
-  if (event.mode === "paper") return `<span class="badge badge-paper">PAPER</span>`
-  if (event.mode === "live") return `<span class="badge badge-live">LIVE</span>`
-  if (event.isFill) return `<span class="badge badge-unmarked">FILL</span>`
-  return ""
+function renderParticipants(view) {
+  const query = view.controls.query.toLowerCase().trim()
+  const entities = view.entities.filter((entity) => `${entity.id} ${entity.displayName}`.toLowerCase().includes(query))
+  return `<section class="panel">${renderToolbar(view)}${entities.length ? `<div class="table-wrap"><table class="participants-table">
+    <thead><tr><th scope="col">Participant</th><th scope="col">Buyer reliability</th><th scope="col">Seller reliability</th><th scope="col">Mock KYC</th></tr></thead>
+    <tbody>${entities.map((entity) => `<tr><td><strong>${e(entity.displayName)}</strong><small>${e(entity.id)}</small><small>${e(entity.roles.map(label).join(" · "))}</small><details id="entity-${e(entity.id)}"><summary>Wallets and KYC history</summary><pre>${e(JSON.stringify({wallets: entity.wallets, history: entity.kycHistory}, null, 2))}</pre></details></td>
+    <td>${roleScores(entity, "buyer")}</td><td>${roleScores(entity, "seller")}</td><td>${renderKyc(entity)}</td></tr>`).join("")}</tbody></table></div>` : empty("No matching participants", "Change the search to see participant records.")}
+    <p class="panel-note">Score means, lower bounds, confidence, and event counts stay separate. A score in one category does not prove another. Scoring, value weighting, and repeat-pair decay are unfinished.</p></section>
+    <section class="panel example-panel"><h2>Mock KYC examples</h2><p class="muted">Badge examples from the KYC fixture route. These examples are not marketplace participants.</p>
+      ${view.kycExamples.length ? `<div class="kyc-examples">${view.kycExamples.map((example) => `<div>${badge(example.badge)}<strong>${e(example.id)}</strong><p>${e(example.label)}</p><small>${e(label(example.tier))} tier${example.reRegistrationOf ? ` · Re-registration of ${e(example.reRegistrationOf)}` : ""}</small></div>`).join("")}</div>` : empty("KYC examples unavailable", view.kycExamplesError || "No badge examples returned.")}
+    </section>`
 }
 
-const renderEvent = (event) => {
-  const tone = event.mode === "paper" ? "fill-paper" : event.mode === "live" ? "fill-live" : event.isFill ? "fill-unmarked" : ""
-  return `
-    <div class="event ${tone}">
-      <div class="event-badge">${fillBadge(event)}</div>
-      <div class="event-type">${escapeHtml(event.type)}</div>
-      <div class="event-detail">${escapeHtml(event.detail)}</div>
-    </div>
-  `
+function renderListings(view) {
+  const query = view.controls.query.toLowerCase().trim()
+  const listings = view.listings.filter((listing) => `${listing.id} ${listing.title} ${participantName(view.entities, listing.sellerId)}`.toLowerCase().includes(query))
+  return `<section class="panel">${renderToolbar(view)}${listings.length ? `<div class="listing-list">${listings.map((listing) => `<article class="listing-row"><div class="listing-icon">${icon(listing.transactionType)}</div><div class="listing-content"><small>${e(label(listing.transactionType))} · ${e(listing.id)}</small><h2>${e(listing.title)}</h2><p class="muted">${e(participantName(view.entities, listing.sellerId))}</p><div class="listing-requirements"><span>Buyer minimum: ${e(formatPct(listing.minBuyerReliability))}</span><span>Seller minimum: ${e(formatPct(listing.minSellerReliability))}</span></div><details id="listing-${e(listing.id)}"><summary>Required terms</summary><pre>${e(JSON.stringify(listing.requiredTerms ?? {}, null, 2))}</pre></details></div><div class="listing-price"><strong>${listing.price === undefined ? "Variable fee" : e(formatValue(listing.price, listing.requiredTerms?.currency))}</strong><small>${e(label(listing.pricingMethod))}</small></div></article>`).join("")}</div>` : empty("No matching listings", "Change the search to see available offers.")}
+    <p class="panel-note">Listing requirements are displayed as returned. Missing reliability thresholds and currencies are not inferred. This desk does not accept offers.</p></section>`
 }
 
-const renderCycle = (cycle) => `
-  <article class="cycle">
-    <header>
-      <h3>${escapeHtml(cycle.cycleId)}</h3>
-      ${cycle.received.iso ? `<time datetime="${escapeHtml(cycle.received.iso)}">${escapeHtml(cycle.received.text)}</time>` : `<time>—</time>`}
-    </header>
-    <div class="events">${cycle.events.map(renderEvent).join("")}</div>
-  </article>
-`
+export function renderLookup(lookup = {}) {
+  return `<section class="lookup-section" aria-label="Transaction lookup"><form id="lookup-form"><label for="transaction-id">Inspect a transaction by ID</label><div><input id="transaction-id" name="transactionId" placeholder="Transaction ID" value="${e(lookup.value ?? "")}" required><button type="submit" class="button" ${lookup.busy ? "disabled" : ""}>${lookup.busy ? "Loading…" : "Inspect receipt"}</button></div></form><p class="fine">Read a durable lifecycle transaction or a demo receipt.</p><p id="lookup-message" class="data-warning" role="status">${e(lookup.error ?? "")}</p></section>`
+}
 
-const renderAudit = (cycles) => `
-  <section class="card" id="audit" aria-labelledby="audit-heading">
-    <div class="section-head">
-      <h2 id="audit-heading">Audit</h2>
-      <p class="legend">
-        <span class="badge badge-paper">PAPER</span> simulated
-        <span class="badge badge-live">LIVE</span> sent to a venue
-      </p>
-    </div>
-    ${
-      cycles.length
-        ? `<div class="audit-list">${cycles.map(renderCycle).join("")}</div>`
-        : `<p class="empty-block">No cycles recorded.</p>`
-    }
-  </section>
-`
-
-export function renderDesk(view) {
-  return `
-    <div class="desk mode-${view.mode}" data-source="${escapeHtml(view.source)}" data-mode="${escapeHtml(view.mode)}">
-      ${renderHeader(view)}
-      ${view.source === "fixture" ? renderFixture(view) : ""}
-      ${view.source === "stale" ? renderStale(view) : ""}
-      ${renderMode(view)}
-      ${view.policy.killSwitch ? renderKill() : ""}
-      <main class="grid">
-        ${renderPolicy(view.policy)}
-        ${renderPortfolio(view.portfolio, view.policy)}
-        ${renderAudit(view.cycles)}
-      </main>
-      <footer class="foot">Read-only. Polls GET /agent/state and GET /audit every 2 seconds.</footer>
-    </div>
-  `
+export function renderDesk(view, lookup = {}) {
+  const descriptions = {
+    transactions: "Inspect agreements, outcomes, and the evidence behind each result.",
+    participants: "Separate buyer and seller reliability, with the evidence and identity status behind each score.",
+    listings: "Inspect goods and service offers, seller records, and required terms.",
+  }
+  return `<div class="desk" data-source="${e(view.source)}">${renderHeader(view)}<main id="main" class="main-shell">
+    <div class="page-heading"><div><h1>${e(label(view.tab))}</h1><p>${descriptions[view.tab]}</p></div><span class="read-only">${icon("lock")}Read only</span></div>
+    ${renderMetrics(view)}${renderNotice(view)}
+    ${view.tab === "transactions" ? `<div class="workspace">${renderLedger(view)}${renderReceipt(view)}</div>${renderLookup(lookup)}` : view.tab === "participants" ? renderParticipants(view) : renderListings(view)}
+    <footer class="app-footer"><span>Local marketplace operator · Read only</span><span>${view.source === "fixture" ? "Saved demo snapshot" : `Last received ${e(stamp(view.updatedAt))}`}</span></footer>
+  </main></div>`
 }
 
 export function deskTitle(view) {
-  const names = { paper: "PAPER", live: "LIVE", mixed: "MIXED", none: "NO FILLS" }
-  const prefix = view.source === "fixture" ? "Fixture · " : ""
-  return `${prefix}Operator · ${names[view.mode] ?? "Operator"}`
+  return `${view.source === "fixture" ? "Offline sample · " : view.source === "stale" ? "Stale · " : ""}${label(view.tab)} · Reliability`
 }
