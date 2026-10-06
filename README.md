@@ -1,6 +1,24 @@
-# Token2049-origins-hackerthon
+# Transaction reliability marketplace
 
-Agent runtime for prediction-market strategies. See [PLAN.md](PLAN.md).
+This repository is a transaction reliability marketplace for B2B and B2C sales of goods and services.
+
+The marketplace is not compute verification.
+
+The target state uses these rules.
+
+- Each entity has a buyer score and a seller score.
+- A score change scales with the transaction value. The weight is `w = log(1 + v / v0)`. `v` is the transaction value. `v0` is the value scale.
+- A platform fee is charged on the buyer side and on the seller side. A higher score gives a lower fee.
+- Repeat transactions between the same pair have diminishing returns. That limit reduces repeated score gains from the same pair.
+- KYC verification is part of the marketplace.
+
+The KYC document arrives with [pull request #8](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/8).
+
+Read the [MVP target state](docs/reliability-lanes.md#mvp-target-state) for the status of each rule.
+
+Read [Reliability marketplace: lane ownership](docs/reliability-lanes.md).
+
+Read [Transaction lifecycle](docs/reliability-lifecycle.md).
 
 ## Layout
 
@@ -8,17 +26,69 @@ Agent runtime for prediction-market strategies. See [PLAN.md](PLAN.md).
 |---|---|
 | `packages/core` | Dependency-free TS shared by the workflow and services: types, policy gate, `edge-vs-signal` strategy pack, Polymarket and Kalshi normalization |
 | `packages/db` | SQLite store: one `AgentStore` connection with record types, validation, and domain query modules |
+| `packages/reliability` | Domain package for the transaction reliability marketplace. It holds frozen types, lane seams, and stubs. |
 | `cre/agent-loop` | Chainlink CRE workflow: config/schema, HTTP steps, and one cron-triggered cycle (state → markets per enabled venue → x402 pay → score → strategy → policy → orders → audit) |
 | `services/control-api.ts` | Control API: durable policy/portfolio, paper executor, audit log, offline Polymarket and Kalshi fixtures |
+| `services/reliability` | Reliability read routes, lifecycle routes, the seed helper, and the Masumi escrow port. The control API registers these routes. |
 | `services/cardano-agent.ts` | Offline-first payment service with Cardano/Masumi adapters, score receipts, and durable settlement reconciliation |
 | `services/cardano-agents-ts` | Payment lifecycle, settlement worker, protocol evidence, simulated and preprod adapters, and offline fixture tests |
 | `services/score-provider.ts` | Mock third-party x402-protected fair-value API (1 ADA per call) |
 | `services/market-feed.ts` | Polls Polymarket and Kalshi every 30s in the background and serves the latest snapshot; refuses data older than 90s |
 | `ui` | Display-only operator desk: state/audit parsing in `model.js`, HTML in `render.js`, and shared display formatting in `format.js` |
 
+## Reliability routes
+
+The control API serves these routes. The default port is 8787.
+
+The read routes serve seed fixtures. `GET /reliability/scores` calls the scoring stub. `GET /reliability/receipts` calls the scoring stub and the fee stub.
+
+The lifecycle routes use the shared `AgentStore`. The lifecycle view calls the scoring stub, the pair-decay stub, and the fee stub.
+
+| Method | Path |
+|---|---|
+| `GET` | `/reliability/entities` |
+| `GET` | `/reliability/scores` |
+| `GET` | `/reliability/listings` |
+| `GET` | `/reliability/transactions` |
+| `GET` | `/reliability/receipts` |
+| `POST` | `/reliability/lifecycle/open` |
+| `POST` | `/reliability/lifecycle/terms` |
+| `POST` | `/reliability/lifecycle/transition` |
+| `GET` | `/reliability/lifecycle` |
+
+`GET /reliability/entities`, `GET /reliability/listings`, and `GET /reliability/transactions` accept an optional `id` query.
+
+`GET /reliability/scores` accepts an optional `entityId` query.
+
+`GET /reliability/receipts` requires `transactionId`.
+
+`GET /reliability/lifecycle` requires `transactionId`. It accepts an optional `now` query.
+
+Read [Transaction lifecycle](docs/reliability-lifecycle.md) for the lifecycle actions.
+
+Lane C builds the operator UI against these routes. The operator UI sends no orders. The operator UI edits no policy.
+
+## Marketplace status
+
+Marketplace orders are paper.
+
+Cardano escrow is simulated by default.
+
+The escrow broadcasts a preprod transaction only when `CARDANO_MODE` is `preprod` and `CARDANO_ALLOW_NETWORK` is `true`.
+
+That broadcast is a live order.
+
+Scoring and fees are stubs.
+
+## Prediction-market trading runtime
+
+The prediction-market trading runtime remains in this repository. It runs.
+
+Agent runtime for prediction-market strategies. See [PLAN.md](PLAN.md).
+
 The payment, workflow, and store entry points preserve their existing exports.
 Payment serialization stays in `PaymentRuntime`. SQLite query modules share the
-store's connection and transaction. The desk reads only `GET /agent/state` and
+store's connection and transaction. The desk reads `GET /agent/state` and
 `GET /audit`. Its renderer receives a prepared view and sends no requests.
 
 ## Run
@@ -103,7 +173,7 @@ The control API also accepts explicit quotes, closes, and outcomes through
 See [paper position lifecycle](docs/paper-position-lifecycle.md) for prices,
 retry behavior, risk stops, daily accounting, and offline tests.
 
-## Status
+## Trading runtime status
 
 - Orders are **paper** fills. Payments default to **simulated** Cardano transactions with a local `X-PAYMENT` envelope. Preprod adapters have offline fixture coverage; actual chain settlement has not been tested.
 - Every POST from the workflow carries an idempotency key and CRE cache settings, so repeats from multiple DON nodes take effect once.
