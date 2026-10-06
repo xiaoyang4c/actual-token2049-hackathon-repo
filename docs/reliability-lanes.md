@@ -2,6 +2,8 @@
 
 Read this file before you start a lane.
 
+Read [module boundaries](reliability-modules.md) for lifecycle internals and policy composition.
+
 ## MVP target state
 
 The product is a transaction reliability marketplace for B2B and B2C sales of goods and services.
