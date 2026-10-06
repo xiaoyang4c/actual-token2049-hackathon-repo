@@ -1,0 +1,33 @@
+# ==========================================================================
+# CRE WORKFLOW SETTINGS FILE
+# ==========================================================================
+# local-settings:   markets from the background market feed (live data,
+#                   polled every 30s by services/market-feed.ts)
+# offline-settings: markets from saved Polymarket/Kalshi snapshots (no internet)
+# staging-settings: markets straight from the live venue APIs
+# All three call the local stub services in services/ (run `bun run services`).
+local-settings:
+  user-workflow:
+    workflow-name: "agent-loop-local"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.local.json"
+    secrets-path: ""
+
+# ==========================================================================
+offline-settings:
+  user-workflow:
+    workflow-name: "agent-loop-offline"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.offline.json"
+    secrets-path: ""
+
+# ==========================================================================
+staging-settings:
+  user-workflow:
+    workflow-name: "agent-loop-staging"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.staging.json"
+    secrets-path: ""

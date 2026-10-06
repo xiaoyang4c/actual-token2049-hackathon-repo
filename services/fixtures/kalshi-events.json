@@ -1,0 +1,239 @@
+{
+  "events": [
+    {
+      "event_ticker": "KXFED-26OCT",
+      "series_ticker": "KXFED",
+      "category": "Economics",
+      "title": "Fed funds rate after Oct 2026 meeting?",
+      "markets": [
+        {
+          "ticker": "KXFED-26OCT-T2.75",
+          "event_ticker": "KXFED-26OCT",
+          "title": "Will the upper bound of the federal funds rate be above 2.75% following the Fed's Oct 28, 2026 meeting?",
+          "yes_sub_title": "Above 2.75%",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.9900",
+          "yes_ask_dollars": "1.0000",
+          "last_price_dollars": "0.9900",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "964.17",
+          "close_time": "2026-10-28T17:55:00Z"
+        },
+        {
+          "ticker": "KXFED-26OCT-T3.00",
+          "event_ticker": "KXFED-26OCT",
+          "title": "Will the upper bound of the federal funds rate be above 3.00% following the Fed's Oct 28, 2026 meeting?",
+          "yes_sub_title": "Above 3.00%",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.9900",
+          "yes_ask_dollars": "1.0000",
+          "last_price_dollars": "0.9900",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "1400.96",
+          "close_time": "2026-10-28T17:55:00Z"
+        },
+        {
+          "ticker": "KXFED-26OCT-T3.25",
+          "event_ticker": "KXFED-26OCT",
+          "title": "Will the upper bound of the federal funds rate be above 3.25% following the Fed's Oct 28, 2026 meeting?",
+          "yes_sub_title": "Above 3.25%",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.9900",
+          "yes_ask_dollars": "1.0000",
+          "last_price_dollars": "0.9800",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "2151.09",
+          "close_time": "2026-10-28T17:55:00Z"
+        },
+        {
+          "ticker": "KXFED-26OCT-T3.50",
+          "event_ticker": "KXFED-26OCT",
+          "title": "Will the upper bound of the federal funds rate be above 3.50% following the Fed's Oct 28, 2026 meeting?",
+          "yes_sub_title": "Above 3.50%",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.9800",
+          "yes_ask_dollars": "1.0000",
+          "last_price_dollars": "0.9800",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "7405.96",
+          "close_time": "2026-10-28T17:55:00Z"
+        },
+        {
+          "ticker": "KXFED-26OCT-T3.75",
+          "event_ticker": "KXFED-26OCT",
+          "title": "Will the upper bound of the federal funds rate be above 3.75% following the Fed's Oct 28, 2026 meeting?",
+          "yes_sub_title": "Above 3.75%",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.9900",
+          "yes_ask_dollars": "1.0000",
+          "last_price_dollars": "0.9900",
+          "volume_24h_fp": "45.00",
+          "open_interest_fp": "17903.24",
+          "close_time": "2026-10-28T17:55:00Z"
+        },
+        {
+          "ticker": "KXFED-26OCT-T4.00",
+          "event_ticker": "KXFED-26OCT",
+          "title": "Will the upper bound of the federal funds rate be above 4.00% following the Fed's Oct 28, 2026 meeting?",
+          "yes_sub_title": "Above 4.00%",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.1800",
+          "yes_ask_dollars": "0.2200",
+          "last_price_dollars": "0.2300",
+          "volume_24h_fp": "9235.72",
+          "open_interest_fp": "76327.94",
+          "close_time": "2026-10-28T17:55:00Z"
+        }
+      ]
+    },
+    {
+      "event_ticker": "KXNEXTNATOSECGEN-99",
+      "series_ticker": "KXNEXTNATOSECGEN",
+      "category": "Elections",
+      "title": "Who will be the next Secretary General of NATO?",
+      "markets": [
+        {
+          "ticker": "KXNEXTNATOSECGEN-99-KIOH",
+          "event_ticker": "KXNEXTNATOSECGEN-99",
+          "title": "Will Klaus Iohannis be the next Secretary General of NATO?",
+          "yes_sub_title": "Klaus Iohannis",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.0100",
+          "yes_ask_dollars": "0.0800",
+          "last_price_dollars": "0.0800",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "90.00",
+          "close_time": "2099-01-08T15:00:00Z"
+        },
+        {
+          "ticker": "KXNEXTNATOSECGEN-99-KKAL",
+          "event_ticker": "KXNEXTNATOSECGEN-99",
+          "title": "Will Kaja Kallas be the next Secretary General of NATO?",
+          "yes_sub_title": "Kaja Kallas",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.1200",
+          "yes_ask_dollars": "0.2000",
+          "last_price_dollars": "0.1700",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "962.16",
+          "close_time": "2099-01-08T15:00:00Z"
+        },
+        {
+          "ticker": "KXNEXTNATOSECGEN-99-BWAL",
+          "event_ticker": "KXNEXTNATOSECGEN-99",
+          "title": "Will Ben Wallace be the next Secretary General of NATO?",
+          "yes_sub_title": "Ben Wallace",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.0100",
+          "yes_ask_dollars": "0.0500",
+          "last_price_dollars": "0.0100",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "89.61",
+          "close_time": "2099-01-08T15:00:00Z"
+        },
+        {
+          "ticker": "KXNEXTNATOSECGEN-99-MFRE",
+          "event_ticker": "KXNEXTNATOSECGEN-99",
+          "title": "Will Mette Frederiksen be the next Secretary General of NATO?",
+          "yes_sub_title": "Mette Frederiksen",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.2600",
+          "yes_ask_dollars": "0.3400",
+          "last_price_dollars": "0.2700",
+          "volume_24h_fp": "1.00",
+          "open_interest_fp": "195.21",
+          "close_time": "2099-01-08T15:00:00Z"
+        },
+        {
+          "ticker": "KXNEXTNATOSECGEN-99-ULEY",
+          "event_ticker": "KXNEXTNATOSECGEN-99",
+          "title": "Will Ursula von der Leyen be the next Secretary General of NATO?",
+          "yes_sub_title": "Ursula von der Leyen",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.0100",
+          "yes_ask_dollars": "0.0600",
+          "last_price_dollars": "0.0100",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "116.84",
+          "close_time": "2099-01-08T15:00:00Z"
+        },
+        {
+          "ticker": "KXNEXTNATOSECGEN-99-PPAV",
+          "event_ticker": "KXNEXTNATOSECGEN-99",
+          "title": "Will Petr Pavel be the next Secretary General of NATO?",
+          "yes_sub_title": "Petr Pavel",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.0100",
+          "yes_ask_dollars": "0.0800",
+          "last_price_dollars": "0.0900",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "70.25",
+          "close_time": "2099-01-08T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "event_ticker": "KXWCCAREERGOALS-KMBAPPE",
+      "series_ticker": "KXWCCAREERGOALS",
+      "category": "Sports",
+      "title": "Kylian Mbappe Total FIFA World Cup Career Goals",
+      "markets": [
+        {
+          "ticker": "KXWCCAREERGOALS-KMBAPPE-30",
+          "event_ticker": "KXWCCAREERGOALS-KMBAPPE",
+          "title": "Will Kylian Mbappe score at least 30 goals in the World Cup in his career?",
+          "yes_sub_title": "30+ Goals Scored",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.7900",
+          "yes_ask_dollars": "0.8600",
+          "last_price_dollars": "0.7900",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "228.70",
+          "close_time": "2043-07-28T14:00:00Z"
+        },
+        {
+          "ticker": "KXWCCAREERGOALS-KMBAPPE-35",
+          "event_ticker": "KXWCCAREERGOALS-KMBAPPE",
+          "title": "Will Kylian Mbappe score at least 35 goals in the World Cup in his career?",
+          "yes_sub_title": "35+ Goals Scored",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.1400",
+          "yes_ask_dollars": "0.1600",
+          "last_price_dollars": "0.1400",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "2059.28",
+          "close_time": "2043-07-28T14:00:00Z"
+        },
+        {
+          "ticker": "KXWCCAREERGOALS-KMBAPPE-40",
+          "event_ticker": "KXWCCAREERGOALS-KMBAPPE",
+          "title": "Will Kylian Mbappe score at least 40 goals in the World Cup in his career?",
+          "yes_sub_title": "40+ Goals Scored",
+          "market_type": "binary",
+          "status": "active",
+          "yes_bid_dollars": "0.0100",
+          "yes_ask_dollars": "0.0500",
+          "last_price_dollars": "0.0700",
+          "volume_24h_fp": "0.00",
+          "open_interest_fp": "500.77",
+          "close_time": "2043-07-28T14:00:00Z"
+        }
+      ]
+    }
+  ],
+  "cursor": ""
+}

@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # lockfileVersion 2 needs Bun 1.4+. README only sets a floor of 1.2.21.
+          bun-version: "1.4.2"
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: cre/agent-loop
+      - run: bun run test
+      - run: bun run typecheck:workflow
+      - run: bun run typecheck:control
+      - run: bun run payments:typecheck
+      - run: bun run lint

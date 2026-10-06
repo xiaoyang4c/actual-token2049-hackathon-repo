@@ -1,0 +1,76 @@
+# AGENTS.md
+
+Follow this file when you write code or docs in this repo.
+
+## Code
+
+Follow the [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html).
+
+Follow the repo formatter when it conflicts with that guide.
+
+Use ESLint as the check after ESLint is present.
+
+Lint these paths:
+
+- `packages/*`
+- `services/*`
+- the operator UI (`ui/`)
+
+## Documentation
+
+Follow about 90% of ASD-STE100 (Simplified Technical English).
+
+- Write short sentences.
+- Put one instruction in each sentence.
+- Use the active voice.
+- Use the same term for the same thing.
+- Do not use slang.
+
+Do not invent Simplified Technical English dictionary words. Use a plain word when you are not sure.
+
+Drop an STE rule when that rule makes the sentence unclear.
+
+Also follow the [Google developer documentation best practices](https://google.github.io/styleguide/docguide/best_practices.html).
+
+- Write the shortest doc that stays accurate.
+- Update docs in the same pull request as the code.
+- Link to an external guide.
+- Do not copy an external guide into this repo.
+
+## Repo facts
+
+`main` holds the plan in `PLAN.md`.
+
+Send product changes to `main` through a pull request.
+
+Do not push directly to `main`.
+
+Do not edit `cre/agent-loop` unless the task names that path.
+
+Do not edit `services/market-feed.ts` unless the task names that path.
+
+The operator UI is display-only. The operator UI is not a public site.
+
+The operator UI reads `GET /agent/state` and `GET /audit`.
+
+The operator UI does not edit policy. The operator UI does not send orders.
+
+Start the local operator UI in this order:
+
+1. Run `bun run services`.
+2. Run `bun run ui/server.ts`.
+3. Open `http://localhost:8791`.
+
+Use bun as the package manager.
+
+You may add a SQLite store. Do not connect that store to `services/control-api.ts` until that file is free to change.
+
+The control API demo routes already exist. Extend the demo routes. Do not replace the demo routes with a new implementation.
+
+Use "paper" for a simulated fill. Use "live" for a real venue order.
+
+Show whether each order is paper or live in the operator UI.
+
+State whether each order is paper or live in the docs.
+
+Do not commit secrets. Commit example env files only.

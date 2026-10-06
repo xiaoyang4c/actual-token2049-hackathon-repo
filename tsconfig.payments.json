@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["bun"]
+  },
+  "include": [
+    "services/cardano-agent.ts",
+    "services/cardano-agents-ts/**/*.ts",
+    "services/score-provider.ts",
+    "services/score-provider.test.ts",
+    "packages/db/**/*.ts"
+  ]
+}

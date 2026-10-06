@@ -1,0 +1,18 @@
+{
+  "id": "fixture-payment",
+  "blockchainIdentifier": "fixture-signed-blockchain-identifier",
+  "agentIdentifier": "fixture-agent",
+  "inputHash": "fixture-input",
+  "payByTime": "0",
+  "submitResultTime": "0",
+  "unlockTime": "0",
+  "externalDisputeUnlockTime": "0",
+  "sellerReturnAddress": "addr_test1_fixture_provider",
+  "onChainState": "FundsLocked",
+  "resultHash": null,
+  "NextAction": {"requestedAction": "WaitingForExternalAction", "errorType": null, "resultHash": null},
+  "CurrentTransaction": null,
+  "RequestedFunds": [{"unit": "", "amount": "1000000"}],
+  "PaymentSource": {"network": "Preprod", "paymentSourceType": "Web3CardanoV1", "smartContractAddress": "addr_test1_fixture_escrow"},
+  "SmartContractWallet": {"walletVkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "walletAddress": "addr_test1_fixture_provider"}
+}

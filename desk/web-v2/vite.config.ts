@@ -1,0 +1,12 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import path from 'node:path'
+
+// v2 is served by the desk server under /v2.
+export default defineConfig({
+  base: '/v2/',
+  plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': path.resolve(__dirname, './src') } },
+  server: { port: 5174, proxy: { '/api': 'http://127.0.0.1:8800' } },
+})

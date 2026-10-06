@@ -1,0 +1,30 @@
+{
+  "name": "prediction-agent-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "services": "bun run services/dev.ts",
+    "paper:demo": "bun run services/paper-position-demo.ts",
+    "payments:demo": "bun run services/cardano-agents-ts/demo.ts",
+    "payments:test": "bun test services/cardano-agents-ts services/score-provider.test.ts packages/db",
+    "payments:typecheck": "tsc --noEmit -p tsconfig.payments.json",
+    "test": "bun test packages services ui && cd cre/agent-loop && bun test",
+    "typecheck:workflow": "cd cre/agent-loop && bun run typecheck",
+    "typecheck:control": "tsc --noEmit -p tsconfig.control.json",
+    "simulate": "cd cre && cre workflow simulate agent-loop --target local-settings",
+    "simulate:offline": "cd cre && cre workflow simulate agent-loop --target offline-settings",
+    "simulate:live": "cd cre && cre workflow simulate agent-loop --target staging-settings",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/bun": "latest",
+    "eslint": "^10.12.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.71.0"
+  },
+  "dependencies": {
+    "@blockfrost/blockfrost-js": "6.2.0",
+    "lz-string": "1.5.0"
+  }
+}

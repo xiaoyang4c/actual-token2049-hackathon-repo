@@ -1,0 +1,17 @@
+{
+  "id": "fixture-purchase",
+  "blockchainIdentifier": "fixture-signed-blockchain-identifier",
+  "agentIdentifier": "fixture-agent",
+  "inputHash": "fixture-input",
+  "onChainState": "FundsLocked",
+  "NextAction": {"requestedAction": "WaitingForExternalAction", "errorType": null},
+  "PaidFunds": [{"unit": "", "amount": "1000000"}],
+  "PaymentSource": {"network": "Preprod", "paymentSourceType": "Web3CardanoV1", "smartContractAddress": "addr_test1_fixture_escrow"},
+  "CurrentTransaction": {
+    "txHash": "abababababababababababababababababababababababababababababababab",
+    "status": "Confirmed",
+    "newOnChainState": "FundsLocked",
+    "layer": "L1"
+  },
+  "TransactionHistory": []
+}

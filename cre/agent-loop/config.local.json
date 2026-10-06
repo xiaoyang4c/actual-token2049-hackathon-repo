@@ -1,0 +1,20 @@
+{
+  "schedule": "0 */1 * * * *",
+  "venueUrls": {
+    "polymarket": "http://localhost:8790/markets/polymarket",
+    "kalshi": "http://localhost:8790/markets/kalshi"
+  },
+  "controlApiUrl": "http://localhost:8787",
+  "cardanoAgentUrl": "http://localhost:8788",
+  "scoreUrl": "http://localhost:8789/score",
+  "maxDataPaymentLovelace": 2000000,
+  "strategy": {
+    "minEdge": 0.04,
+    "minConfidence": 0.5,
+    "stake": 20,
+    "maxIntents": 5,
+    "minLiquidity": 1000,
+    "minPrice": 0.05,
+    "maxPrice": 0.95
+  }
+}

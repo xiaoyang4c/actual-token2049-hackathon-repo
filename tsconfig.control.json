@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.payments.json",
+  "compilerOptions": {
+    "allowJs": true
+  },
+  "include": [
+    "services/control-api.ts",
+    "services/control-api.test.ts",
+    "services/agent-runtime.ts",
+    "services/agent-state.test.ts",
+    "services/position-lifecycle.test.ts",
+    "services/paper-market-source.ts",
+    "services/paper-position-demo.ts",
+    "packages/db/**/*.ts"
+  ]
+}

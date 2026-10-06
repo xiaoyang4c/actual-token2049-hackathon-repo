@@ -1,0 +1,354 @@
+[
+  {
+    "id": "5126779",
+    "question": "Will Indiana enact a data center moratorium by December 31, 2027?",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.145\", \"0.855\"]",
+    "bestBid": 0.14,
+    "bestAsk": 0.15,
+    "liquidityNum": 1245528.9493,
+    "volume24hr": 1889604.5124819998,
+    "endDate": "2028-01-01T04:59:00Z",
+    "tags": [
+      {
+        "slug": "ai"
+      },
+      {
+        "slug": "tech"
+      },
+      {
+        "slug": "states"
+      },
+      {
+        "slug": "compute"
+      },
+      {
+        "slug": "earn-4"
+      },
+      {
+        "slug": "indiana"
+      },
+      {
+        "slug": "politics"
+      },
+      {
+        "slug": "ai-regulation"
+      }
+    ]
+  },
+  {
+    "id": "2589812",
+    "question": "Will there be no change in Fed interest rates after the October 2026 meeting?",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.825\", \"0.175\"]",
+    "bestBid": 0.82,
+    "bestAsk": 0.83,
+    "liquidityNum": 715162.3793,
+    "volume24hr": 968909.5051830002,
+    "endDate": "2026-10-29T03:59:00Z",
+    "tags": [
+      {
+        "slug": "recurring"
+      },
+      {
+        "slug": "fed"
+      },
+      {
+        "slug": "fomc"
+      },
+      {
+        "slug": "trump"
+      },
+      {
+        "slug": "economy"
+      },
+      {
+        "slug": "fed-rates"
+      },
+      {
+        "slug": "kevin-warsh"
+      },
+      {
+        "slug": "Global-Rates"
+      },
+      {
+        "slug": "economic-policy"
+      },
+      {
+        "slug": "macro-indicators"
+      }
+    ]
+  },
+  {
+    "id": "4662693",
+    "question": "Will Anthropic announce bankruptcy by December 31, 2027?",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.115\", \"0.885\"]",
+    "bestBid": 0.11,
+    "bestAsk": 0.12,
+    "liquidityNum": 669178.3762,
+    "volume24hr": 821059.196176,
+    "endDate": "2028-01-01T04:59:00Z",
+    "tags": [
+      {
+        "slug": "tech"
+      },
+      {
+        "slug": "finance"
+      },
+      {
+        "slug": "business"
+      },
+      {
+        "slug": "anthropic"
+      },
+      {
+        "slug": "corporate-financials"
+      },
+      {
+        "slug": "earn-4"
+      }
+    ]
+  },
+  {
+    "id": "601819",
+    "question": "Will Luiz Inácio Lula da Silva win the 2026 Brazilian presidential election?",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.425\", \"0.575\"]",
+    "bestBid": 0.42,
+    "bestAsk": 0.43,
+    "liquidityNum": 751008.5671,
+    "volume24hr": 801219.6434469998,
+    "endDate": "2026-10-05T03:59:00Z",
+    "tags": [
+      {
+        "slug": "politics"
+      },
+      {
+        "slug": "macro-election-2"
+      },
+      {
+        "slug": "main-election"
+      },
+      {
+        "slug": "global-elections"
+      },
+      {
+        "slug": "brazil"
+      },
+      {
+        "slug": "world-elections"
+      },
+      {
+        "slug": "world"
+      }
+    ]
+  },
+  {
+    "id": "601826",
+    "question": "Will Flávio Bolsonaro win the 2026 Brazilian presidential election?",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.5835\", \"0.4165\"]",
+    "bestBid": 0.582,
+    "bestAsk": 0.585,
+    "liquidityNum": 518957.39118,
+    "volume24hr": 721712.588986,
+    "endDate": "2026-10-05T03:59:00Z",
+    "tags": [
+      {
+        "slug": "politics"
+      },
+      {
+        "slug": "macro-election-2"
+      },
+      {
+        "slug": "main-election"
+      },
+      {
+        "slug": "global-elections"
+      },
+      {
+        "slug": "brazil"
+      },
+      {
+        "slug": "world-elections"
+      },
+      {
+        "slug": "world"
+      }
+    ]
+  },
+  {
+    "id": "5177379",
+    "question": "Valorant: G2 Esports vs Team Liquid (BO3) - VCT Champions Group C",
+    "outcomes": "[\"G2 Esports\", \"Team Liquid\"]",
+    "outcomePrices": "[\"0.535\", \"0.465\"]",
+    "bestBid": 0.53,
+    "bestAsk": 0.54,
+    "liquidityNum": 187035.6696,
+    "volume24hr": 685091.281893,
+    "endDate": "2026-10-03T15:00:00Z",
+    "tags": [
+      {
+        "slug": "esports"
+      },
+      {
+        "slug": "valorant"
+      },
+      {
+        "slug": "games"
+      },
+      {
+        "slug": "sports"
+      }
+    ]
+  },
+  {
+    "id": "5011085",
+    "question": "Counter-Strike: Legacy vs PARIVISION (BO3) - ESL Pro League Group Stage",
+    "outcomes": "[\"Legacy\", \"PARIVISION\"]",
+    "outcomePrices": "[\"0.445\", \"0.555\"]",
+    "bestBid": 0.44,
+    "bestAsk": 0.45,
+    "liquidityNum": 341349.3334,
+    "volume24hr": 618233.4703840001,
+    "endDate": "2026-10-03T15:00:00Z",
+    "tags": [
+      {
+        "slug": "esports"
+      },
+      {
+        "slug": "counter-strike-2"
+      },
+      {
+        "slug": "games"
+      },
+      {
+        "slug": "sports"
+      }
+    ]
+  },
+  {
+    "id": "562831",
+    "question": "2026 Balance of Power: R Senate, R House",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.065\", \"0.935\"]",
+    "bestBid": 0.06,
+    "bestAsk": 0.07,
+    "liquidityNum": 2344182.5953,
+    "volume24hr": 500970.09209499997,
+    "endDate": "2026-11-04T04:59:00Z",
+    "tags": [
+      {
+        "slug": "global-elections"
+      },
+      {
+        "slug": "united-states"
+      },
+      {
+        "slug": "rewards-20-4pt5-50"
+      },
+      {
+        "slug": "politics"
+      },
+      {
+        "slug": "elections"
+      },
+      {
+        "slug": "us-presidential-election"
+      },
+      {
+        "slug": "midterms"
+      },
+      {
+        "slug": "earn-4"
+      },
+      {
+        "slug": "main-election"
+      }
+    ]
+  },
+  {
+    "id": "2589813",
+    "question": "Will the Fed increase interest rates by 25 bps after the October 2026 meeting?",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.175\", \"0.825\"]",
+    "bestBid": 0.17,
+    "bestAsk": 0.18,
+    "liquidityNum": 441853.7318,
+    "volume24hr": 494148.8624600001,
+    "endDate": "2026-10-29T03:59:00Z",
+    "tags": [
+      {
+        "slug": "recurring"
+      },
+      {
+        "slug": "fed"
+      },
+      {
+        "slug": "fomc"
+      },
+      {
+        "slug": "trump"
+      },
+      {
+        "slug": "economy"
+      },
+      {
+        "slug": "fed-rates"
+      },
+      {
+        "slug": "kevin-warsh"
+      },
+      {
+        "slug": "Global-Rates"
+      },
+      {
+        "slug": "economic-policy"
+      },
+      {
+        "slug": "macro-indicators"
+      }
+    ]
+  },
+  {
+    "id": "562828",
+    "question": "2026 Balance of Power: D Senate, D House",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.635\", \"0.365\"]",
+    "bestBid": 0.63,
+    "bestAsk": 0.64,
+    "liquidityNum": 2404982.5231,
+    "volume24hr": 458544.9731480001,
+    "endDate": "2026-11-04T04:59:00Z",
+    "tags": [
+      {
+        "slug": "global-elections"
+      },
+      {
+        "slug": "united-states"
+      },
+      {
+        "slug": "rewards-20-4pt5-50"
+      },
+      {
+        "slug": "politics"
+      },
+      {
+        "slug": "elections"
+      },
+      {
+        "slug": "us-presidential-election"
+      },
+      {
+        "slug": "midterms"
+      },
+      {
+        "slug": "earn-4"
+      },
+      {
+        "slug": "main-election"
+      }
+    ]
+  }
+]
