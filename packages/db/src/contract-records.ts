@@ -81,11 +81,12 @@ export function commitContract(db: Database, change: ContractCommit): void {
     );
   }
   const updateOperation = db.query(`UPDATE contract_operations SET status = ?,
-      result_json = COALESCE(?, result_json), last_error = COALESCE(?, last_error),
+      result_json = COALESCE(?, result_json), last_error = CASE WHEN ? THEN ? ELSE last_error END,
       lease_owner = NULL, lease_until = NULL, updated_at = ? WHERE id = ?`);
   for (const update of change.operationUpdates) {
     updateOperation.run(
-      update.status, update.result ? jsonText(update.result) : null, update.lastError ?? null, change.now, update.id,
+      update.status, update.result ? jsonText(update.result) : null, update.lastError !== undefined ? 1 : 0,
+      update.lastError ?? null, change.now, update.id,
     );
   }
   const insertContent = db.query(`INSERT INTO contract_evidence_content (sha256, content, size)

@@ -153,6 +153,14 @@ export interface Inspector {
   publicKeyHex: string;
 }
 
+/** One confirmed escrow transaction. */
+export interface ConfirmedEscrowTransition {
+  at: number;
+  from: OnChainState|null;
+  to: OnChainState;
+  resultHash?: string|null;
+}
+
 /** Last escrow status the adapter reported. `confirmed` = no tx in flight. */
 export interface ChainView {
   onChainState: OnChainState|null;
@@ -162,6 +170,8 @@ export interface ChainView {
   paidToSellerAtomic: string|null;
   paidToBuyerAtomic: string|null;
   settlementTxHash: string|null;
+  /** Confirmed transactions. Optional for records written before history support. */
+  history?: ConfirmedEscrowTransition[];
   syncedAt: number|null;
 }
 
