@@ -8,7 +8,7 @@
  * the lifecycle routes.
  */
 
-import {AgentStore, kycRecordStore} from '../../packages/db/src/index';
+import type {AgentStore} from '../../packages/db/src/index';
 import {
   DEMO_KYC_SCRIPTS,
   KYC_FIXTURE_CASES,
@@ -24,19 +24,10 @@ import type {ReliabilityRoute} from './routes-plumbing';
 
 const providers = new WeakMap<AgentStore, MockKycProvider>();
 
-function requireStore(store: AgentStore|undefined): AgentStore {
-  if (!store) {
-    throw new KycFlowError('store_required', 'KYC onboarding needs a store');
-  }
-  return store;
-}
-
 function providerFor(store: AgentStore): MockKycProvider {
   const existing = providers.get(store);
   if (existing) return existing;
-  const created = new MockKycProvider(new Map(), {
-    store: kycRecordStore(store),
-  });
+  const created = new MockKycProvider(new Map(), {store});
   providers.set(store, created);
   return created;
 }
@@ -49,6 +40,10 @@ function fail(error: unknown): Response {
   if (error instanceof KycFlowError) {
     const status = error.code === 'unknown_entity' ? 404 : 400;
     return json({error: error.message, code: error.code}, status);
+  }
+  // readJson throws SyntaxError for a malformed or empty body.
+  if (error instanceof SyntaxError) {
+    return json({error: 'invalid JSON', code: 'bad_input'}, 400);
   }
   throw error;
 }
@@ -181,7 +176,7 @@ export const laneAKycRoutes: ReliabilityRoute[] = [
         return json({error: 'entityId is required', code: 'bad_input'}, 400);
       }
       try {
-        return json(providerFor(requireStore(store)).view(entityId));
+        return json(providerFor(store).view(entityId));
       } catch (error) {
         return fail(error);
       }
@@ -193,7 +188,7 @@ export const laneAKycRoutes: ReliabilityRoute[] = [
     handler: async (request, url, store) => {
       try {
         const body = parseRegister(await readJson<unknown>(request));
-        return json(providerFor(requireStore(store)).registerEntity(body));
+        return json(providerFor(store).registerEntity(body));
       } catch (error) {
         return fail(error);
       }
@@ -204,7 +199,7 @@ export const laneAKycRoutes: ReliabilityRoute[] = [
     path: '/reliability/kyc/wallets',
     handler: async (request, url, store) => {
       try {
-        const provider = providerFor(requireStore(store));
+        const provider = providerFor(store);
         const body = readBody(await readJson<unknown>(request));
         return json(provider.attachWallet(
           requiredString(body, 'entityId'),
@@ -222,7 +217,7 @@ export const laneAKycRoutes: ReliabilityRoute[] = [
     handler: async (request, url, store) => {
       try {
         const body = parseCheck(await readJson<unknown>(request));
-        return json(providerFor(requireStore(store)).submitCheck(body));
+        return json(providerFor(store).submitCheck(body));
       } catch (error) {
         return fail(error);
       }
@@ -234,7 +229,7 @@ export const laneAKycRoutes: ReliabilityRoute[] = [
     handler: async (request, url, store) => {
       try {
         const parsed = parseEntityId(await readJson<unknown>(request));
-        const provider = providerFor(requireStore(store));
+        const provider = providerFor(store);
         return json(provider.resolveCheck(parsed.entityId, parsed.at));
       } catch (error) {
         return fail(error);
@@ -251,7 +246,7 @@ export const laneAKycRoutes: ReliabilityRoute[] = [
         if (force !== undefined && typeof force !== 'boolean') {
           throw new KycFlowError('bad_input', 'force must be a boolean');
         }
-        const provider = providerFor(requireStore(store));
+        const provider = providerFor(store);
         return json(provider.expireVerification(
           requiredString(body, 'entityId'),
           atOf(body),

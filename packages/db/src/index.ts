@@ -5,7 +5,6 @@
  */
 
 export {applyMigrations} from './migrate';
-export {kycRecordStore} from './kyc-store';
 export {AgentStore} from './store';
 export type {
   AgentStateRecord,

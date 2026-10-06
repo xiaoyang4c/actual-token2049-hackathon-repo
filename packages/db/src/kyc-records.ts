@@ -5,13 +5,17 @@
  */
 
 import type {Database} from 'bun:sqlite';
-import type {
-  KycBadge, KycHow, KycProfile, KycReRegistrationSignal, KycStatusRecord,
-  KycSubjectKind,
+import {
+  KYC_BADGES as BADGES,
+  KYC_HOWS as HOWS,
+  KYC_RE_REGISTRATION_SIGNALS as SIGNALS,
+  type KycProfile,
+  type KycStatusRecord,
+  type KycSubjectKind,
 } from '../../reliability/src/kyc';
 import type {Entity, KycStatus, KycTier} from '../../reliability/src/types';
 import {
-  jsonText, requireOneOf, requiredRow, requireText,
+  bindOptionalText, jsonText, requireOneOf, requiredRow, requireText,
 } from './codecs';
 import {getEntity} from './reliability';
 
@@ -20,16 +24,6 @@ const STATUSES: readonly KycStatus[] = [
   'unverified', 'pending', 'verified', 'rejected',
 ];
 const TIERS: readonly KycTier[] = ['none', 'basic', 'enhanced'];
-const BADGES: readonly KycBadge[] = [
-  'unverified', 'pending', 'verified', 'rejected', 'expired',
-];
-const HOWS: readonly KycHow[] = [
-  'registered', 'check_submitted', 'vendor_approved', 'tier_raised',
-  'vendor_rejected', 'vendor_hold', 'checks_short_of_tier', 'expired',
-];
-const SIGNALS: readonly KycReRegistrationSignal[] = [
-  'document', 'registration_number',
-];
 
 /** Updates the frozen KYC status and tier. Wallets and roles stay. */
 export function updateEntityKyc(
@@ -124,17 +118,17 @@ export function saveKycProfile(db: Database, profile: KycProfile): KycProfile {
       updated_at = excluded.updated_at`).run(
     requireText(profile.entityId, 'entityId'),
     requireOneOf(profile.subjectKind, KINDS, 'subjectKind'),
-    optionalBind(profile.documentId),
-    optionalBind(profile.registrationNumber),
-    optionalBind(profile.beneficialOwnerDocumentId),
+    bindOptionalText(profile.documentId),
+    bindOptionalText(profile.registrationNumber),
+    bindOptionalText(profile.beneficialOwnerDocumentId),
     jsonText([...profile.submittedChecks]),
-    optionalBind(profile.reRegistrationOf),
+    bindOptionalText(profile.reRegistrationOf),
     profile.reRegistrationSignal === undefined ?
       null :
       requireOneOf(profile.reRegistrationSignal, SIGNALS, 'reRegistrationSignal'),
-    optionalBind(profile.reRegistrationValue),
+    bindOptionalText(profile.reRegistrationValue),
     requireText(profile.rulesVersion, 'rulesVersion'),
-    optionalBind(profile.verifiedAt),
+    bindOptionalText(profile.verifiedAt),
     requireText(profile.updatedAt, 'updatedAt'),
   );
   return requiredRow(getKycProfile(db, profile.entityId), 'kyc profile');
@@ -267,10 +261,5 @@ function parseDetail(raw: string): {[key: string]: string} {
 
 function optionalText(value: string|null): string|undefined {
   if (value === null) return undefined;
-  return requireText(value, 'optional text');
-}
-
-function optionalBind(value: string|undefined): string|null {
-  if (value === undefined) return null;
   return requireText(value, 'optional text');
 }

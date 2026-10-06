@@ -139,6 +139,18 @@ describe('KYC demo routes', () => {
       expect(bad.status).toBe(400);
       const body = await bad.json() as {code: string};
       expect(body.code).toBe('bad_input');
+
+      for (const raw of ['{bad', '']) {
+        const malformed = await fetch(`${origin}/reliability/kyc/entities`, {
+          method: 'POST',
+          headers: {'content-type': 'application/json'},
+          body: raw,
+        });
+        expect(malformed.status).toBe(400);
+        expect(await malformed.json()).toEqual({
+          error: 'invalid JSON', code: 'bad_input',
+        });
+      }
     });
   });
 });

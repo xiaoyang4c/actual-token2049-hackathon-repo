@@ -1,8 +1,5 @@
--- Lane A KYC onboarding only.
--- Another lane A change may also need migration 008 for the transaction
--- lifecycle. packages/db/src/migrate.ts rejects two files with the same
--- version number. Combine both schemas into this file before merge.
--- Do not add a second 008_*.sql file.
+-- Lane A mock KYC onboarding: profiles and status history.
+-- The lifecycle tables are in 011_lane_a_lifecycle.sql.
 
 CREATE TABLE reliability_kyc_profiles (
   entity_id TEXT PRIMARY KEY REFERENCES reliability_entities (id),

@@ -3,7 +3,7 @@
  */
 
 import {describe, expect, test} from 'bun:test';
-import {AgentStore, kycRecordStore} from '../../db/src/index';
+import {AgentStore} from '../../db/src/index';
 import {KYC_FIXTURE_CASES} from '../src/fixtures/kyc-demo';
 import {
   KYC_BADGES,
@@ -61,7 +61,7 @@ function withKyc(
   const store = AgentStore.open();
   try {
     const provider = new MockKycProvider(options.overrides ?? new Map(), {
-      store: kycRecordStore(store),
+      store,
       rules: options.rules,
       scripts: options.scripts,
     });
