@@ -74,6 +74,12 @@ Read [lane ownership](../docs/reliability-lanes.md),
 [transaction lifecycle](../docs/reliability-lifecycle.md), and
 [mock KYC](../docs/kyc.md) for the contracts behind these views.
 
+## Appearance
+
+Use the sun or moon button in the header to switch between light and dark mode.
+The first visit uses the system theme.
+Your choice is saved in this browser when local storage is available.
+
 ## Checks
 
 ```sh

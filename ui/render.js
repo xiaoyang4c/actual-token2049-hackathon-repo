@@ -21,6 +21,8 @@ const ICONS = {
   refresh: '<path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-3l2 3M4 16l2 3a8 8 0 0 0 13-3"/>',
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16v1"/>',
   check: '<path d="m6 12 4 4 8-8"/>',
+  moon: '<path d="M20.5 13A9 9 0 0 1 11 3.5 9 9 0 1 0 20.5 13Z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/>',
 }
 const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] ?? ICONS.service}</svg>`
 const badge = (state) => `<span class="status status-${e(state)}"><span class="status-dot" aria-hidden="true"></span>${e(label(state))}</span>`
@@ -28,13 +30,14 @@ const modeBadge = (mode) => `<span class="mode-label mode-${e(mode)}">${e(mode.t
 const facts = (rows) => `<dl class="facts">${rows.map(([key, value]) => `<div><dt>${e(key)}</dt><dd>${e(value)}</dd></div>`).join("")}</dl>`
 const empty = (title, detail) => `<div class="empty-state"><strong>${e(title)}</strong><p>${e(detail)}</p></div>`
 
-function renderHeader(view) {
+function renderHeader(view, theme) {
   const connection = { connected: "Connected", fixture: view.error ? "Offline sample" : "Loading", stale: "Connection lost" }[view.source]
   return `<header class="app-header">
     <a class="brand" href="/" aria-label="Reliability home"><span class="brand-mark">R</span>Reliability</a>
     <nav aria-label="Marketplace views">${["transactions", "participants", "listings"].map((tab) =>
       `<button type="button" id="nav-${tab}" data-tab="${tab}" ${view.tab === tab ? 'aria-current="page"' : ""}>${label(tab)}</button>`).join("")}</nav>
     <div class="header-status"><span class="local-label">Local operator</span><span class="connection connection-${view.source}"><span class="status-dot" aria-hidden="true"></span>${connection}</span>
+    <button type="button" id="theme-toggle" class="icon-button" data-theme-toggle aria-label="Switch to ${theme === "dark" ? "light" : "dark"} mode" title="Switch to ${theme === "dark" ? "light" : "dark"} mode">${icon(theme === "dark" ? "sun" : "moon")}</button>
     <button type="button" id="refresh-marketplace" class="icon-button" data-refresh aria-label="Refresh marketplace">${icon("refresh")}</button></div>
   </header>`
 }
@@ -158,13 +161,13 @@ export function renderLookup(lookup = {}) {
   return `<section class="lookup-section" aria-label="Transaction lookup"><form id="lookup-form"><label for="transaction-id">Inspect a transaction by ID</label><div><input id="transaction-id" name="transactionId" placeholder="Transaction ID" value="${e(lookup.value ?? "")}" required><button type="submit" class="button" ${lookup.busy ? "disabled" : ""}>${lookup.busy ? "Loading…" : "Inspect receipt"}</button></div></form><p class="fine">Read a durable lifecycle transaction or a demo receipt.</p><p id="lookup-message" class="data-warning" role="status">${e(lookup.error ?? "")}</p></section>`
 }
 
-export function renderDesk(view, lookup = {}) {
+export function renderDesk(view, lookup = {}, theme = "light") {
   const descriptions = {
     transactions: "Inspect agreements, outcomes, and the evidence behind each result.",
     participants: "Separate buyer and seller reliability, with the evidence and identity status behind each score.",
     listings: "Inspect goods and service offers, seller records, and required terms.",
   }
-  return `<div class="desk" data-source="${e(view.source)}">${renderHeader(view)}<main id="main" class="main-shell">
+  return `<div class="desk" data-source="${e(view.source)}">${renderHeader(view, theme)}<main id="main" class="main-shell">
     <div class="page-heading"><div><h1>${e(label(view.tab))}</h1><p>${descriptions[view.tab]}</p></div><span class="read-only">${icon("lock")}Read only</span></div>
     ${renderMetrics(view)}${renderNotice(view)}
     ${view.tab === "transactions" ? `<div class="workspace">${renderLedger(view)}${renderReceipt(view)}</div>${renderLookup(lookup)}` : view.tab === "participants" ? renderParticipants(view) : renderListings(view)}

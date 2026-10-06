@@ -25,7 +25,7 @@ function paint() {
   const view = buildView(snapshot, meta, controls)
   controls.page = view.page
   document.title = deskTitle(view)
-  app.innerHTML = renderDesk(view, lookup)
+  app.innerHTML = renderDesk(view, lookup, document.documentElement.dataset.theme)
   for (const id of disclosures) {
     const detail = document.getElementById(id)
     if (detail instanceof HTMLDetailsElement) detail.open = true
@@ -120,6 +120,13 @@ async function inspect(id) {
 app.addEventListener("click", (event) => {
   const button = event.target.closest("button")
   if (!button || button.disabled) return
+  if (button.hasAttribute("data-theme-toggle")) {
+    const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"
+    document.documentElement.dataset.theme = theme
+    try { localStorage.setItem("reliability-theme", theme) } catch {}
+    paint()
+    return
+  }
   if (button.hasAttribute("data-refresh")) { tick(); return }
   if (button.hasAttribute("data-tab")) {
     controls = { ...controls, tab: button.dataset.tab, query: "", page: 0 }
