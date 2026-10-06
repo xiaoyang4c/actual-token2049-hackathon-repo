@@ -184,7 +184,7 @@ bun run contracts:smoke    # day 2 preprod proof (needs both gates)
 5. **Party registration is open.** Anyone can register a key for an entity id that has none. KYC is on main (pull request #8). Link key registration to a verified KYC entity, and let a template require a KYC tier.
 6. **Scoring and fees are still stubs** (`policies.ts`). Scores accumulate (pull request #15). The math lane owns value weighting and pair decay.
 7. **Platform fees are not in the escrow amount.** Lane B owns fees.
-8. **The mediator is a key, not a Coworker.** Plan: a Sokosumi Coworker returns the ruling; a platform signer checks the paid Task and signs.
+8. **A person holds the mediator key.** The Tally Mediator Coworker drafts the ruling and returns the exact bytes to sign. The Task worker is not built yet. Read [Tally Coworkers](../services/reliability/coworkers/README.md).
 9. **Evidence lives in SQLite.** Production needs object storage.
 10. **The operator UI does not show contracts yet.** The routes exist for lane C.
 11. **Two lifecycles exist.** Keep v1 for the paper sales demo. Use contracts for live escrow. The v1 live path now stops with a clear error before it reaches Masumi.

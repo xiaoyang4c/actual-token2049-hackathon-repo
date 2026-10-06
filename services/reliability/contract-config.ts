@@ -37,7 +37,7 @@ const DEFAULT_DISPUTE_MARGIN_MS = 120_000;
 /** Evidence above 1 MiB belongs in object storage, not in the SQLite store. */
 const DEFAULT_MAX_EVIDENCE_BYTES = 1_048_576;
 /** MPS waits 10 minutes after unlockTime before it withdraws (rev d569a33). */
-const MPS_AUTO_WITHDRAW_DELAY_MS = 600_000;
+export const MPS_AUTO_WITHDRAW_DELAY_MS = 600_000;
 /** A paper confirmation feels like a short block wait. */
 const DEFAULT_PAPER_CONFIRMATION_MS = 3_000;
 /** The worker polls MPS no faster than this. MPS itself batches jobs on a similar cadence. */
