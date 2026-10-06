@@ -8,6 +8,7 @@ import {
   EscrowTransactionLifecycle, LifecycleError, type LifecycleTransition,
 } from '../../packages/reliability/src/lifecycle';
 import type {EscrowPort} from '../../packages/reliability/src/escrow-port';
+import {categoryForType} from '../../packages/reliability/src/event-flow';
 import {flowLifecycleOutcome} from '../../packages/reliability/src/lifecycle-flow';
 import {createEscrowPort} from './masumi-escrow';
 import {
@@ -64,26 +65,40 @@ export class LifecycleService {
       throw new LifecycleError(`unknown transaction ${transactionId}`);
     }
     const transaction = lifecycle.getTransaction(transactionId);
-    const outcome = lifecycle.outcomeFor(transactionId, {now});
-    const entities = new Map(
-      this.store.listEntities().map((entity) => [entity.id, entity]),
-    );
-    const flowed = flowLifecycleOutcome(
-      transaction, outcome, this.policies.scoring, this.policies.decay,
-      this.policies.fees, now, entities,
-    );
-    const existing = this.store.listReliabilityEventsForTransaction(transactionId);
-    let inserted = false;
-    for (const event of flowed.events) {
-      if (!existing.some((item) => item.id === event.id)) {
+    // Hold the write lock while reading history and committing the projection.
+    // This synchronous work uses local records and injected policies only.
+    const {outcome, flowed} = this.store.transaction(() => {
+      const outcome = lifecycle.outcomeFor(transactionId, {now});
+      const entities = new Map(
+        this.store.listEntities().map((entity) => [entity.id, entity]),
+      );
+      const category = categoryForType(transaction.type);
+      const states = transaction.participants.flatMap((participant) => {
+        const state = this.store.getReliabilityState(
+          participant.entityId, category, participant.role,
+        );
+        return state ? [state] : [];
+      });
+      const appliedEventIds = new Set(
+        this.store.listReliabilityEventsForTransaction(transactionId)
+          .map((event) => event.id),
+      );
+      const flowed = flowLifecycleOutcome(
+        transaction, outcome, this.policies.scoring, this.policies.decay,
+        this.policies.fees, now, entities, {states, appliedEventIds},
+      );
+      for (let index = 0; index < flowed.events.length; index++) {
+        const event = flowed.events[index];
+        if (!event || appliedEventIds.has(event.id)) continue;
+        const state = flowed.states[index];
+        const decision = flowed.decisions[index];
+        if (!state || !decision) throw new Error('incomplete reliability projection');
         this.store.insertReliabilityEvent(event);
-        inserted = true;
+        this.store.saveReliabilityState(state);
+        this.store.insertTermsDecision(decision);
       }
-    }
-    if (inserted) {
-      for (const state of flowed.states) this.store.saveReliabilityState(state);
-      for (const decision of flowed.decisions) this.store.insertTermsDecision(decision);
-    }
+      return {outcome, flowed};
+    });
     const parties = transaction.participants.flatMap((participant) => {
       const entity = this.store.getEntity(participant.entityId);
       return entity ? [entity] : [];
