@@ -11,7 +11,7 @@ import type {ScoringPolicy} from './scoring';
 import type {
   Entity, MarketplaceTransaction, Outcome, ReliabilityCategory,
   ReliabilityEvent, ReliabilityOutcome, ReliabilityState, ScoreView,
-  TermsDecision, TransactionType,
+  TermsDecision, TransactionParticipant, TransactionType,
 } from './types';
 
 const CATEGORY_BY_TYPE: Record<TransactionType, ReliabilityCategory> = {
@@ -25,26 +25,13 @@ export function categoryForType(type: TransactionType): ReliabilityCategory {
   return CATEGORY_BY_TYPE[type];
 }
 
-function outcomeForState(
-  state: Outcome['state'],
-): ReliabilityOutcome|undefined {
-  if (state === 'successful') return 'success';
-  if (state === 'failed') return 'failure';
-  return undefined;
-}
-
-/**
- * Builds one reliability event per participant with a role. Pending,
- * disputed, cancelled, and unresolved outcomes emit no events. Pending
- * is not successful and disputed is not a final failure.
- */
-export function outcomeToEvents(
+function toEvent(
   transaction: MarketplaceTransaction,
   outcome: Outcome,
-): ReliabilityEvent[] {
-  const result = outcomeForState(outcome.state);
-  if (result === undefined) return [];
-  return transaction.participants.map((participant) => ({
+  participant: TransactionParticipant,
+  result: ReliabilityOutcome,
+): ReliabilityEvent {
+  return {
     id: `${transaction.id}:${participant.entityId}:${participant.role}`,
     transactionId: transaction.id,
     entityId: participant.entityId,
@@ -56,7 +43,33 @@ export function outcomeToEvents(
     verificationConfidence: outcome.verificationConfidence,
     value: transaction.value,
     createdAt: outcome.decidedAt,
-  }));
+  };
+}
+
+/**
+ * Builds reliability events for one outcome.
+ * A successful outcome emits one success event per participant role.
+ * A failed outcome emits one failure event for `fault` only.
+ * `seller` fails the seller role. `buyer` fails the buyer role.
+ * `none`, an empty fault, and every other state emit no events.
+ * Pending is not successful. Disputed is not a final failure.
+ * `cancelled` is a mutual end.
+ */
+export function outcomeToEvents(
+  transaction: MarketplaceTransaction,
+  outcome: Outcome,
+): ReliabilityEvent[] {
+  if (outcome.state === 'successful') {
+    return transaction.participants.map((participant) =>
+      toEvent(transaction, outcome, participant, 'success'));
+  }
+  if (outcome.state !== 'failed') return [];
+  if (outcome.fault !== 'buyer' && outcome.fault !== 'seller') return [];
+  const fault = outcome.fault;
+  return transaction.participants
+    .filter((participant) => participant.role === fault)
+    .map((participant) =>
+      toEvent(transaction, outcome, participant, 'failure'));
 }
 
 /**

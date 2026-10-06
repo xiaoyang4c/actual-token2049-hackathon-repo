@@ -11,19 +11,39 @@ Read this file before you start a lane.
 
 ## Frozen file
 
-`packages/reliability/src/types.ts` is frozen after the plumbing PR.
+`packages/reliability/src/types.ts` is frozen after the per-role fault change.
 
-Request type changes through a separate small PR.
+Request further type changes through a separate small PR.
 
 Do not change types inside a lane PR.
+
+`Outcome.fault` records the at-fault role for a failed outcome.
+
+The values are `buyer`, `seller`, and `none`.
+
+Set `fault` when `state` is `failed`.
+
+Leave `fault` empty when `state` is `successful`.
+
+A success credits both roles.
+
+A `seller` fault lowers only that entity's seller score.
+
+A `buyer` fault lowers only that entity's buyer score.
+
+`none` changes no score.
+
+`outcomeToEvents` reads `Outcome.fault`. It does not read `evidence.fault`.
 
 ## Migration numbers
 
 The plumbing PR adds `006_reliability_marketplace.sql`.
 
+`010_outcome_fault.sql` stores `Outcome.fault`.
+
 Reserved numbers follow in this order: `007` math lane, `008` lane A, `009` lane D.
 
-Take the next free number after `009` for any new lane.
+Take the next free number after `010` for any new lane.
 
 ## Shared files
 
@@ -42,9 +62,16 @@ Example: lane A adds `services/reliability/routes-lane-a.ts` and one line in `se
 An outcome emits reliability events. Events update scores. Scores feed terms and fee decisions.
 
 1. Lane A or lane D produces an `Outcome` with evidence.
-2. `outcomeToEvents` in `packages/reliability/src/event-flow.ts` builds one `ReliabilityEvent` per participant role.
-3. The math lane `ScoringPolicy` applies events to per-role `ReliabilityState` rows.
-4. The math lane `FeeTermsPolicy` maps each state to a `TermsDecision` with fees, reason code, and policy version.
+2. Set `Outcome.fault` to `seller`, `buyer`, or `none` when `state` is `failed`.
+3. `outcomeToEvents` in `packages/reliability/src/event-flow.ts` reads that fault.
+4. A `successful` outcome emits one success event for each participant role.
+5. A `seller` fault emits one failure event for the seller role.
+6. A `buyer` fault emits one failure event for the buyer role.
+7. An empty fault, `none`, `cancelled`, `pending`, `disputed`, and `unresolved` emit no events.
+8. The math lane `ScoringPolicy` applies events to per-role `ReliabilityState` rows.
+9. The math lane `FeeTermsPolicy` maps each state to a `TermsDecision` with fees, reason code, and policy version.
+
+`cancelled` is a mutual end. It emits no events.
 
 Policy decisions use the lower bound, not the mean.
 

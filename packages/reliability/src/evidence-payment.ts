@@ -7,7 +7,7 @@
  */
 
 import {createHash} from 'node:crypto';
-import type {Outcome} from './types';
+import type {JsonValue, Outcome} from './types';
 
 export const STUB_PAYMENT_EVIDENCE_VERSION = 'payment-evidence-stub-v0';
 
@@ -30,7 +30,8 @@ export function hashInvoiceTerms(terms: {[key: string]: unknown}): string {
 
 /**
  * Payment outcome evidence seam. Lane 4 owns the real hash and
- * settlement comparison. The stub marks on-time payment successful.
+ * settlement comparison. The stub marks on-time payment successful
+ * and leaves fault empty. A late payment is a buyer fault.
  */
 export interface PaymentEvidenceProducer {
   readonly version: string;
@@ -48,16 +49,28 @@ export class StubPaymentEvidenceProducer implements PaymentEvidenceProducer {
     const termsHash = hashInvoiceTerms(input.invoiceTerms);
     const onTime =
       Date.parse(input.settlementTimestamp) <= Date.parse(input.dueDate);
+    const evidence: {[key: string]: JsonValue} = {
+      termsHash,
+      dueDate: input.dueDate,
+      settlementTimestamp: input.settlementTimestamp,
+      settlementTxHash: input.settlementTxHash ?? null,
+      producer: this.version,
+    };
+    if (onTime) {
+      return {
+        transactionId: input.transactionId,
+        state: 'successful',
+        evidence,
+        verificationMethod: 'payment-settlement',
+        verificationConfidence: 0.5,
+        decidedAt: input.now,
+      };
+    }
     return {
       transactionId: input.transactionId,
-      state: onTime ? 'successful' : 'failed',
-      evidence: {
-        termsHash,
-        dueDate: input.dueDate,
-        settlementTimestamp: input.settlementTimestamp,
-        settlementTxHash: input.settlementTxHash ?? null,
-        producer: this.version,
-      },
+      state: 'failed',
+      fault: 'buyer',
+      evidence,
       verificationMethod: 'payment-settlement',
       verificationConfidence: 0.5,
       decidedAt: input.now,

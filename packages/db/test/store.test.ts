@@ -98,7 +98,7 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      expect(versions.versions).toBe(6);
+      expect(versions.versions).toBe(7);
     } finally {
       db.close();
     }
