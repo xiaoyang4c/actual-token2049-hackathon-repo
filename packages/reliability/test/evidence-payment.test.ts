@@ -32,7 +32,9 @@ describe('StubPaymentEvidenceProducer', () => {
       settlementTimestamp: '2026-10-05T00:00:00.000Z', now: NOW,
     });
     expect(onTime.state).toBe('successful');
+    expect(onTime.fault).toBeUndefined();
     expect(late.state).toBe('failed');
+    expect(late.fault).toBe('buyer');
     expect(onTime.verificationMethod).toBe('payment-settlement');
     expect(onTime.evidence['termsHash'])
       .toBe(hashInvoiceTerms(TERMS));

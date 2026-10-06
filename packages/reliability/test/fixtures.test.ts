@@ -10,6 +10,9 @@ import {
   FIXTURE_OUTCOMES,
   FIXTURE_STATES,
   FIXTURE_TRANSACTIONS,
+  OUTCOME_BUYER_FAULT,
+  OUTCOME_NO_FAULT,
+  OUTCOME_SELLER_FAULT,
 } from '../src/fixtures/index';
 
 describe('reliability fixtures', () => {
@@ -38,6 +41,13 @@ describe('reliability fixtures', () => {
     );
     expect(farm).toHaveLength(12);
     expect(FIXTURE_OUTCOMES).toHaveLength(FIXTURE_TRANSACTIONS.length);
+    expect(FIXTURE_OUTCOMES.every((outcome) => outcome.fault === undefined))
+      .toBe(true);
+    expect(FIXTURE_OUTCOMES.some((outcome) => outcome.state === 'failed'))
+      .toBe(false);
+    expect(OUTCOME_SELLER_FAULT.fault).toBe('seller');
+    expect(OUTCOME_BUYER_FAULT.fault).toBe('buyer');
+    expect(OUTCOME_NO_FAULT.fault).toBe('none');
   });
 
   test('covers listings with buyer and seller minimums', () => {

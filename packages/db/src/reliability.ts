@@ -7,9 +7,9 @@
 import type {Database} from 'bun:sqlite';
 import type {
   Entity, EntityRole, Listing, MarketplaceTransaction, Outcome,
-  OutcomeState, ReliabilityCategory, ReliabilityEvent, ReliabilityOutcome,
-  ReliabilityState, TermsDecision, TermsReasonCode, TermsVersion,
-  TransactionType, VerificationMethod,
+  OutcomeFault, OutcomeState, ReliabilityCategory, ReliabilityEvent,
+  ReliabilityOutcome, ReliabilityState, TermsDecision, TermsReasonCode,
+  TermsVersion, TransactionType, VerificationMethod,
 } from '../../reliability/src/types';
 import {
   jsonText, requireFinite, requireOneOf, requiredRow, requireText,
@@ -29,6 +29,7 @@ const VERIFICATION_METHODS: readonly VerificationMethod[] = [
   'lifecycle', 'payment-settlement', 'manual-review', 'unverified',
 ];
 const EVENT_OUTCOMES: readonly ReliabilityOutcome[] = ['success', 'failure'];
+const OUTCOME_FAULTS: readonly OutcomeFault[] = ['buyer', 'seller', 'none'];
 const REASON_CODES: readonly TermsReasonCode[] = [
   'NEW_ENTITY', 'LOW_CONFIDENCE', 'STRONG_HISTORY', 'WEAK_HISTORY',
   'REPEAT_PAIR_DISCOUNT', 'KYC_LIMIT', 'POLICY_DEFAULT',
@@ -240,17 +241,21 @@ export function listTermsVersions(
 /** Stores the outcome of a transaction. One outcome per transaction. */
 export function saveOutcome(db: Database, outcome: Outcome): Outcome {
   db.query(`INSERT INTO reliability_outcomes
-      (transaction_id, state, evidence_json, verification_method,
+      (transaction_id, state, fault, evidence_json, verification_method,
        verification_confidence, resolver, resolve_by, decided_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (transaction_id) DO UPDATE SET
-      state = excluded.state, evidence_json = excluded.evidence_json,
+      state = excluded.state, fault = excluded.fault,
+      evidence_json = excluded.evidence_json,
       verification_method = excluded.verification_method,
       verification_confidence = excluded.verification_confidence,
       resolver = excluded.resolver, resolve_by = excluded.resolve_by,
       decided_at = excluded.decided_at`).run(
     requireText(outcome.transactionId, 'transactionId'),
     requireOneOf(outcome.state, OUTCOME_STATES, 'state'),
+    outcome.fault === undefined ?
+      null :
+      requireOneOf(outcome.fault, OUTCOME_FAULTS, 'fault'),
     jsonText(outcome.evidence),
     requireOneOf(
       outcome.verificationMethod, VERIFICATION_METHODS, 'verificationMethod',
@@ -266,6 +271,7 @@ export function saveOutcome(db: Database, outcome: Outcome): Outcome {
 interface OutcomeRow {
   transactionId: string;
   state: string;
+  fault: string|null;
   evidenceJson: string;
   verificationMethod: string;
   verificationConfidence: number|null;
@@ -275,9 +281,13 @@ interface OutcomeRow {
 }
 
 function parseOutcome(row: OutcomeRow): Outcome {
+  const fault = row.fault === null ?
+    undefined :
+    requireOneOf(row.fault, OUTCOME_FAULTS, 'fault');
   return {
     transactionId: row.transactionId,
     state: requireOneOf(row.state, OUTCOME_STATES, 'state'),
+    ...(fault === undefined ? {} : {fault}),
     evidence: JSON.parse(row.evidenceJson),
     verificationMethod: requireOneOf(
       row.verificationMethod, VERIFICATION_METHODS, 'verificationMethod',
@@ -294,7 +304,8 @@ export function getOutcome(
   db: Database, transactionId: string,
 ): Outcome|undefined {
   const row = db.query<OutcomeRow, [string]>(`SELECT
-      transaction_id AS transactionId, state, evidence_json AS evidenceJson,
+      transaction_id AS transactionId, state, fault,
+      evidence_json AS evidenceJson,
       verification_method AS verificationMethod,
       verification_confidence AS verificationConfidence,
       resolver, resolve_by AS resolveBy, decided_at AS decidedAt

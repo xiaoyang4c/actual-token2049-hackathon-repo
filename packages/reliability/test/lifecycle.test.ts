@@ -66,4 +66,23 @@ describe('StubTransactionLifecycle', () => {
     expect(outcome.state).toBe('disputed');
     expect(outcome.resolver).toBe('marketplace-arbiter');
   });
+
+  test('records no fault on a refund', () => {
+    const lifecycle = new StubTransactionLifecycle();
+    lifecycle.advance({
+      transactionId: 'tx-4', from: undefined, to: 'offer_accepted',
+      evidence: {}, at: NOW,
+    });
+    lifecycle.advance({
+      transactionId: 'tx-4', from: 'offer_accepted', to: 'escrow_funded',
+      evidence: {}, at: NOW,
+    });
+    lifecycle.advance({
+      transactionId: 'tx-4', from: 'escrow_funded', to: 'refunded',
+      evidence: {}, at: NOW,
+    });
+    const outcome = lifecycle.outcomeFor('tx-4', {now: NOW});
+    expect(outcome.state).toBe('cancelled');
+    expect(outcome.fault).toBe('none');
+  });
 });

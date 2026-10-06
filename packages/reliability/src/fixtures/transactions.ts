@@ -161,3 +161,59 @@ export const FIXTURE_OUTCOMES: Outcome[] = [
   OUTCOME_INVOICE,
   ...FARM_OUTCOMES,
 ];
+
+/**
+ * Failed service. Only the seller role is at fault.
+ * This row is paper. It is not in the seed list. It shares an id with
+ * the successful service outcome.
+ */
+export const OUTCOME_SELLER_FAULT: Outcome = {
+  transactionId: 'tx-service-1',
+  state: 'failed',
+  fault: 'seller',
+  evidence: {
+    stage: 'refunded',
+    producer: 'lifecycle-stub-v0',
+  },
+  verificationMethod: 'manual-review',
+  verificationConfidence: 0.85,
+  decidedAt: '2026-10-06T00:00:00.000Z',
+};
+
+/**
+ * Late invoice payment. Only the buyer role is at fault.
+ * This row is paper. It is not in the seed list. It shares an id with
+ * the successful invoice outcome.
+ */
+export const OUTCOME_BUYER_FAULT: Outcome = {
+  transactionId: 'tx-invoice-1',
+  state: 'failed',
+  fault: 'buyer',
+  evidence: {
+    termsHash: hashInvoiceTerms(INVOICE_TERMS),
+    dueDate: '2026-10-03T00:00:00.000Z',
+    settlementTimestamp: '2026-10-05T00:00:00.000Z',
+    settlementTxHash: null,
+    producer: 'payment-evidence-stub-v0',
+  },
+  verificationMethod: 'payment-settlement',
+  verificationConfidence: 0.5,
+  decidedAt: '2026-10-05T00:00:00.000Z',
+};
+
+/**
+ * Failed outcome with no at-fault party. Neither score changes.
+ * This row is paper. It is not in the seed list.
+ */
+export const OUTCOME_NO_FAULT: Outcome = {
+  transactionId: 'tx-service-1',
+  state: 'failed',
+  fault: 'none',
+  evidence: {
+    stage: 'refunded',
+    producer: 'lifecycle-stub-v0',
+  },
+  verificationMethod: 'lifecycle',
+  verificationConfidence: 0.9,
+  decidedAt: '2026-10-06T00:00:00.000Z',
+};
