@@ -34,6 +34,7 @@ function party(id: string): Entity {
 function paperEscrow(): EscrowPort {
   return {
     simulated: true,
+    broadcast: false,
     async fund(request) {
       const session: EscrowSession = {
         simulated: true,
@@ -72,6 +73,28 @@ function paperEscrow(): EscrowPort {
         mode: 'paper',
         action: 'request_refund',
         blockchainIdentifier: session.blockchainIdentifier,
+      };
+    },
+    async status(session) {
+      return {
+        simulated: true,
+        mode: 'paper',
+        onChainState: session.onChainState,
+        txHash: session.txHash,
+        escrowAddress: session.escrowAddress,
+      };
+    },
+    async mutualTerminate(session, consent) {
+      return {
+        simulated: true,
+        mode: 'paper',
+        action: 'mutual_termination',
+        blockchainIdentifier: session.blockchainIdentifier,
+        txHash: session.txHash,
+        onChainState: 'RefundRequested',
+        buyerConsentAt: consent.buyerConsentAt,
+        sellerConsentAt: consent.sellerConsentAt,
+        contractEnds: consent.contractEnds,
       };
     },
   };

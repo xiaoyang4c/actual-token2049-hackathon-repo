@@ -6,19 +6,23 @@ import {describe, expect, test} from 'bun:test';
 import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {AgentStore} from '../../packages/db/src/index';
 import {start} from '../control-api';
 
 const OPEN = '2026-10-06T00:00:00.000Z';
 const WINDOW = '2026-10-13T00:00:00.000Z';
 
-async function withServer(run: (origin: string) => Promise<void>): Promise<void> {
+async function withServer(
+  run: (origin: string, databasePath: string) => Promise<void>,
+): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), 'lifecycle-api-'));
+  const databasePath = join(directory, 'agent.sqlite');
   const server = start(0, {
     auditFile: join(directory, 'audit.jsonl'),
-    databasePath: join(directory, 'agent.sqlite'),
+    databasePath,
   });
   try {
-    await run(`http://127.0.0.1:${server.port}`);
+    await run(`http://127.0.0.1:${server.port}`, databasePath);
   } finally {
     await server.stop(true);
     rmSync(directory, {recursive: true, force: true});
@@ -27,7 +31,7 @@ async function withServer(run: (origin: string) => Promise<void>): Promise<void>
 
 describe('lifecycle demo routes', () => {
   test('drives a paper sale from offer to settlement', async () => {
-    await withServer(async (origin) => {
+    await withServer(async (origin, databasePath) => {
       const opened = await fetch(`${origin}/reliability/lifecycle/open`, {
         method: 'POST',
         headers: {'content-type': 'application/json'},
@@ -50,6 +54,13 @@ describe('lifecycle demo routes', () => {
       expect(openBody.mode).toBe('paper');
       expect(openBody.stage).toBe('offer_accepted');
       expect(openBody.outcome.state).toBe('pending');
+      const shared = AgentStore.open(databasePath);
+      try {
+        expect(shared.getEntity('buyer-demo')?.kycStatus).toBe('unverified');
+        expect(shared.getTransaction('tx-demo')?.id).toBe('tx-demo');
+      } finally {
+        shared.close();
+      }
 
       const amended = await fetch(`${origin}/reliability/lifecycle/terms`, {
         method: 'POST',
@@ -125,10 +136,14 @@ describe('lifecycle demo routes', () => {
         mode: string;
         stage: string;
         transitions: unknown[];
+        entities: {id: string; kycStatus: string}[];
       };
       expect(receiptBody.mode).toBe('paper');
       expect(receiptBody.stage).toBe('payment_settled');
       expect(receiptBody.transitions).toHaveLength(4);
+      expect(receiptBody.entities.map((entity) => entity.id).sort()).toEqual([
+        'buyer-demo', 'seller-demo',
+      ]);
 
       const rejected = await post(origin, {
         action: 'deliver',

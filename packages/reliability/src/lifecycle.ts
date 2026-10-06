@@ -76,7 +76,8 @@ export const LIFECYCLE_NEXT_STAGES: Record<
 > = {
   offer_accepted: ['escrow_funded', 'cancelled'],
   escrow_funded: ['delivery_confirmed', 'dispute_opened', 'refunded'],
-  delivery_confirmed: ['payment_settled', 'dispute_opened'],
+  // `refunded` from delivery is mutual termination only. One-sided refund stays on escrow_funded.
+  delivery_confirmed: ['payment_settled', 'dispute_opened', 'refunded'],
   payment_settled: ['dispute_opened'],
   dispute_opened: ['dispute_resolved'],
   dispute_resolved: ['payment_settled', 'refunded'],
@@ -130,6 +131,8 @@ export interface OpenTransactionInput {
   terms: {[key: string]: JsonValue};
   value?: number;
   termsHash?: string;
+  /** UTC end of the contract term. Mutual termination must happen before this time. */
+  contractEnds?: string;
   at: string;
 }
 
@@ -262,12 +265,15 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     }
     if (input.termsHash !== undefined) this.requireText(input.termsHash, 'termsHash');
     assertJson(input.terms, 'terms');
+    const contractEnds = contractEnd(input.contractEnds, input.terms.contractEnds);
     if (this.hasTransaction(input.id)) {
       throw new LifecycleError(`transaction ${input.id} already exists`);
     }
+    const terms = copyTerms(input.terms);
+    if (contractEnds && terms.contractEnds === undefined) terms.contractEnds = contractEnds;
     const version: TermsVersion = {
       version: 1,
-      terms: copyTerms(input.terms),
+      terms: copyTerms(terms),
       reason: 'initial terms',
       createdAt: input.at,
     };
@@ -278,7 +284,7 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
         {entityId: input.buyerId, role: 'buyer'},
         {entityId: input.sellerId, role: 'seller'},
       ],
-      terms: copyTerms(input.terms),
+      terms: copyTerms(terms),
       termsHash: input.termsHash,
       versions: [version],
       value: input.value,
@@ -295,7 +301,10 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
       transactionId: input.id,
       from: undefined,
       to: 'offer_accepted',
-      evidence: {reason: 'offer accepted'},
+      evidence: {
+        reason: 'offer accepted',
+        ...(contractEnds ? {contractEnds} : {}),
+      },
       at: input.at,
     });
     return this.transaction(input.id);
@@ -391,8 +400,10 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
         `${input.transactionId}:${JSON.stringify(this.transaction(input.transactionId).terms)}`,
       ),
     };
-    const session = await this.paperPort().fund(request);
-    this.assertPaper(session.simulated, session.mode);
+    const port = this.requireEscrow();
+    const session = await port.fund(request);
+    this.assertEscrowResult(session.simulated, session.mode);
+    const chain = await this.chainEvidence(session);
     return this.commitEscrow({
       transactionId: input.transactionId,
       from: 'offer_accepted',
@@ -401,6 +412,7 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
       evidence: sessionEvidence(session, {
         disputeWindowEnds: input.disputeWindowEnds,
         masumiAction: 'create_purchase',
+        ...chain,
       }),
     });
   }
@@ -463,22 +475,25 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
       throw new LifecycleError('delivery evidence is already recorded');
     }
     const session = this.sessionFor(input.transactionId);
-    const result = await this.paperPort().release(
+    const port = this.requireEscrow();
+    const result = await port.release(
       session,
       sha256(`${input.transactionId}:${tier ?? 'resolver'}:${input.at}`),
     );
-    this.assertPaper(result.simulated, result.mode);
+    this.assertEscrowResult(result.simulated, result.mode);
+    const chain = await this.chainEvidence(session);
     return this.commitEscrow({
       transactionId: input.transactionId,
       from: stage,
       to: 'payment_settled',
       at: input.at,
       evidence: {
-        simulated: true,
-        mode: 'paper',
+        simulated: result.simulated,
+        mode: result.mode,
         masumiAction: result.action,
         resultHash: result.resultHash,
         blockchainIdentifier: result.blockchainIdentifier,
+        ...chain,
         ...(tier ? {deliveryTier: tier} : {}),
         ...(decision ? {
           resolution: decision,
@@ -501,8 +516,10 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
       throw new LifecycleError('this dispute resolution releases escrow to the seller');
     }
     const session = this.sessionFor(input.transactionId);
-    const result = await this.paperPort().refund(session);
-    this.assertPaper(result.simulated, result.mode);
+    const port = this.requireEscrow();
+    const result = await port.refund(session);
+    this.assertEscrowResult(result.simulated, result.mode);
+    const chain = await this.chainEvidence(session);
     const fault = stage === 'dispute_resolved' ? 'seller' :
       input.fault === 'buyer' ? 'buyer' : 'none';
     return this.commitEscrow({
@@ -511,14 +528,84 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
       to: 'refunded',
       at: input.at,
       evidence: {
-        simulated: true,
-        mode: 'paper',
+        simulated: result.simulated,
+        mode: result.mode,
         masumiAction: result.action,
         blockchainIdentifier: result.blockchainIdentifier,
+        ...chain,
         fault,
         refunded: true,
         ...(fault === 'seller' ? {resolution: 'uphold_buyer'} : {}),
         ...(input.reason ? {reason: input.reason} : {}),
+      },
+    });
+  }
+
+  /**
+   * Ends the contract when both parties consent before `contractEnds`.
+   * Escrow is returned through the port. The outcome emits no events.
+   * A one-sided cancel stays on `cancel`.
+   */
+  async mutualTerminate(input: {
+    transactionId: string;
+    at: string;
+    buyerConsentAt: string;
+    sellerConsentAt: string;
+  }): Promise<LifecycleTransition> {
+    const at = parseTime(input.at, 'at');
+    const buyerConsentAt = parseTime(input.buyerConsentAt, 'buyerConsentAt');
+    const sellerConsentAt = parseTime(input.sellerConsentAt, 'sellerConsentAt');
+    if (buyerConsentAt > at || sellerConsentAt > at) {
+      throw new LifecycleError('consent must be at or before termination');
+    }
+    const ends = this.contractEnds(input.transactionId);
+    if (at >= parseTime(ends, 'contractEnds')) {
+      throw new LifecycleError('the contract term has ended');
+    }
+    const stage = this.requireStage(input.transactionId);
+    const consent = {
+      termination: 'mutual',
+      buyerConsentAt: input.buyerConsentAt,
+      sellerConsentAt: input.sellerConsentAt,
+      contractEnds: ends,
+      contractStart: this.transaction(input.transactionId).createdAt,
+    };
+    if (stage === 'offer_accepted') {
+      return this.advance({
+        transactionId: input.transactionId,
+        from: 'offer_accepted',
+        to: 'cancelled',
+        at: input.at,
+        evidence: {...consent, escrowDisposition: 'unfunded'},
+      });
+    }
+    if (stage !== 'escrow_funded' && stage !== 'delivery_confirmed') {
+      throw new LifecycleError(`cannot terminate from ${stage}`);
+    }
+    const session = this.sessionFor(input.transactionId);
+    const port = this.requireEscrow();
+    const result = await port.mutualTerminate(session, {
+      buyerConsentAt: input.buyerConsentAt,
+      sellerConsentAt: input.sellerConsentAt,
+      contractEnds: ends,
+      terminatedAt: input.at,
+    });
+    this.assertEscrowResult(result.simulated, result.mode);
+    const chain = await this.chainEvidence(session);
+    return this.commitEscrow({
+      transactionId: input.transactionId,
+      from: stage,
+      to: 'refunded',
+      at: input.at,
+      evidence: {
+        ...consent,
+        simulated: result.simulated,
+        mode: result.mode,
+        masumiAction: result.action,
+        blockchainIdentifier: result.blockchainIdentifier,
+        fault: 'none',
+        refunded: true,
+        ...chain,
       },
     });
   }
@@ -889,19 +976,54 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     }
   }
 
-  private paperPort(): EscrowPort {
+  private requireEscrow(): EscrowPort {
     const port = this.options.escrow;
     if (!port) throw new LifecycleError('an escrow port is required');
-    if (!port.simulated) {
+    if (port.broadcast && port.simulated) {
+      throw new LifecycleError('escrow must stay simulated; live broadcast is disabled');
+    }
+    if (!port.simulated && !port.broadcast) {
       throw new LifecycleError('escrow must stay simulated; live broadcast is disabled');
     }
     return port;
   }
 
-  private assertPaper(simulated: boolean, mode: string): void {
-    if (!simulated || mode !== 'paper') {
-      throw new LifecycleError('escrow must stay simulated; live broadcast is disabled');
+  private assertEscrowResult(simulated: boolean, mode: string): void {
+    const port = this.requireEscrow();
+    if (port.simulated) {
+      if (!simulated || mode !== 'paper') {
+        throw new LifecycleError('escrow must stay simulated; live broadcast is disabled');
+      }
+      return;
     }
+    if (!port.broadcast || simulated || mode !== 'live') {
+      throw new LifecycleError('a preprod order must be live and explicitly enabled');
+    }
+  }
+
+  private async chainEvidence(session: EscrowSession): Promise<Evidence> {
+    const status = await this.requireEscrow().status(session);
+    const evidence: Evidence = {
+      escrowState: status.onChainState ?? session.onChainState,
+    };
+    if (status.txHash) evidence.txHash = status.txHash;
+    if (status.blockTime) evidence.blockTime = status.blockTime;
+    if (status.escrowAddress) evidence.escrowAddress = status.escrowAddress;
+    return evidence;
+  }
+
+  private contractEnds(transactionId: string): string {
+    const fromTerms = this.transaction(transactionId).terms.contractEnds;
+    if (typeof fromTerms === 'string' && fromTerms !== '') {
+      parseTime(fromTerms, 'contractEnds');
+      return fromTerms;
+    }
+    const recorded = this.findStage(transactionId, 'offer_accepted')?.evidence.contractEnds;
+    if (typeof recorded === 'string' && recorded !== '') {
+      parseTime(recorded, 'contractEnds');
+      return recorded;
+    }
+    throw new LifecycleError('the contract has no end');
   }
 
   private persist(outcome: Outcome): void {
@@ -1092,12 +1214,17 @@ function sessionFromEvidence(evidence: Evidence): EscrowSession {
   if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0) {
     throw new LifecycleError('escrow session evidence is incomplete');
   }
-  if (evidence.simulated !== true || evidence.mode !== 'paper') {
+  const simulated = evidence.simulated === true;
+  const live = evidence.simulated === false && evidence.mode === 'live';
+  if (!simulated && !live) {
+    throw new LifecycleError('escrow session evidence is incomplete');
+  }
+  if (simulated && evidence.mode !== 'paper') {
     throw new LifecycleError('escrow must stay simulated; live broadcast is disabled');
   }
   return {
-    simulated: true,
-    mode: 'paper',
+    simulated,
+    mode: simulated ? 'paper' : 'live',
     blockchainIdentifier: text('blockchainIdentifier'),
     txHash: text('txHash'),
     escrowAddress: text('escrowAddress'),
@@ -1199,6 +1326,16 @@ function assertJson(value: JsonValue, label: string): void {
   if (value !== null && typeof value === 'object') {
     for (const item of Object.values(value)) assertJson(item, label);
   }
+}
+
+function contractEnd(explicit: unknown, fromTerms: unknown): string|undefined {
+  const value = explicit ?? fromTerms;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    throw new LifecycleError('contractEnds must be a UTC timestamp');
+  }
+  parseTime(value, 'contractEnds');
+  return value;
 }
 
 function sha256(value: string): string {

@@ -18,32 +18,29 @@ import type {
   JsonValue, TransactionType,
 } from '../../packages/reliability/src/types';
 import {json} from '../lib/http';
-import {createSimulatedMasumiEscrow} from './masumi-escrow';
+import {createEscrowPort} from './masumi-escrow';
 import type {ReliabilityRoute} from './routes-plumbing';
 
 const scoring = new StubScoringPolicy();
 const fees = new StubFeeTermsPolicy();
 const decay = new StubPairDecay();
 
-interface Demo {
-  store: AgentStore;
-  lifecycle: EscrowTransactionLifecycle;
+const lifecycles = new WeakMap<AgentStore, EscrowTransactionLifecycle>();
+
+function requireStore(store: AgentStore|undefined): AgentStore {
+  if (!store) throw new LifecycleError('the control store is required');
+  return store;
 }
 
-let demo: Demo|undefined;
-
-function demoLifecycle(): Demo {
-  if (!demo) {
-    const store = AgentStore.open(':memory:');
-    demo = {
-      store,
-      lifecycle: new EscrowTransactionLifecycle({
-        store,
-        escrow: createSimulatedMasumiEscrow(),
-      }),
-    };
-  }
-  return demo;
+function lifecycleFor(store: AgentStore): EscrowTransactionLifecycle {
+  const existing = lifecycles.get(store);
+  if (existing) return existing;
+  const created = new EscrowTransactionLifecycle({
+    store,
+    escrow: createEscrowPort({store, env: process.env}),
+  });
+  lifecycles.set(store, created);
+  return created;
 }
 
 function fail(error: unknown): Response {
@@ -135,16 +132,17 @@ function ensureParty(store: AgentStore, id: string, at: string): void {
   });
 }
 
-function view(transactionId: string, now: string): {
-  mode: 'paper';
+function view(store: AgentStore, transactionId: string, now: string): {
+  mode: 'paper'|'live';
   transaction: ReturnType<EscrowTransactionLifecycle['getTransaction']>;
   stage: ReturnType<EscrowTransactionLifecycle['currentStage']>;
   transitions: readonly LifecycleTransition[];
   outcome: ReturnType<EscrowTransactionLifecycle['outcomeFor']>;
+  entities: ReturnType<AgentStore['listEntities']>;
   events: ReturnType<typeof flowLifecycleOutcome>['events'];
   termsDecisions: ReturnType<typeof flowLifecycleOutcome>['decisions'];
 } {
-  const {store, lifecycle} = demoLifecycle();
+  const lifecycle = lifecycleFor(store);
   if (!lifecycle.hasTransaction(transactionId)) {
     throw new LifecycleError(`unknown transaction ${transactionId}`);
   }
@@ -168,12 +166,17 @@ function view(transactionId: string, now: string): {
     for (const state of flowed.states) store.saveReliabilityState(state);
     for (const decision of flowed.decisions) store.insertTermsDecision(decision);
   }
+  const parties = transaction.participants.flatMap((participant) => {
+    const entity = store.getEntity(participant.entityId);
+    return entity ? [entity] : [];
+  });
   return {
-    mode: 'paper',
+    mode: outcome.evidence.mode === 'live' ? 'live' : 'paper',
     transaction,
     stage: lifecycle.currentStage(transactionId),
     transitions: lifecycle.listTransitions(transactionId),
     outcome,
+    entities: parties,
     events: flowed.events,
     termsDecisions: flowed.decisions,
   };
@@ -195,15 +198,16 @@ export const laneARoutes: ReliabilityRoute[] = [
   {
     method: 'POST',
     path: '/reliability/lifecycle/open',
-    handler: async (request) => {
+    handler: async (request, url, store) => {
       try {
+        const records = requireStore(store);
         const body = await readBody(request);
         const at = textField(body, 'at');
         const buyerId = textField(body, 'buyerId');
         const sellerId = textField(body, 'sellerId');
-        const {store, lifecycle} = demoLifecycle();
-        ensureParty(store, buyerId, at);
-        ensureParty(store, sellerId, at);
+        const lifecycle = lifecycleFor(records);
+        ensureParty(records, buyerId, at);
+        ensureParty(records, sellerId, at);
         const value = body.value;
         if (value !== undefined && typeof value !== 'number') {
           throw new LifecycleError('value must be a non-negative number');
@@ -216,6 +220,7 @@ export const laneARoutes: ReliabilityRoute[] = [
           terms: termsField(body.terms),
           value,
           termsHash: optionalText(body, 'termsHash'),
+          contractEnds: optionalText(body, 'contractEnds'),
           at,
         });
         return json({
@@ -232,18 +237,19 @@ export const laneARoutes: ReliabilityRoute[] = [
   {
     method: 'POST',
     path: '/reliability/lifecycle/terms',
-    handler: async (request) => {
+    handler: async (request, url, store) => {
       try {
+        const lifecycle = lifecycleFor(requireStore(store));
         const body = await readBody(request);
         const transactionId = textField(body, 'transactionId');
         const at = textField(body, 'at');
-        const version = demoLifecycle().lifecycle.amendTerms(
+        const version = lifecycle.amendTerms(
           transactionId, termsField(body.terms), textField(body, 'reason'), at,
         );
         return json({
           mode: 'paper',
           version,
-          transaction: demoLifecycle().lifecycle.getTransaction(transactionId),
+          transaction: lifecycle.getTransaction(transactionId),
         });
       } catch (error) {
         return fail(error);
@@ -253,17 +259,18 @@ export const laneARoutes: ReliabilityRoute[] = [
   {
     method: 'POST',
     path: '/reliability/lifecycle/transition',
-    handler: async (request) => {
+    handler: async (request, url, store) => {
       try {
+        const records = requireStore(store);
         const body = await readBody(request);
         const action = textField(body, 'action');
         const transactionId = textField(body, 'transactionId');
         const at = textField(body, 'at');
-        const lifecycle = demoLifecycle().lifecycle;
+        const lifecycle = lifecycleFor(records);
         const transition = await runAction(lifecycle, action, transactionId, at, body);
         return json({
           transition,
-          ...view(transactionId, at),
+          ...view(records, transactionId, at),
         });
       } catch (error) {
         return fail(error);
@@ -273,15 +280,16 @@ export const laneARoutes: ReliabilityRoute[] = [
   {
     method: 'GET',
     path: '/reliability/lifecycle',
-    handler: (request, url) => {
+    handler: (request, url, store) => {
       try {
+        const records = requireStore(store);
         const transactionId = url.searchParams.get('transactionId');
         if (!transactionId) {
           return json({error: 'transactionId is required'}, 400);
         }
         const now = url.searchParams.get('now') ??
-          latestAt(transactionId);
-        return json(view(transactionId, now));
+          latestAt(records, transactionId);
+        return json(view(records, transactionId, now));
       } catch (error) {
         return fail(error);
       }
@@ -289,8 +297,8 @@ export const laneARoutes: ReliabilityRoute[] = [
   },
 ];
 
-function latestAt(transactionId: string): string {
-  const lifecycle = demoLifecycle().lifecycle;
+function latestAt(store: AgentStore, transactionId: string): string {
+  const lifecycle = lifecycleFor(store);
   const transitions = lifecycle.listTransitions(transactionId);
   const last = transitions[transitions.length - 1];
   if (!last) throw new LifecycleError(`unknown transaction ${transactionId}`);
@@ -341,6 +349,14 @@ async function runAction(
   if (action === 'cancel') {
     return lifecycle.cancel({
       transactionId, at, reason: textField(body, 'reason'),
+    });
+  }
+  if (action === 'terminate') {
+    return lifecycle.mutualTerminate({
+      transactionId,
+      at,
+      buyerConsentAt: textField(body, 'buyerConsentAt'),
+      sellerConsentAt: textField(body, 'sellerConsentAt'),
     });
   }
   if (action === 'dispute') {

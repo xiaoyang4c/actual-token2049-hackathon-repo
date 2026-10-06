@@ -29,7 +29,9 @@ const AFTER_WINDOW = '2026-10-13T00:00:00.001Z';
 
 class FakeEscrow implements EscrowPort {
   readonly simulated = true;
+  readonly broadcast = false;
   readonly calls: string[] = [];
+  private observedState: string|undefined;
 
   async fund(request: EscrowFundRequest): Promise<EscrowSession> {
     this.calls.push('fund');
@@ -70,11 +72,44 @@ class FakeEscrow implements EscrowPort {
 
   async refund(session: EscrowSession): Promise<EscrowRefundResult> {
     this.calls.push('refund');
+    this.observedState = 'RefundRequested';
     return {
       simulated: true,
       mode: 'paper',
       action: 'request_refund',
       blockchainIdentifier: session.blockchainIdentifier,
+    };
+  }
+
+  async status(session: EscrowSession) {
+    return {
+      simulated: true as const,
+      mode: 'paper' as const,
+      onChainState: this.observedState ?? session.onChainState,
+      txHash: session.txHash,
+      blockTime: OPEN,
+      escrowAddress: session.escrowAddress,
+    };
+  }
+
+  async mutualTerminate(session: EscrowSession, consent: {
+    buyerConsentAt: string;
+    sellerConsentAt: string;
+    contractEnds: string;
+  }) {
+    this.calls.push('mutual');
+    this.observedState = 'RefundRequested';
+    return {
+      simulated: true as const,
+      mode: 'paper' as const,
+      action: 'mutual_termination' as const,
+      blockchainIdentifier: session.blockchainIdentifier,
+      txHash: session.txHash,
+      onChainState: 'RefundRequested',
+      blockTime: OPEN,
+      buyerConsentAt: consent.buyerConsentAt,
+      sellerConsentAt: consent.sellerConsentAt,
+      contractEnds: consent.contractEnds,
     };
   }
 }
@@ -197,6 +232,9 @@ describe('delivery evidence tiers', () => {
     expect(outcome.state).toBe('successful');
     expect(outcome.verificationMethod).toBe('lifecycle');
     expect(outcome.verificationConfidence).toBe(0.7);
+    expect(outcome.evidence.txHash).toBe('ab'.repeat(32));
+    expect(outcome.evidence.escrowState).toBe('FundsLocked');
+    expect(outcome.evidence.blockTime).toBe(OPEN);
     expect(eventsFor(life, 'tx-1', OPEN)).toHaveLength(2);
   });
 
@@ -422,6 +460,108 @@ describe('dispute, refund, and cancel', () => {
   });
 });
 
+describe('mutual termination', () => {
+  test('returns funded escrow when both parties consent during the term', async () => {
+    const {life, escrow} = lifecycle();
+    life.open({
+      id: 'tx-mutual',
+      type: 'service',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      terms: {service: 'repair'},
+      contractEnds: WINDOW,
+      at: OPEN,
+    });
+    expect(life.getTransaction('tx-mutual').terms.contractEnds).toBe(WINDOW);
+    await life.mutualTerminate({
+      transactionId: 'tx-mutual',
+      at: OPEN,
+      buyerConsentAt: OPEN,
+      sellerConsentAt: OPEN,
+    });
+    expect(life.currentStage('tx-mutual')).toBe('cancelled');
+    expect(escrow.calls).toEqual([]);
+
+    const funded = lifecycle();
+    funded.life.open({
+      id: 'tx-funded',
+      type: 'service',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      terms: {service: 'repair', contractEnds: WINDOW},
+      at: OPEN,
+    });
+    await fundSale(funded.life, 'tx-funded');
+    funded.life.confirmDelivery({
+      transactionId: 'tx-funded',
+      at: OPEN,
+      evidence: {deliveryTier: 'buyer_confirmation', confirmedBy: 'buyer-1'},
+    });
+    await funded.life.mutualTerminate({
+      transactionId: 'tx-funded',
+      at: AMEND_AT,
+      buyerConsentAt: OPEN,
+      sellerConsentAt: AMEND_AT,
+    });
+    const outcome = funded.life.outcomeFor('tx-funded', {now: AMEND_AT});
+    expect(funded.life.currentStage('tx-funded')).toBe('refunded');
+    expect(outcome.state).toBe('cancelled');
+    expect(outcome.fault).toBe('none');
+    expect(outcome.evidence.termination).toBe('mutual');
+    expect(outcome.evidence.buyerConsentAt).toBe(OPEN);
+    expect(outcome.evidence.sellerConsentAt).toBe(AMEND_AT);
+    expect(outcome.evidence.contractEnds).toBe(WINDOW);
+    expect(outcome.evidence.contractStart).toBe(OPEN);
+    expect(outcome.evidence.escrowState).toBe('RefundRequested');
+    expect(eventsFor(funded.life, 'tx-funded', AMEND_AT)).toEqual([]);
+    expect(funded.escrow.calls).toEqual(['fund', 'mutual']);
+  });
+
+  test('keeps a one-sided cancel and rejects consent after the term', async () => {
+    const {life, escrow} = lifecycle();
+    life.open({
+      id: 'tx-1',
+      type: 'goods',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      terms: {goods: 'cable'},
+      contractEnds: WINDOW,
+      at: OPEN,
+    });
+    life.cancel({transactionId: 'tx-1', at: OPEN, reason: 'buyer withdrew'});
+    const cancelled = life.outcomeFor('tx-1', {now: OPEN});
+    expect(cancelled.state).toBe('cancelled');
+    expect(cancelled.evidence.termination).toBeUndefined();
+    expect(eventsFor(life, 'tx-1', OPEN)).toEqual([]);
+    expect(escrow.calls).toEqual([]);
+
+    const late = lifecycle();
+    late.life.open({
+      id: 'tx-late',
+      type: 'goods',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      terms: {goods: 'cable', contractEnds: OPEN},
+      at: OPEN,
+    });
+    await fundSale(late.life, 'tx-late');
+    await expect(late.life.mutualTerminate({
+      transactionId: 'tx-late',
+      at: AMEND_AT,
+      buyerConsentAt: OPEN,
+      sellerConsentAt: OPEN,
+    })).rejects.toThrow('the contract term has ended');
+    await expect(late.life.mutualTerminate({
+      transactionId: 'tx-late',
+      at: OPEN,
+      buyerConsentAt: AMEND_AT,
+      sellerConsentAt: OPEN,
+    })).rejects.toThrow('consent must be at or before termination');
+    expect(late.life.currentStage('tx-late')).toBe('escrow_funded');
+    expect(late.escrow.calls).toEqual(['fund']);
+  });
+});
+
 describe('terms and invalid transitions', () => {
   test('records terms at creation and appends amendments', () => {
     const {life} = lifecycle();
@@ -522,6 +662,7 @@ describe('terms and invalid transitions', () => {
     let called = false;
     const escrow: EscrowPort = {
       simulated: false,
+      broadcast: false,
       async fund() {
         called = true;
         throw new Error('broadcast');
@@ -530,6 +671,12 @@ describe('terms and invalid transitions', () => {
         throw new Error('broadcast');
       },
       async refund() {
+        throw new Error('broadcast');
+      },
+      async status() {
+        throw new Error('broadcast');
+      },
+      async mutualTerminate() {
         throw new Error('broadcast');
       },
     };
