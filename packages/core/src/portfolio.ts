@@ -54,7 +54,7 @@ export function markPositions(
   const byMarket = new Map(quotes.map((quote) => [marketKey(quote.venue, quote.marketId), quote]));
   return positions.map((position) => {
     const quote = byMarket.get(marketKey(position.venue, position.marketId));
-    const markPrice = quote ? position.side === 'yes' ? quote.yesPrice : 1 - quote.yesPrice : position.avgPrice;
+    const markPrice = quote ? position.side === 'yes' ? quote.bestBid : 1 - quote.bestAsk : position.avgPrice;
     return {
       ...position, markPrice, marketValue: position.size * markPrice,
       unrealizedPnl: position.size * (markPrice - position.avgPrice),
