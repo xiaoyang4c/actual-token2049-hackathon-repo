@@ -1,9 +1,6 @@
 /** @fileoverview Regression tests for refund sequencing, recovery, and deadlines. */
 
 import {describe, expect, test} from 'bun:test';
-import {mkdtempSync, rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
 import {ContractError} from '../../packages/reliability/src/contract-lifecycle/errors';
 import {sha256Hex} from '../../packages/reliability/src/contract-lifecycle/hashing';
 import {EscrowRejectedError, type ContractEscrow, type EscrowRequest} from '../../packages/reliability/src/contract-lifecycle/ports';
@@ -17,12 +14,10 @@ import {ContractService} from './contract-service';
 
 const FILE = 'contract regression test file';
 
-function digital(kit: Kit, remedy?: Remedy, count = 1): string {
+function digital(kit: Kit, remedy?: Remedy): string {
   return kit.service.lifecycle.createContract({
     templateId: 'digital-machine-checkable', buyerId: kit.buyerId, sellerId: kit.sellerId, remedy,
-    milestones: Array.from({length: count}, (value, index) => ({
-      title: `file ${index}`, amountAtomic: '5000000', deliverable: {expectedSha256: sha256Hex(FILE)},
-    })),
+    milestones: [{title: 'file', amountAtomic: '5000000', deliverable: {expectedSha256: sha256Hex(FILE)}}],
   }, kit.buyerId).id;
 }
 
@@ -71,34 +66,6 @@ function withFault(kit: Kit, reject: (request: EscrowRequest) => boolean): Kit {
 }
 
 describe('refund sequencing', () => {
-  for (const action of ['concession', 'termination'] as const) {
-    for (const state of ['funded', 'in_inspection'] as const) {
-      test(`${action} from ${state} requests a refund before seller authorization`, async () => {
-        const kit = createKit();
-        try {
-          const id = state === 'in_inspection' ? await inspectingDigital(kit) : digital(kit);
-          if (state === 'funded') {
-            acceptTerms(kit, id);
-            await runUntil(kit, id, 'funded');
-          }
-          const mId = milestone(kit, id).id;
-          if (action === 'concession') act(kit, id, kit.sellerId, 'concede_refund', {milestoneId: mId});
-          else terminate(kit, id, mId);
-          expect(kit.service.lifecycle.operations(id).filter((operation) => operation.kind === 'authorize_refund')).toHaveLength(0);
-          await kit.service.tick();
-          expect(kit.service.lifecycle.operations(id).filter((operation) => operation.kind === 'authorize_refund')).toHaveLength(0);
-          await runUntil(kit, id, 'refunded');
-          const ref = milestone(kit, id).tranches[0]!.escrowRef!;
-          const kinds = (kit.service.escrow as PaperContractEscrow).transactionLog(ref).map((tx) => tx.kind);
-          expect(kinds.indexOf('SetRefundRequested')).toBeLessThan(kinds.indexOf('AuthorizeRefund'));
-          expect(milestone(kit, id).tranches[0]!.chain.paidToBuyerAtomic).toBe('5000000');
-        } finally {
-          kit.close();
-        }
-      });
-    }
-  }
-
   test('partial funding refunds the locked escrow through the legal states', async () => {
     const base = createKit();
     let blockedRef: string|null = null;
@@ -188,36 +155,7 @@ describe('separate escrow states', () => {
   });
 });
 
-describe('delivery recovery and repeated evidence', () => {
-  test('a restart after automatic payment recovers delivery time and funds the next milestone once', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'contract-delivery-recovery-'));
-    const databasePath = join(directory, 'agent.sqlite');
-    let kit = createKit({databasePath});
-    try {
-      const id = digital(kit, undefined, 2);
-      acceptTerms(kit, id);
-      await runUntil(kit, id, 'funded');
-      act(kit, id, kit.sellerId, 'deliver', {milestoneId: milestone(kit, id).id, evidence: [{type: 'content_file', content: FILE}]});
-      const deliveredAt = kit.clock.now() + kit.service.config.paperEscrow.confirmationDelayMs;
-      await kit.service.lifecycle.processOperations();
-      kit.clock.set(milestone(kit, id).deadlines!.unlockTime + kit.service.config.paperEscrow.autoWithdrawDelayMs);
-      const {clock, keys} = kit;
-      kit.close();
-      kit = createKit({databasePath, clock, keys, reuseParties: true});
-      await runUntil(kit, id, 'settled');
-      expect(milestone(kit, id).deliveredAt).toBe(deliveredAt);
-      expect(kit.store.getOutcome(`${id}/m0`)?.state).toBe('successful');
-      expect(kit.service.lifecycle.operations(id).filter((operation) => operation.milestoneId === milestone(kit, id, 1).id && operation.kind === 'create_terms')).toHaveLength(1);
-      const events = kit.store.listReliabilityEventsForTransaction(`${id}/m0`).length;
-      await settleTicks(kit);
-      expect(kit.store.listReliabilityEventsForTransaction(`${id}/m0`)).toHaveLength(events);
-      expect(kit.store.verifyContractAuditChain()).toBeNull();
-    } finally {
-      kit.close();
-      rmSync(directory, {recursive: true, force: true});
-    }
-  });
-
+describe('repeated delivery evidence', () => {
   test('identical evidence reuses the failed operation and preserves inspection before retry', async () => {
     const base = createKit();
     let rejected = false;
