@@ -281,7 +281,7 @@ The response shows terms recalculated from the current cumulative scores. Persis
 
 The math lane can replace the policies through the shared policy composition seam.
 
-Existing stored scores remain the starting point. This change does not rebuild older scores that were overwritten by the earlier per-outcome flow.
+Existing stored scores remain the starting point. A missing score is rebuilt from its recorded events under the active scoring policy. The service commits that score and its current terms together. This change does not rebuild older scores that were overwritten by the earlier per-outcome flow.
 
 An applied event keeps its transaction and role id. Reversing an applied outcome or replaying it under a new policy needs a separate history rebuild.
 

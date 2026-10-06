@@ -8,6 +8,7 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {AgentStore} from '../../packages/db/src/index';
+import {outcomeToEvents} from '../../packages/reliability/src/event-flow';
 import {flowLifecycleOutcome} from '../../packages/reliability/src/lifecycle-flow';
 import type {ScoreView, TransactionType} from '../../packages/reliability/src/types';
 import {LifecycleService} from './lifecycle-service';
@@ -310,6 +311,43 @@ describe('cumulative lifecycle scoring', () => {
       for (const state of store.listReliabilityStates()) {
         expect(state).toMatchObject({alpha: 3, beta: 1, eventCount: 2});
       }
+    } finally {
+      store.close();
+    }
+  });
+
+  test('recovers a missing legacy posterior from recorded events without double counting', async () => {
+    const store = AgentStore.open();
+    try {
+      const service = serviceFor(store);
+      // The old flow could commit events before writing either score row.
+      for (const id of ['first', 'second']) {
+        await settle(service, id);
+        const transaction = service.lifecycle.getTransaction(id);
+        const outcome = service.lifecycle.outcomeFor(id, {now: NOW});
+        for (const event of outcomeToEvents(transaction, outcome)) {
+          store.insertReliabilityEvent(event);
+        }
+      }
+      expect(store.listReliabilityStates()).toHaveLength(0);
+      const restarted = serviceFor(store);
+      expect(restarted.view('first', NOW).termsDecisions
+        .map((decision) => decision.inputs.eventCount)).toEqual([2, 2]);
+      restarted.view('second', NOW);
+      for (const state of store.listReliabilityStates()) {
+        expect(state).toMatchObject({alpha: 3, beta: 1, eventCount: 2});
+      }
+      expect(store.listTermsDecisions('buyer', 'delivery')).toHaveLength(1);
+      expect(store.listTermsDecisions('seller', 'delivery')).toHaveLength(1);
+      await settle(restarted, 'third');
+      restarted.view('third', NOW);
+      restarted.view('first', NOW);
+      for (const state of store.listReliabilityStates()) {
+        expect(state).toMatchObject({alpha: 4, beta: 1, eventCount: 3});
+      }
+      expect(store.listReliabilityEventsForTransaction('first')).toHaveLength(2);
+      expect(store.listTermsDecisions('buyer', 'delivery')).toHaveLength(2);
+      expect(store.listTermsDecisions('seller', 'delivery')).toHaveLength(2);
     } finally {
       store.close();
     }

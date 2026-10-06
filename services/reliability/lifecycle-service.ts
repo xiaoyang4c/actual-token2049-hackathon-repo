@@ -8,7 +8,7 @@ import {
   EscrowTransactionLifecycle, LifecycleError, type LifecycleTransition,
 } from '../../packages/reliability/src/lifecycle';
 import type {EscrowPort} from '../../packages/reliability/src/escrow-port';
-import {categoryForType} from '../../packages/reliability/src/event-flow';
+import {outcomeToEvents} from '../../packages/reliability/src/event-flow';
 import {flowLifecycleOutcome} from '../../packages/reliability/src/lifecycle-flow';
 import {createEscrowPort} from './masumi-escrow';
 import {
@@ -72,12 +72,28 @@ export class LifecycleService {
       const entities = new Map(
         this.store.listEntities().map((entity) => [entity.id, entity]),
       );
-      const category = categoryForType(transaction.type);
-      const states = transaction.participants.flatMap((participant) => {
+      const recoveredEventIds = new Set<string>();
+      const states = outcomeToEvents(transaction, outcome).flatMap((event) => {
         const state = this.store.getReliabilityState(
-          participant.entityId, category, participant.role,
+          event.entityId, event.category, event.role,
         );
-        return state ? [state] : [];
+        if (state) return [state];
+        // Older writes could leave event rows without a posterior. Rebuild
+        // only missing triples; existing scores remain the starting history.
+        const recorded = this.store.listReliabilityEventsForState(
+          event.entityId, event.category, event.role,
+        ).sort((left, right) =>
+          Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+          left.id.localeCompare(right.id));
+        const first = recorded[0];
+        if (!first) return [];
+        const initial = this.policies.scoring.initialState(
+          event.entityId, event.category, event.role, first.createdAt,
+        );
+        const recovered = recorded.reduce((previous, item) =>
+          this.policies.scoring.applyEvent(previous, item, item.createdAt), initial);
+        recoveredEventIds.add(event.id);
+        return [recovered];
       });
       const appliedEventIds = new Set(
         this.store.listReliabilityEventsForTransaction(transactionId)
@@ -89,11 +105,13 @@ export class LifecycleService {
       );
       for (let index = 0; index < flowed.events.length; index++) {
         const event = flowed.events[index];
-        if (!event || appliedEventIds.has(event.id)) continue;
+        if (!event) continue;
+        const applied = appliedEventIds.has(event.id);
+        if (applied && !recoveredEventIds.has(event.id)) continue;
         const state = flowed.states[index];
         const decision = flowed.decisions[index];
         if (!state || !decision) throw new Error('incomplete reliability projection');
-        this.store.insertReliabilityEvent(event);
+        if (!applied) this.store.insertReliabilityEvent(event);
         this.store.saveReliabilityState(state);
         this.store.insertTermsDecision(decision);
       }

@@ -50,6 +50,8 @@ Stored event ids mark outcomes that have already been applied.
 The service reads that history under the SQLite write lock.
 It commits new events, score updates, and terms decisions in one transaction.
 Repeated reads return current terms without applying the event again.
+If an older write left events without a score, the service rebuilds that missing
+score from its event history under the active scoring policy.
 The score read route uses stored rows when available. Fixture rows fill missing triples.
 
 The scoring policy still uses unit weights.
