@@ -39,7 +39,21 @@ describe('AgentStore reliability tables', () => {
 
       const outcome = store.saveOutcome(OUTCOME_INVOICE);
       expect(outcome.state).toBe('successful');
+      expect(outcome.fault).toBeUndefined();
       expect(store.getOutcome('tx-invoice-1')?.state).toBe('successful');
+
+      const buyerFault = store.saveOutcome({
+        ...OUTCOME_INVOICE, state: 'failed', fault: 'buyer',
+      });
+      expect(buyerFault.fault).toBe('buyer');
+      expect(store.getOutcome('tx-invoice-1')?.fault).toBe('buyer');
+      const cleared = store.saveOutcome(OUTCOME_INVOICE);
+      expect(cleared.state).toBe('successful');
+      expect(cleared.fault).toBeUndefined();
+      expect(store.saveOutcome({
+        ...OUTCOME_INVOICE, state: 'failed', fault: 'none',
+      }).fault).toBe('none');
+      store.saveOutcome(OUTCOME_INVOICE);
 
       store.insertReliabilityEvent({
         id: 'tx-invoice-1:entity-established:buyer',

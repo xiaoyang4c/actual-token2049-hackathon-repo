@@ -1,8 +1,8 @@
 /**
  * @fileoverview Public entry point for the reliability marketplace package.
- * The domain types file (types.ts) is frozen after the plumbing PR. Lane
- * owners request type changes through a separate small PR, never inside
- * a lane PR.
+ * The domain types file (types.ts) is frozen after the per-role fault
+ * change. Lane owners request further type changes through a separate
+ * small PR, never inside a lane PR.
  */
 
 export type {
@@ -14,6 +14,7 @@ export type {
   Listing,
   MarketplaceTransaction,
   Outcome,
+  OutcomeFault,
   OutcomeState,
   Receipt,
   ReliabilityCategory,
@@ -80,7 +81,10 @@ export {
   FIXTURE_OUTCOMES,
   FIXTURE_STATES,
   FIXTURE_TRANSACTIONS,
+  OUTCOME_BUYER_FAULT,
   OUTCOME_INVOICE,
+  OUTCOME_NO_FAULT,
+  OUTCOME_SELLER_FAULT,
   OUTCOME_SERVICE,
   TX_INVOICE,
   TX_SERVICE,

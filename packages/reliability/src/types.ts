@@ -33,6 +33,14 @@ export type KycTier = 'none'|'basic'|'enhanced';
 export type OutcomeState =
   'pending'|'successful'|'failed'|'disputed'|'cancelled'|'unresolved';
 
+/**
+ * At-fault role for a failed outcome.
+ * `seller` fails only the seller score. `buyer` fails only the buyer score.
+ * `none` is a mutual end or a failure with no at-fault party, and it
+ * changes no score.
+ */
+export type OutcomeFault = 'buyer'|'seller'|'none';
+
 /** How an outcome was verified. Unverified user ratings never count. */
 export type VerificationMethod =
   'lifecycle'|'payment-settlement'|'manual-review'|'unverified';
@@ -88,6 +96,13 @@ export interface MarketplaceTransaction {
 export interface Outcome {
   transactionId: string;
   state: OutcomeState;
+  /**
+   * At-fault role when `state` is `failed`.
+   * Omit this field when `state` is `successful`. A success credits both
+   * roles. `outcomeToEvents` reads this field and does not read
+   * `evidence.fault`.
+   */
+  fault?: OutcomeFault;
   evidence: {[key: string]: JsonValue};
   verificationMethod: VerificationMethod;
   verificationConfidence?: number;

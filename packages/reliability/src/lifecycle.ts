@@ -6,8 +6,10 @@
  * payment_settled, with dispute_opened, dispute_resolved, refunded, and
  * cancelled as needed. Each verified stage transition carries evidence.
  * Terminal stages emit a verified Outcome: payment_settled emits
- * successful, refunded and cancelled emit their own states, and
- * dispute_opened emits disputed with a named resolver and deadline.
+ * successful with no fault, refunded emits cancelled with fault none,
+ * and dispute_opened emits disputed with a named resolver and deadline.
+ * This stub does not assign buyer or seller fault. Lane A sets
+ * Outcome.fault on a failed outcome.
  *
  * TODO(lane-A): implement the real escrow state machine here on top of
  * the existing Masumi escrow and refund code in
@@ -130,7 +132,7 @@ export class StubTransactionLifecycle implements TransactionLifecycle {
     }
     if (stage === 'refunded') {
       return {
-        transactionId, state: 'cancelled', evidence,
+        transactionId, state: 'cancelled', fault: 'none', evidence,
         verificationMethod: 'lifecycle',
         verificationConfidence: 0.5, decidedAt: options.now,
       };
