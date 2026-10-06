@@ -69,6 +69,17 @@ describe('AgentStore', () => {
       expect(rows.map((row) => row.name)).toEqual([
         'agent_state',
         'audit_events',
+        'contract_actions',
+        'contract_audit',
+        'contract_contracts',
+        'contract_evidence',
+        'contract_evidence_content',
+        'contract_operations',
+        'contract_paper_clock',
+        'contract_paper_escrow_ops',
+        'contract_paper_escrows',
+        'contract_parties',
+        'contract_publications',
         'daily_summaries',
         'market_quotes',
         'market_resolutions',
@@ -103,7 +114,7 @@ describe('AgentStore', () => {
         return;
       }
       // 001-006, 008, 010, and 011. 007 and 009 are reserved.
-      expect(versions.versions).toBe(9);
+      expect(versions.versions).toBe(10);
     } finally {
       db.close();
     }
