@@ -53,6 +53,8 @@ The operator UI is display-only. The operator UI is not a public site.
 
 The operator UI reads `GET /agent/state` and `GET /audit`.
 
+The operator UI may also read `GET /reliability/*`. Lane C builds the UI against these routes.
+
 The operator UI does not edit policy. The operator UI does not send orders.
 
 Start the local operator UI in this order:
@@ -63,9 +65,19 @@ Start the local operator UI in this order:
 
 Use bun as the package manager.
 
-You may add a SQLite store. Do not connect that store to `services/control-api.ts` until that file is free to change.
+Reliability routes use the shared `AgentStore` in `services/control-api.ts`.
 
 The control API demo routes already exist. Extend the demo routes. Do not replace the demo routes with a new implementation.
+
+`packages/reliability/src/types.ts` is frozen. Send type changes in a separate small pull request.
+
+Take the next free migration number.
+
+These numbers are reserved: `007` for the math lane, `008` for KYC, and `009` for lane D.
+
+Migrations `010` and `011` are used.
+
+The next free number is `012`.
 
 Use "paper" for a simulated fill. Use "live" for a real venue order.
 
