@@ -47,13 +47,16 @@ The math lane owns `packages/reliability/src/pair-decay.ts`. That file is a stub
 
 Lane A lifecycle tables use migration `011_lane_a_lifecycle.sql`.
 
+Lane A contract lifecycle tables use migration `012_contract_lifecycle.sql`.
+Read [Contract lifecycle](contract-lifecycle.md) for templates, tiered disputes, remedies, and live Masumi escrow.
+
 KYC uses migration `008`.
 
 Keep migration `009` for lane D.
 
 `010_outcome_fault.sql` stores `Outcome.fault`.
 
-The next free migration number is `012`.
+The next free migration number is `013`.
 
 Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tiers, and demo routes.
 
@@ -77,8 +80,8 @@ The user owns these decisions.
 - Fee floor and fee ceiling.
 - Pairwise decay rate.
 - KYC bar. `KYC_TIER_RULES` and the default values ship with pull request #8.
-- Delivery evidence and dispute settling. This decision is on hold. The paper lifecycle on main keeps the current stages.
-- Who holds the preprod Masumi keys and the Blockfrost keys.
+- Delivery evidence and dispute settling. The v1 lifecycle keeps the current stages. [Contract lifecycle](contract-lifecycle.md) proposes evidence templates, three dispute tiers, and fixed remedies.
+- Who holds the preprod Masumi keys and the Blockfrost keys. The contract lifecycle proposes platform-managed test wallets, labelled custodial. Read [custody](contract-lifecycle.md#custody).
 
 ## Frozen file
 
@@ -116,9 +119,11 @@ Reserved numbers follow in this order: `007` math lane, `008` lane A KYC, `009` 
 
 Lane A lifecycle uses `011_lane_a_lifecycle.sql`.
 
+Lane A contract lifecycle uses `012_contract_lifecycle.sql`.
+
 Take the next free migration number.
 
-The next free number is `012`.
+The next free number is `013`.
 
 ## Shared files
 

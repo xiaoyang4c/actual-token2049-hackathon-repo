@@ -57,6 +57,18 @@ The lifecycle routes use the shared `AgentStore`. The lifecycle view calls the s
 | `POST` | `/reliability/lifecycle/terms` |
 | `POST` | `/reliability/lifecycle/transition` |
 | `GET` | `/reliability/lifecycle` |
+| `GET` | `/reliability/contracts/templates` |
+| `POST` | `/reliability/contracts/parties` |
+| `POST` | `/reliability/contracts` |
+| `GET` | `/reliability/contracts` |
+| `GET` | `/reliability/contracts/terms` |
+| `POST` | `/reliability/contracts/sign` |
+| `POST` | `/reliability/contracts/action` |
+| `POST` | `/reliability/contracts/agree` |
+| `POST` | `/reliability/contracts/terminate` |
+| `POST` | `/reliability/contracts/ruling` |
+| `POST` | `/reliability/contracts/tick` |
+| `GET` | `/reliability/contracts/audit` |
 
 `GET /reliability/entities`, `GET /reliability/listings`, and `GET /reliability/transactions` accept an optional `id` query.
 
@@ -67,6 +79,8 @@ The lifecycle routes use the shared `AgentStore`. The lifecycle view calls the s
 `GET /reliability/lifecycle` requires `transactionId`. It accepts an optional `now` query.
 
 Read [Transaction lifecycle](docs/reliability-lifecycle.md) for the lifecycle actions.
+
+Read [Contract lifecycle](docs/contract-lifecycle.md) for the contract routes, signed party actions, and live Masumi escrow.
 
 Lane C builds the operator UI against these routes. The operator UI sends no orders. The operator UI edits no policy.
 

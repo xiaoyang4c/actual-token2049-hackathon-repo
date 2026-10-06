@@ -8,6 +8,11 @@ The lifecycle calls the Masumi adapter in `services/cardano-agents-ts`.
 
 A live preprod order is sent only when `CARDANO_MODE` is `preprod` and `CARDANO_ALLOW_NETWORK` is `true`.
 
+The v1 live path stops before it calls Masumi.
+It uses the transaction id as the buyer nonce and one time for all deadlines.
+The Masumi payment service rejects both.
+Use the [contract lifecycle](contract-lifecycle.md) for live escrow.
+
 Read [Reliability marketplace: lane ownership](reliability-lanes.md) for lane boundaries.
 
 Read [Cardano and Masumi payment scaffolding](cardano-payments.md) for the Masumi adapter.
