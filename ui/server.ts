@@ -4,8 +4,8 @@
 //
 // Then open http://localhost:8791
 //
-// The page reads GET /agent/state and GET /audit. This process proxies those
-// two reads to the control API (CONTROL_API_URL, default http://127.0.0.1:8787)
+// The page reads GET /reliability/*. This process proxies an explicit allowlist
+// to the control API (CONTROL_API_URL, default http://127.0.0.1:8787)
 // so the browser stays on one origin. Port 8791 leaves the market feed on 8790.
 // Writes (policy, orders, shock, reset) are not forwarded.
 
@@ -18,9 +18,16 @@ const FILES: Record<string, string> = {
   "/render.js": "render.js",
   "/format.js": "format.js",
   "/fixture.js": "fixture.js",
+  "/data.js": "data.js",
+  "/audit.js": "audit.js",
 }
 
-const PROXY_PATHS = new Set(["/agent/state", "/audit"])
+const PROXY_PATHS = new Set([
+  "/agent/state", "/audit",
+  "/reliability/entities", "/reliability/scores", "/reliability/listings",
+  "/reliability/transactions", "/reliability/receipts", "/reliability/lifecycle",
+  "/reliability/kyc", "/reliability/kyc/fixtures",
+])
 
 const fileUrl = (name: string) => new URL(name, import.meta.url)
 
@@ -48,12 +55,13 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string }) => 
   const controlApiUrl = (options?.controlApiUrl ?? process.env.CONTROL_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "")
 
   return Bun.serve({
+    hostname: "127.0.0.1",
     port,
     async fetch(req) {
       const url = new URL(req.url)
       let res: Response
       if ((req.method === "GET" || req.method === "HEAD") && PROXY_PATHS.has(url.pathname)) {
-        res = await proxyGet(controlApiUrl, url.pathname)
+        res = await proxyGet(controlApiUrl, url.pathname + url.search)
         // HEAD gets the GET status and headers with no body.
         if (req.method === "HEAD") res = new Response(null, { status: res.status, headers: res.headers })
       } else if (req.method !== "GET" && req.method !== "HEAD") {
@@ -75,5 +83,5 @@ if (import.meta.main) {
   const control = process.env.CONTROL_API_URL ?? "http://127.0.0.1:8787"
   console.log(`operator ui   http://localhost:${server.port}`)
   console.log(`control api   ${control}`)
-  console.log("read only — open the page; policy, orders, shock, and reset stay on the control API")
+  console.log("read only — marketplace display; writes stay on the control API")
 }

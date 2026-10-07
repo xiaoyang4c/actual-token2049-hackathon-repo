@@ -55,6 +55,10 @@ It keeps a separate service cache for each route table and store.
 The existing `laneARoutes` and `plumbingRoutes` exports use the defaults.
 The `ReliabilityRoute` export from `routes-plumbing.ts` remains available for KYC.
 
+`omnibus-funding.ts` records paper deposits and deal allocations through the shared store.
+It does not register HTTP routes or call the escrow port.
+Read [paper omnibus funding](omnibus-funding.md).
+
 ## Next changes
 
 Replace the implementations in `policies.ts` when the math and fee lanes are ready.
@@ -76,7 +80,12 @@ The scoring policy still uses unit weights.
 Value weighting and cumulative pair history are not implemented.
 The event flow calls the decay stub without using the returned weight.
 The math lane must implement those rules and pair-history persistence together.
+Read [Reliability math](reliability-math.md) for the target model and proposed policy curves.
 Fee limits, the decay rate, and the KYC bar still require product decisions.
+
+The fee policy returns rate offers.
+The lifecycle does not collect fees or enforce the offered terms.
+Read [Implementation status](implementation-status.md) for the remaining work and logic gaps.
 
 Read [lane ownership](reliability-lanes.md) before changing a lane.
 Read [transaction lifecycle](reliability-lifecycle.md) for state and escrow rules.

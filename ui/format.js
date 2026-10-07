@@ -1,39 +1,37 @@
-// Shared display formatting for the desk model and renderer.
+// Display formatting. Missing numbers and currencies stay missing.
 
-export function formatMoney(value) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "—"
-  const abs = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return (n < 0 ? "−" : "") + "$" + abs
+export function finite(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
 }
 
-export function formatPnl(value) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "—"
-  if (n > 0) return "+" + formatMoney(n)
-  return formatMoney(n)
+export function formatValue(value, currency) {
+  const number = finite(value)
+  if (number === null) return "—"
+  const text = number.toLocaleString("en-US", { maximumFractionDigits: 2 })
+  return currency ? `${text} ${currency}` : text
 }
 
 export function formatPct(value) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "—"
-  return n.toLocaleString("en-US", { style: "percent", maximumFractionDigits: 1 })
+  const number = finite(value)
+  if (number === null || number < 0 || number > 1) return "—"
+  return number.toLocaleString("en-US", { style: "percent", maximumFractionDigits: 1 })
 }
 
-export function formatPrice(value) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "—"
-  return n.toFixed(2)
+export function formatFee(value) {
+  const number = finite(value)
+  return number === null || number < 0 ? "—" : `${(number / 100).toFixed(2)}%`
 }
 
-export function formatSize(value) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "—"
-  return Number.isInteger(n) ? String(n) : n.toLocaleString("en-US", { maximumFractionDigits: 4 })
+export function label(value) {
+  if (typeof value !== "string" || !value) return "Not provided"
+  const normalized = value === value.toUpperCase() ? value.toLowerCase() : value
+  const text = normalized.replaceAll("_", " ").replaceAll("-", " ")
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-export const venueLabel = (venue) => {
-  if (venue === "polymarket") return "Polymarket"
-  if (venue === "kalshi") return "Kalshi"
-  return String(venue ?? "—")
+export function stamp(value) {
+  if (typeof value !== "string" || Number.isNaN(Date.parse(value))) return "—"
+  return new Date(value).toLocaleString("en-US", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+  }) + " UTC"
 }

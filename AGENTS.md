@@ -39,7 +39,14 @@ Also follow the [Google developer documentation best practices](https://google.g
 
 ## Repo facts
 
-`main` holds the plan in `PLAN.md`.
+The product scope is the B2B and B2C marketplace with its reliability checker.
+
+`main` holds the product plan in `PLAN.md`.
+
+The prediction-market runtime and capital-allocation plans are retired.
+
+Shared legacy code still supplies storage and payment dependencies.
+Refactor these dependencies before deleting their source files or migrations.
 
 Send product changes to `main` through a pull request.
 
@@ -51,9 +58,9 @@ Do not edit `services/market-feed.ts` unless the task names that path.
 
 The operator UI is display-only. The operator UI is not a public site.
 
-The operator UI reads `GET /agent/state` and `GET /audit`.
+The operator UI reads `GET /reliability/*`. Lane C builds the UI against these routes.
 
-The operator UI may also read `GET /reliability/*`. Lane C builds the UI against these routes.
+The UI server also retains the legacy `GET /agent/state` and `GET /audit` read proxies.
 
 The operator UI does not edit policy. The operator UI does not send orders.
 
@@ -75,9 +82,9 @@ Take the next free migration number.
 
 These numbers are reserved: `007` for the math lane, `008` for KYC, and `009` for lane D.
 
-Migrations `010`, `011`, and `012` are used.
+Migrations `010`, `011`, `012`, and `013` are used.
 
-The next free number is `013`.
+The next free number is `014`.
 
 Use "paper" for a simulated fill. Use "live" for a real venue order.
 

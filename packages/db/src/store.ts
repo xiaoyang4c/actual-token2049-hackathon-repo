@@ -24,6 +24,11 @@ import type {
   Contract, ContractParty, EvidenceRecord,
 } from '../../reliability/src/contract-lifecycle/types';
 import * as reliabilityRecords from './reliability';
+import * as omnibusFunding from './omnibus-funding';
+import type {
+  DealFundingRequest, OmnibusBalance, PaperDealFundingRecord,
+  PaperOmnibusPool, PaperPoolDeposit,
+} from '../../reliability/src/omnibus-funding';
 import type {
   KycProfile, KycReRegistrationSignal, KycStatusRecord,
 } from '../../reliability/src/kyc';
@@ -266,6 +271,27 @@ export class AgentStore {
   /** Inserts an entity and its wallets. Wallets must be new. */
   insertEntity(record: Entity): Entity {
     return reliabilityRecords.insertEntity(this.db, record);
+  }
+
+  /** Creates a paper pool. An existing pool keeps its address. */
+  ensurePaperOmnibusPool(pool: PaperOmnibusPool): PaperOmnibusPool {
+    return omnibusFunding.ensurePaperOmnibusPool(this.db, pool);
+  }
+
+  /** Credits one simulated deposit output once. */
+  recordPaperPoolDeposit(deposit: PaperPoolDeposit): PaperPoolDeposit {
+    return omnibusFunding.recordPaperPoolDeposit(this.db, deposit);
+  }
+
+  /** Allocates one business balance to a fresh paper deal address. */
+  fundPaperDeal(
+    request: DealFundingRequest & {poolId: string},
+  ): PaperDealFundingRecord {
+    return omnibusFunding.fundPaperDeal(this.db, request);
+  }
+
+  getOmnibusBalance(poolId: string, businessId: string): OmnibusBalance {
+    return omnibusFunding.getOmnibusBalance(this.db, poolId, businessId);
   }
 
   /** Returns the entity, or undefined when `id` is absent. */

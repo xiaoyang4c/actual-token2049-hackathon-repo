@@ -1,144 +1,165 @@
-import { describe, expect, test } from "bun:test"
-import { FIXTURE } from "./fixture.js"
-import { formatMoney, formatPnl } from "./format.js"
-import { buildView, executionOf, fillMode } from "./model.js"
-import { deskTitle, renderDesk } from "./render.js"
+import {describe, expect, test} from 'bun:test';
+import {FIXTURE} from './fixture.js';
+import {formatFee, formatPct, formatValue, label} from './format.js';
+import {buildView, escrowOf, evidenceRows, executionOf, fillMode} from './model.js';
+import {deskTitle, renderDesk} from './render.js';
 
-const policy = FIXTURE.state.policy
-const flatBook = {
-  cash: 1000,
-  equity: 1000,
-  startOfDayEquity: 1000,
-  highWaterMark: 1000,
-  dailyPnl: 0,
-  positions: [],
-}
+const sample = () => structuredClone(FIXTURE);
 
-const htmlOf = (state: unknown, audit: unknown, source: "live" | "fixture" | "stale" = "live") =>
-  renderDesk(buildView(state, audit, { source, updatedAt: "2026-10-03T12:00:00.000Z" }))
+test('preserves the trading-audit exports used by the existing control API', () => {
+  expect(fillMode({type: 'fill_filled', detail: '[PAPER] yes 1'})).toBe('paper');
+  expect(fillMode({type: 'note', mode: 'live'})).toBeNull();
+  expect(executionOf([{events: [
+    {type: 'fill_filled', mode: 'paper'}, {type: 'fill_filled', fill: {mode: 'live'}},
+    {type: 'fill_filled'},
+  ]}])).toEqual({kind: 'mixed', paper: 1, live: 1, unmarked: 1});
+});
 
-describe("fill mode", () => {
-  test("reads the leading PAPER or LIVE tag from audit details", () => {
-    expect(fillMode({ type: "fill_filled", detail: "[PAPER] yes 20 @ 0.42 on m1 (edge)" })).toBe("paper")
-    expect(fillMode({ type: "fill_rejected", detail: "[LIVE] no 5 @ 0.20 on m2 (reason)" })).toBe("live")
-    expect(fillMode({ type: "note", detail: "mention [LIVE] later" })).toBeNull()
-  })
+describe('marketplace read model', () => {
+  test('keeps roles, categories, lower bounds, and confidence separate', () => {
+    const view = buildView(sample());
+    const entity = view.entities.find((entry: {id: string}) => entry.id === 'entity-established');
+    expect(entity.scores).toHaveLength(2);
+    expect(entity.scores.find((score: {role: string}) => score.role === 'buyer').category).toBe('payment');
+    expect(entity.scores.find((score: {role: string}) => score.role === 'seller').category).toBe('fulfillment');
+    const html = renderDesk(buildView(sample(), {}, {tab: 'participants'}));
+    expect(html).toContain('Buyer reliability');
+    expect(html).toContain('Seller reliability');
+    expect(html).toContain('Lower bound');
+    expect(html).toContain('Confidence');
+    expect(html).not.toContain('Overall score');
+  });
 
-  test("reads a mode field only on fill events", () => {
-    expect(fillMode({ type: "fill_filled", detail: "yes 1 @ 0.4 on m", mode: "live" })).toBe("live")
-    expect(fillMode({ type: "policy_blocked", detail: "blocked", mode: "live" })).toBeNull()
-  })
+  test('does not infer completed outcomes from completion dates or missing receipts', () => {
+    const snapshot = sample();
+    delete snapshot.receipts['tx-service-1'];
+    snapshot.receipts['tx-invoice-1'].outcome.state = 'disputed';
+    const view = buildView(snapshot);
+    expect(view.metrics.completed).toBe(1);
+    expect(view.metrics.attention).toBe(1);
+    expect(view.metrics.unknown).toBe(1);
+    expect(view.transactions[0].outcome).toBe('unknown');
+  });
 
-  test("counts paper, live, mixed, and empty logs", () => {
-    expect(executionOf([]).kind).toBe("none")
-    expect(executionOf([{ events: [{ type: "fill_filled", detail: "[PAPER] yes 1 @ 0.4 on m" }] }]).kind).toBe("paper")
-    expect(executionOf([{ events: [{ type: "fill_filled", detail: "[LIVE] yes 1 @ 0.4 on m" }] }]).kind).toBe("live")
-    expect(executionOf(FIXTURE.audit)).toEqual({ kind: "mixed", paper: 2, live: 1, unmarked: 0 })
-  })
-})
+  test.each(['pending', 'cancelled', 'disputed', 'unresolved', 'failed'])(
+    'does not treat %s as success', (state) => {
+      const snapshot = sample();
+      snapshot.receipts['tx-service-1'].outcome.state = state;
+      expect(buildView(snapshot).metrics.completed).toBe(2);
+    },
+  );
 
-describe("desk html", () => {
-  test("renders the initial control-api book with no controls", () => {
-    const html = htmlOf({ policy, portfolio: flatBook }, [])
-    expect(html).toContain('data-source="live"')
-    expect(html).toContain('data-mode="none"')
-    expect(html).toContain(">Policy<")
-    expect(html).toContain(">Portfolio<")
-    expect(html).toContain(">Audit<")
-    expect(html).toContain(">Cash<")
-    expect(html).toContain(">Equity<")
-    expect(html).toContain(">Daily PnL<")
-    expect(html).toContain("$1,000.00")
-    expect(html).toContain("$25.00")
-    expect(html).toContain("$100.00")
-    expect(html).toContain("20%")
-    expect(html).toContain("Polymarket")
-    expect(html).toContain("Kalshi")
-    expect(html).toContain("politics")
-    expect(html).toContain("No open positions.")
-    expect(html).toContain("No cycles recorded.")
-    expect(html).toContain(">NO FILLS<")
-    expect(html).toContain(">Connected<")
-    expect(html).toContain(">PAPER<")
-    expect(html).toContain(">LIVE<")
-    expect(html).not.toContain("<button")
-    expect(html).not.toContain("<form")
-    expect(html).not.toContain("<input")
-    expect(html).not.toContain("<textarea")
-    expect(html).not.toContain("<select")
-    expect(html).not.toContain("onclick=")
-    expect(html).not.toContain("Kill switch is on")
-    expect(deskTitle(buildView({ policy, portfolio: flatBook }, [], { source: "live" }))).toBe("Operator · NO FILLS")
-  })
+  test('filters by counterparty, type, and outcome without changing total metrics', () => {
+    const view = buildView(sample(), {}, {query: 'meridian', type: 'invoice', outcome: 'successful'});
+    expect(view.rows.map((entry: {id: string}) => entry.id)).toEqual(['tx-invoice-1']);
+    expect(view.selected.id).toBe('tx-invoice-1');
+    expect(view.metrics.total).toBe(3);
+    const empty = buildView(sample(), {}, {query: 'missing'});
+    expect(empty.selected).toBeUndefined();
+    expect(renderDesk(empty)).toContain('No matching transactions');
+  });
 
-  test("shows cash, equity, daily PnL, positions, and paper versus live fills", () => {
-    const html = htmlOf(FIXTURE.state, FIXTURE.audit, "fixture")
-    expect(html).toContain('data-source="fixture"')
-    expect(html).toContain('data-mode="mixed"')
-    expect(html).toContain("Fixture data")
-    expect(html).toContain("not the running agent")
-    expect(html).toContain("$960.00")
-    expect(html).toContain("$975.50")
-    expect(html).toContain("−$24.50")
-    expect(html).toContain("sample-fed-cut")
-    expect(html).toContain("sample-cpi")
-    expect(html).toContain("badge-paper")
-    expect(html).toContain("badge-live")
-    expect(html).toContain("sample-live-market")
-    expect(html).toContain("category_denied: politics")
-    expect(html).not.toContain("<button")
-    expect(deskTitle(buildView(FIXTURE.state, FIXTURE.audit, { source: "fixture" }))).toBe("Fixture · Operator · MIXED")
-  })
+  test('pagination chooses a receipt from the displayed page and clamps deleted pages', () => {
+    const snapshot = sample();
+    snapshot.transactions = Array.from({length: 12}, (value, index) => ({
+      ...snapshot.transactions[0], id: `page-${index}`,
+    }));
+    const view = buildView(snapshot, {}, {page: 1});
+    expect(view.rows).toHaveLength(4);
+    expect(view.selected.id).toBe('page-8');
+    expect(buildView(snapshot, {}, {page: 20}).page).toBe(1);
+  });
 
-  test("escapes audit details", () => {
-    const html = htmlOf(
-      { policy, portfolio: flatBook },
-      [{ cycleId: "c", events: [{ type: "note", detail: `<img src=x onerror="alert(1)">` }] }],
-    )
-    expect(html).not.toContain("<img")
-    expect(html).toContain("&lt;img")
-  })
+  test('expired and pending renewal badges come from the mock KYC view', () => {
+    const snapshot = {
+      ...sample(),
+      kycById: {'entity-established': {
+        badge: 'expired', status: 'unverified', tier: 'none', checkPending: true,
+        reRegistration: {ofEntityId: 'old-entity', signal: 'document'}, history: [],
+      }},
+    };
+    const view = buildView(snapshot, {}, {tab: 'participants'});
+    const entity = view.entities.find((entry: {id: string}) => entry.id === 'entity-established');
+    expect(entity.kycBadge).toBe('expired');
+    expect(entity.kycTier).toBe('none');
+    const html = renderDesk(view);
+    expect(html).toContain('Expired');
+    expect(html).toContain('New check pending');
+    expect(html).toContain('Re-registration flag: old-entity');
+    expect(html).toContain('Reliability does not transfer');
+  });
 
-  test("marks a kill switch without offering a control", () => {
-    const html = htmlOf({ policy: { ...policy, kill_switch: true }, portfolio: flatBook }, [])
-    expect(html).toContain("Kill switch is on")
-    expect(html).toContain(">On<")
-    expect(html).not.toContain("<button")
-  })
+  test('does not replace an unavailable KYC read with a verified seed badge', () => {
+    const snapshot = {...sample(), kycErrors: {'entity-established': 'KYC returned 503'}};
+    const entity = buildView(snapshot).entities.find((entry: {id: string}) => entry.id === 'entity-established');
+    expect(entity.kycBadge).toBe('unknown');
+    expect(entity.kycSource).toBe('Mock KYC unavailable');
+  });
+});
 
-  test("paper-only and live-only banners stay distinct", () => {
-    const paper = htmlOf(
-      { policy, portfolio: flatBook },
-      [{ events: [{ type: "fill_filled", detail: "[PAPER] yes 1 @ 0.40 on m" }] }],
-    )
-    const live = htmlOf(
-      { policy, portfolio: flatBook },
-      [{ events: [{ type: "fill_filled", detail: "[LIVE] yes 1 @ 0.40 on m" }] }],
-    )
-    expect(paper).toContain('data-mode="paper"')
-    expect(paper).toContain("Nothing was sent to a venue")
-    expect(paper).toContain("fill-paper")
-    expect(paper).not.toContain("fill-live")
-    expect(live).toContain('data-mode="live"')
-    expect(live).toContain("orders that were sent to a venue")
-    expect(live).toContain("fill-live")
-    expect(live).not.toContain("fill-paper")
-  })
+describe('receipt evidence', () => {
+  test('paper sales and escrow evidence have independent modes', () => {
+    expect(escrowOf(sample().receipts['tx-service-1']).mode).toBe('paper');
+    expect(escrowOf(sample().receipts['tx-invoice-1']).mode).toBe('unknown');
+    const snapshot = sample();
+    snapshot.receipts['tx-service-1'].outcome.evidence.mode = 'live';
+    const transaction = buildView(snapshot).transactions[0];
+    expect(transaction.orderMode).toBe('paper');
+    expect(transaction.escrow.mode).toBe('live');
+    expect(renderDesk(buildView(snapshot))).toContain('LIVE escrow');
+    expect(escrowOf({outcome: {evidence: {txHash: 'dry-run'}}}).text).toContain('No chain settlement proof');
+  });
 
-  test("keeps the last book labeled when the source is stale", () => {
-    const html = htmlOf({ policy, portfolio: flatBook }, [], "stale")
-    expect(html).toContain("Showing the last response")
-    expect(html).toContain('data-source="stale"')
-    expect(html).not.toContain("Fixture data")
-  })
-})
+  test('timeline shows recorded facts without inventing escrow or delivery steps', () => {
+    const rows = evidenceRows(sample().receipts['tx-invoice-1']);
+    expect(rows.map((row: {title: string}) => row.title)).toEqual([
+      'Agreement recorded', 'Settlement timestamp recorded',
+    ]);
+    expect(rows.map((row: {title: string}) => row.title)).not.toContain('Escrow funded');
+  });
 
-describe("money", () => {
-  test("formats cash and pnl", () => {
-    expect(formatMoney(1000)).toBe("$1,000.00")
-    expect(formatMoney(-24.5)).toBe("−$24.50")
-    expect(formatPnl(3)).toBe("+$3.00")
-    expect(formatPnl(0)).toBe("$0.00")
-    expect(formatMoney("nope")).toBe("—")
-  })
-})
+  test('shows fault, decisions, and their scope, and escapes source text', () => {
+    const snapshot = sample();
+    const receipt = snapshot.receipts['tx-service-1'];
+    receipt.outcome.state = 'failed';
+    Object.assign(receipt.outcome, {fault: 'seller'});
+    receipt.outcome.evidence.producer = '<img src=x onerror="alert(1)">';
+    snapshot.entities[0].displayName = '<script>alert(1)</script>';
+    const html = renderDesk(buildView(snapshot, {source: 'connected'}));
+    expect(html).toContain('At-fault role');
+    expect(html).toContain('Seller');
+    expect(html).toContain('Buyer fee offer');
+    expect(html).toContain('Seller fee offer');
+    expect(html).toContain('Decision for Meridian Services');
+    expect(html).toContain('not recorded charges to both parties');
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img');
+    expect(html).not.toContain('Polymarket');
+    expect(html).not.toContain('Portfolio');
+    expect(html).not.toContain('Kill switch');
+  });
+
+  test('labels offline sample and last response independently', () => {
+    const fixture = buildView(sample(), {source: 'fixture'});
+    const stale = buildView(sample(), {source: 'stale', updatedAt: '2026-10-06T12:00:00Z'});
+    expect(renderDesk(fixture)).toContain('Saved demo snapshot');
+    expect(renderDesk(stale)).toContain('Showing the last response');
+    expect(deskTitle(fixture)).toBe('Offline sample · Transactions · Reliability');
+    expect(deskTitle(stale)).toBe('Stale · Transactions · Reliability');
+  });
+});
+
+describe('display formatting', () => {
+  test('does not turn missing numbers into zero or assume a currency', () => {
+    for (const value of [null, undefined, '', '10', NaN, Infinity]) {
+      expect(formatValue(value)).toBe('—');
+      expect(formatPct(value)).toBe('—');
+    }
+    expect(formatValue(250)).toBe('250');
+    expect(formatValue(1200, 'USD')).toBe('1,200 USD');
+    expect(formatPct(0)).toBe('0%');
+    expect(formatFee(80)).toBe('0.80%');
+    expect(label('STRONG_HISTORY')).toBe('Strong history');
+  });
+});
