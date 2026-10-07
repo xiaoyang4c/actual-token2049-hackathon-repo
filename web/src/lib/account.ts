@@ -6,6 +6,7 @@
  */
 
 import {connect, signInAddress, utf8Hex, type Cip30Api} from './cip30'
+import {APP_EDITION} from './edition'
 import {walletFromPhrase, type BrowserWallet} from './cardano-keys'
 
 /** The Tally server. Empty means this origin (the Vite proxy or ui/server.ts). */
@@ -94,6 +95,7 @@ function saveSession(session: Session | null) {
     if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
     else localStorage.removeItem(SESSION_KEY)
   } catch { /* storage unavailable: the session lasts until the page closes */ }
+  if (APP_EDITION) window.dispatchEvent(new CustomEvent('tally-session-changed', {detail: session}))
 }
 
 export interface Profile {

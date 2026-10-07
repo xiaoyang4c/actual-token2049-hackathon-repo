@@ -5,6 +5,7 @@
  * without changing existing behavior.
  */
 
+import {appRoutes} from './routes-app';
 import {accountRoutes} from './routes-account';
 import {laneAKycRoutes} from './routes-lane-a-kyc';
 import {laneARoutes} from './routes-lane-a';
@@ -27,4 +28,5 @@ export const reliabilityRoutes: ReliabilityRoute[] = [
   ...scoringRoutes,
   ...marketplaceRoutes,
   ...accountRoutes,
+  ...appRoutes,
 ];

@@ -10,7 +10,7 @@ Environment=UI_PORT=8791
 Environment=CONTROL_API_URL=http://127.0.0.1:8787
 # The web app on Vercel calls the Coworker chat and the account routes from the browser. Comma-separated.
 # The UI server also reads COWORKER_ASK_ORIGINS, the older name for this list.
-Environment=TALLY_WEB_ORIGINS=https://tally-origins.vercel.app
+Environment=TALLY_WEB_ORIGINS=https://tally-origins.vercel.app,https://main.d23gra1a9ugqjs.amplifyapp.com
 ExecStart=/home/ubuntu/.bun/bin/bun run ui/server.ts
 Restart=always
 RestartSec=5

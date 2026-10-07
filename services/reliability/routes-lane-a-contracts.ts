@@ -8,92 +8,16 @@
  */
 
 import type {AgentStore} from '../../packages/db/src/index';
-import type {MediatorRuling, PartyAction, PartyActionType} from '../../packages/reliability/src/contract-lifecycle/engine';
+import type {MediatorRuling} from '../../packages/reliability/src/contract-lifecycle/engine';
 import {ContractError} from '../../packages/reliability/src/contract-lifecycle/errors';
 import {sha256Hex} from '../../packages/reliability/src/contract-lifecycle/hashing';
-import type {EvidenceInput, NegotiatedOutcome, Remedy} from '../../packages/reliability/src/contract-lifecycle/types';
+import type {NegotiatedOutcome, Remedy} from '../../packages/reliability/src/contract-lifecycle/types';
 import {json} from '../lib/http';
 import {companyAnchors, contractAnchors} from './anchors';
 import {contractServiceFor, type ContractService} from './contract-service';
 import {CoworkerTools, type DraftInput, type ToolResult} from './coworker-tools';
-import {MarketplaceRuleError} from './marketplace-gate';
 import type {ReliabilityRoute} from './route';
-
-const STATUS_BY_CODE: {[code: string]: number} = {
-  not_found: 404,
-  forbidden: 403,
-  bad_signature: 401,
-  illegal_transition: 409,
-  operation_in_flight: 409,
-  funding_in_flight: 409,
-  action_id_reused: 409,
-  party_exists: 409,
-  kyc_required: 403,
-  wallet_required: 403,
-  evidence_too_large: 413,
-  not_in_tier_3: 409,
-};
-
-const PARTY_ACTIONS: readonly PartyActionType[] = [
-  'submit_for_acceptance', 'cancel', 'deliver', 'accept', 'dispute', 'concede_refund', 'escalate',
-  'submit_judge_report', 'comply_with_ruling', 'record_return_shipment', 'confirm_return_received',
-  'redeliver', 'accept_redo', 'reject_redo',
-];
-
-function fail(error: unknown): Response {
-  if (error instanceof MarketplaceRuleError) {
-    return json({error: error.message, code: 'deal_not_allowed', violations: error.violations}, 403);
-  }
-  if (error instanceof ContractError) return json({error: error.message, code: error.code}, STATUS_BY_CODE[error.code] ?? 400);
-  throw error;
-}
-
-function record(value: unknown, label: string): {[key: string]: unknown} {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new ContractError('invalid_input', `${label} must be an object`);
-  }
-  return value as {[key: string]: unknown};
-}
-
-function text(body: {[key: string]: unknown}, key: string): string {
-  const value = body[key];
-  if (typeof value !== 'string' || value.trim() === '') throw new ContractError('invalid_input', `${key} must be a non-empty string`);
-  return value;
-}
-
-function optionalText(body: {[key: string]: unknown}, key: string): string|undefined {
-  return body[key] === undefined || body[key] === null ? undefined : text(body, key);
-}
-
-async function readBody(request: Request): Promise<{[key: string]: unknown}> {
-  let value: unknown;
-  try {
-    value = await request.json();
-  } catch {
-    throw new ContractError('invalid_input', 'the body must be JSON');
-  }
-  return record(value, 'body');
-}
-
-/** Evidence over HTTP: `contentText` or `contentBase64`, plus an optional inspector signature. */
-function evidenceList(value: unknown): EvidenceInput[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) throw new ContractError('invalid_input', 'evidence must be an array');
-  return value.map((item, index) => {
-    const entry = record(item, `evidence[${index}]`);
-    let content: Uint8Array|string;
-    if (typeof entry.contentText === 'string') content = entry.contentText;
-    else if (typeof entry.contentBase64 === 'string') content = new Uint8Array(Buffer.from(entry.contentBase64, 'base64'));
-    else throw new ContractError('invalid_input', `evidence[${index}] needs contentText or contentBase64`);
-    const signer = entry.signer === undefined ? undefined : record(entry.signer, `evidence[${index}].signer`);
-    return {
-      type: text(entry, 'type'),
-      content,
-      mediaType: optionalText(entry, 'mediaType'),
-      signer: signer ? {id: text(signer, 'id'), signatureHex: text(signer, 'signatureHex')} : undefined,
-    };
-  });
-}
+import {afterAction, contractRouteError, optionalText, parsePartyAction, readBody, record, STATUS_BY_CODE, text} from './contract-route-helpers';
 
 /** Applies `at` in paper mode. Rejects it in live mode. */
 function applyAt(service: ContractService, body: {[key: string]: unknown}): void {
@@ -102,11 +26,6 @@ function applyAt(service: ContractService, body: {[key: string]: unknown}): void
   const ms = Date.parse(at);
   if (Number.isNaN(ms)) throw new ContractError('invalid_input', 'at must be an ISO timestamp');
   service.advancePaperClock(ms);
-}
-
-/** In paper mode, run the scheduler after an action so escrow writes proceed. Live mode uses the worker. */
-async function afterAction(service: ContractService): Promise<void> {
-  if (service.mode === 'paper') await service.tick();
 }
 
 function serviceFor(store: AgentStore|undefined): ContractService {
@@ -128,7 +47,7 @@ function post(
         const result = await handle(service, body);
         return json(result);
       } catch (error) {
-        return fail(error);
+        return contractRouteError(error);
       }
     },
   };
@@ -142,7 +61,7 @@ function get(path: string, handle: (service: ContractService, url: URL) => unkno
       try {
         return json(handle(serviceFor(store), url));
       } catch (error) {
-        return fail(error);
+        return contractRouteError(error);
       }
     },
   };
@@ -164,7 +83,7 @@ function toolGet(path: string, handle: (tools: CoworkerTools, url: URL) => ToolR
         if (!result.ok) return json({error: result.error.message, code: result.error.code}, STATUS_BY_CODE[result.error.code] ?? 400);
         return json(result.result);
       } catch (error) {
-        return fail(error);
+        return contractRouteError(error);
       }
     },
   };
@@ -179,7 +98,7 @@ function anchorGet(path: string, handle: (store: AgentStore, url: URL) => unknow
       try {
         return json(handle(store, url));
       } catch (error) {
-        return fail(error);
+        return contractRouteError(error);
       }
     },
   };
@@ -264,18 +183,7 @@ export const laneAContractRoutes: ReliabilityRoute[] = [
     return service.view(id);
   }),
   post('/reliability/contracts/action', async (service, body) => {
-    const payload = record(body.action, 'action');
-    const action = text(payload, 'action') as PartyActionType;
-    if (!PARTY_ACTIONS.includes(action)) throw new ContractError('invalid_action', `unknown action ${action}`);
-    const request: PartyAction = {
-      actionId: text(payload, 'actionId'),
-      contractId: text(payload, 'contractId'),
-      milestoneId: optionalText(payload, 'milestoneId') ?? null,
-      partyId: text(payload, 'partyId'),
-      action,
-      evidence: evidenceList(payload.evidence),
-      reason: optionalText(payload, 'reason'),
-    };
+    const request = parsePartyAction(body.action);
     service.lifecycle.perform(request, text(body, 'signatureHex'));
     await afterAction(service);
     return service.view(request.contractId);

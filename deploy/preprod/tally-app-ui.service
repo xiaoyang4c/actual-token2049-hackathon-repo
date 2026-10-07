@@ -1,0 +1,22 @@
+[Unit]
+Description=Tally signed-in app gateway
+After=tally-app-services.service
+Wants=tally-app-services.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tally-app/current
+Environment=UI_PORT=8798
+Environment=CONTROL_API_URL=http://127.0.0.1:8797
+Environment=TALLY_EDITION=app
+EnvironmentFile=/home/ubuntu/tally-app/app.env
+# The shared Coworker worker keeps its public, read-only preview limits.
+Environment=COWORKER_ASK_URL=http://127.0.0.1:8792
+ExecStart=/home/ubuntu/.bun/bin/bun run ui/server.ts
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

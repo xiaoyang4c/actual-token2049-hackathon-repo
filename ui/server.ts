@@ -53,6 +53,22 @@ const PROXY_PATHS = new Set([
   "/reliability/contracts/draft-templates", "/reliability/contracts/draft",
 ])
 
+/** The app edition exposes only these public read views. */
+const APP_PUBLIC_PATHS = new Set([
+  "/reliability/profile/search", "/reliability/profile", "/reliability/anchors/company",
+  "/reliability/contracts/templates", "/reliability/contracts/draft-templates", "/reliability/contracts/draft",
+])
+
+/** Explicit app methods. Operator and mediator routes never enter this set. */
+const APP_ROUTES = new Set([
+  "GET /reliability/app/me", "POST /reliability/app/party", "GET /reliability/app/contracts", "POST /reliability/app/contracts",
+  "GET /reliability/app/contract", "GET /reliability/app/contract/terms", "GET /reliability/app/contract/audit",
+  "GET /reliability/app/contract/case", "GET /reliability/app/contract/anchors", "POST /reliability/app/sign", "POST /reliability/app/action",
+])
+const APP_PATHS = new Set([...APP_ROUTES].map((route) => route.split(" ")[1]))
+/** Base64 evidence can fill the engine's 1 MiB evidence limit. */
+const APP_BODY_LIMIT = 1_500_000
+
 /** Wallet sign-in and account routes, as "METHOD /path". */
 const ACCOUNT_ROUTES = new Set([
   "POST /reliability/wallets/challenge", "POST /reliability/wallets/verify",
@@ -110,11 +126,11 @@ const proxyAsk = async (askUrl: string, req: Request, visitor: string, search: s
   }
 }
 
-const proxyAccount = async (controlApiUrl: string, req: Request, visitor: string, path: string) => {
+const proxyAccount = async (controlApiUrl: string, req: Request, visitor: string, path: string, bodyLimit = ACCOUNT_BODY_LIMIT) => {
   let body: string | undefined
   if (req.method === "POST") {
     body = await req.text()
-    if (new TextEncoder().encode(body).length > ACCOUNT_BODY_LIMIT) {
+    if (new TextEncoder().encode(body).length > bodyLimit) {
       return Response.json({ error: "The request is too long." }, { status: 413 })
     }
   }
@@ -160,7 +176,9 @@ const proxyGet = async (controlApiUrl: string, path: string) => {
   }
 }
 
-export const startUi = (options?: { port?: number; controlApiUrl?: string; askUrl?: string; askOrigins?: string[] }) => {
+export const startUi = (options?: { port?: number; controlApiUrl?: string; askUrl?: string; askOrigins?: string[]; edition?: "demo" | "app" }) => {
+  const appEdition = (options?.edition ?? process.env.TALLY_EDITION ?? "demo") === "app"
+  const publicPaths = appEdition ? APP_PUBLIC_PATHS : PROXY_PATHS
   const port = options?.port ?? Number(process.env.UI_PORT ?? 8791)
   const controlApiUrl = (options?.controlApiUrl ?? process.env.CONTROL_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "")
   const askUrl = (options?.askUrl ?? process.env.COWORKER_ASK_URL ?? "http://127.0.0.1:8792").replace(/\/$/, "")
@@ -173,11 +191,13 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string; askUr
     async fetch(req, server) {
       const url = new URL(req.url)
       let res: Response
-      if (ACCOUNT_PATHS.has(url.pathname) && req.method === "OPTIONS") {
+      if ((ACCOUNT_PATHS.has(url.pathname) || (appEdition && APP_PATHS.has(url.pathname))) && req.method === "OPTIONS") {
         const cors = corsFor(req, askOrigins)
         res = cors["access-control-allow-origin"]
           ? new Response(null, { status: 204, headers: { ...cors, "access-control-allow-methods": "GET, POST", "access-control-allow-headers": "content-type, authorization", "access-control-max-age": "600" } })
           : new Response("origin not allowed", { status: 403 })
+      } else if (appEdition && APP_ROUTES.has(`${req.method} ${url.pathname}`)) {
+        res = withHeaders(await proxyAccount(controlApiUrl, req, visitorOf(req, server.requestIP(req)?.address), url.pathname + url.search, APP_BODY_LIMIT), corsFor(req, askOrigins))
       } else if (ACCOUNT_ROUTES.has(`${req.method} ${url.pathname}`)) {
         res = withHeaders(await proxyAccount(controlApiUrl, req, visitorOf(req, server.requestIP(req)?.address), url.pathname), corsFor(req, askOrigins))
       } else if (url.pathname === ASK_PATH && req.method === "OPTIONS") {
@@ -188,14 +208,15 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string; askUr
           : new Response("origin not allowed", { status: 403 })
       } else if (url.pathname === ASK_PATH && (req.method === "POST" || req.method === "GET")) {
         res = withHeaders(await proxyAsk(askUrl, req, visitorOf(req, server.requestIP(req)?.address), url.search), corsFor(req, askOrigins))
-      } else if ((req.method === "GET" || req.method === "HEAD") && PROXY_PATHS.has(url.pathname)) {
+      } else if ((req.method === "GET" || req.method === "HEAD") && publicPaths.has(url.pathname)) {
         res = await proxyGet(controlApiUrl, url.pathname + url.search)
+        if (appEdition) res = withHeaders(res, corsFor(req, askOrigins))
         // HEAD gets the GET status and headers with no body.
         if (req.method === "HEAD") res = new Response(null, { status: res.status, headers: res.headers })
       } else if (req.method !== "GET" && req.method !== "HEAD") {
         res = new Response("read only", { status: 405, headers: { "allow": "GET, HEAD" } })
       } else {
-        const name = FILES[url.pathname]
+        const name = appEdition ? undefined : FILES[url.pathname]
         res = name
           ? new Response(Bun.file(fileUrl(name)), { headers: { "cache-control": "no-store" } })
           : new Response("not found", { status: 404 })

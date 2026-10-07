@@ -14,3 +14,16 @@
 		reverse_proxy 127.0.0.1:8791
 	}
 }
+
+# App gateway. Use the app server hostname in Amplify's variables and rewrites.
+app-13-210-42-0.sslip.io {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8798
+	}
+}

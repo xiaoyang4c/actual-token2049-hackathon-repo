@@ -48,6 +48,8 @@ import {
 
 /** Settings from the service config. The engine has no defaults of its own. */
 export interface ContractSettings {
+  /** App edition only: a seller can concede all tranches at Tier 1. */
+  allowAppTier1Concession?: boolean;
   mode: ContractMode;
   custodyModel: CustodyModel;
   assetUnit: string;
@@ -562,6 +564,17 @@ export class ContractLifecycle {
 
   /** The seller refunds outside a dispute. The outcome is REFUNDED after the refund confirms. */
   private concedeRefund(ctx: Ctx, milestone: Milestone, actor: string): void {
+    if (milestone.state === 'tier_1_negotiation' && this.settings.allowAppTier1Concession) {
+      this.assertNoPending(milestone);
+      this.assertBeforeDeadline(ctx, milestone.dispute.tierDeadline, 'Tier 1');
+      // The seller's own signature authorizes a full refund. No buyer key or
+      // mediator authority is used. Keep the existing ruling journal and rail.
+      this.applyRuling(ctx, milestone, {
+        ...this.ruling(ctx, milestone, 'buyer', actor, 'the seller conceded a full refund', true),
+        trancheDecisions: decisionsForOutcome('full_refund', milestone.tranches),
+      }, 'ruling_issued', actor, ['seller']);
+      return;
+    }
     this.assertCan(milestone, 'refund_confirmed');
     this.assertNoPending(milestone);
     this.assertRefundWindow(ctx, milestone);

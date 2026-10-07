@@ -88,6 +88,7 @@ export function loadContractConfig(env: Record<string, string|undefined> = proce
   return {
     payment,
     settings: {
+      allowAppTier1Concession: env.TALLY_EDITION === 'app',
       mode,
       custodyModel: 'platform_custodial_test_only',
       assetUnit,

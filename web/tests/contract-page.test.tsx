@@ -7,7 +7,7 @@ import {MemoryRouter, Route, Routes} from 'react-router-dom'
 import {AgentStore} from '../../packages/db/src'
 import {seedShowcase} from '../../services/reliability/contract-showcase'
 import {reliabilityRoutes} from '../../services/reliability'
-import type {ContractSummary, ContractView} from '../src/lib/api'
+import type {ContractSummary, ContractView, DisputeCase} from '../src/lib/api'
 
 const directory = mkdtempSync(join(tmpdir(), 'pr26-contract-page-'))
 const responses = new Map<string, unknown>()
@@ -24,7 +24,7 @@ mock.module('../src/lib/useAsync', () => ({
   },
 }))
 
-const {ContractPage} = await import('../src/pages/Contract')
+const {ContractDetails, ContractPage} = await import('../src/pages/Contract')
 const {TooltipProvider} = await import('../src/components/ui/tooltip')
 
 async function read<T>(path: string): Promise<T> {
@@ -77,6 +77,21 @@ function withOutcome(state: string): ContractSummary[] {
 }
 
 describe('contract page with actual paper API responses', () => {
+  test('renders a private draft before terms and deadlines are frozen', () => {
+    const contract = contracts[0]
+    const draft = structuredClone(views.get(contract.id)!)
+    const kase = structuredClone(responses.get(`case-${contract.id}`)) as DisputeCase
+    draft.contract.termsSha256 = null
+    draft.contract.signatures = {}
+    draft.milestones[0].state = 'draft'
+    draft.milestones[0].deadlines = null
+    kase.milestone.state = 'draft'
+    kase.milestone.deadlines = null
+    const html = renderToStaticMarkup(<MemoryRouter><TooltipProvider><ContractDetails view={draft} kase={kase} privateDeal /></TooltipProvider></MemoryRouter>)
+    expect(html).toContain('Submit to freeze terms')
+    expect(html).toContain('Deadlines are set after both parties sign.')
+  })
+
   test('renders pending records when the API omits fault', () => {
     const pending = withOutcome('pending')
     expect(pending.length).toBeGreaterThan(0)

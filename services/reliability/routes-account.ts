@@ -55,6 +55,12 @@ function limit(request: Request, limiter: RateLimiter): void {
 
 const bearer = (request: Request) => /^Bearer\s+([A-Za-z0-9_-]{20,100})$/.exec(request.headers.get('authorization') ?? '')?.[1] ?? null;
 
+/** Returns only the entity of a live wallet session. Applies the account read limit. */
+export function sessionEntityOf(request: Request, store: AgentStore): string {
+  limit(request, LIMITS.read);
+  return servicesFor(store).accounts.sessionEntity(bearer(request));
+}
+
 async function body(request: Request): Promise<{[key: string]: unknown}> {
   let value: unknown;
   try {
@@ -85,7 +91,7 @@ async function handle(work: () => unknown): Promise<Response> {
   }
 }
 
-function account(store: AgentStore, entityId: string) {
+export function accountViewOf(store: AgentStore, entityId: string) {
   const {accounts, deposits} = servicesFor(store);
   const entity = store.getEntity(entityId);
   const kyc = accounts.kyc.view(entityId);
@@ -129,15 +135,14 @@ export const accountRoutes: ReliabilityRoute[] = [
         displayName: text(input, 'displayName', false),
         kind: input.kind === 'business' ? 'business' : 'person',
       }, sessionEntityId);
-      return {session: signedIn.token, expiresAt: signedIn.expiresAt, created: signedIn.created, account: account(store, signedIn.entityId)};
+      return {session: signedIn.token, expiresAt: signedIn.expiresAt, created: signedIn.created, account: accountViewOf(store, signedIn.entityId)};
     }),
   },
   {
     method: 'GET',
     path: '/reliability/account',
     handler: async (request, url, store) => handle(() => {
-      limit(request, LIMITS.read);
-      return account(store, servicesFor(store).accounts.sessionEntity(bearer(request)));
+      return accountViewOf(store, sessionEntityOf(request, store));
     }),
   },
   {
@@ -156,7 +161,7 @@ export const accountRoutes: ReliabilityRoute[] = [
       } else {
         accounts.submitKyc(entityId, {kind: 'person', documentId: text(input, 'documentId') as string, addressChecked: input.addressChecked === true});
       }
-      return account(store, entityId);
+      return accountViewOf(store, entityId);
     }),
   },
   {

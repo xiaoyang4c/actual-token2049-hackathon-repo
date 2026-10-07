@@ -11,7 +11,9 @@ Tally was built for the TOKEN2049 Origins hackathon.
 It runs on Cardano **preprod** with **test USDM**. Nothing has real value.
 
 **Live demo:** <https://13-210-42-0.sslip.io>. 
-The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
+The demo shows paper contracts, labelled SIMULATED.
+The signed-in app edition uses a separate database and shows each user only their own deals.
+Read [Two Amplify editions](docs/amplify.md) for both website and server setups.
 
 ## What Tally does
 
@@ -21,7 +23,7 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Disputes in tiers | Tier 1: the parties agree one fixed outcome. Tier 2: the named judge (code or an inspector) decides. Tier 3: a mediator names a winner. The remedy was fixed before funding. | [Contract lifecycle](docs/contract-lifecycle.md#disputes) |
 | Reliability record | Separate buyer and seller scores per category, terms decisions, and mock KYC. Ignored rulings count against a party. | [Reliability math](docs/reliability-math.md) |
 | Coworkers on Sokosumi | Tally Deal Desk drafts contracts. Tally Mediator drafts rulings for a human mediator. Tally Trust Check explains a company's record. Every number comes from Tally's code. | [Tally Coworkers](services/reliability/coworkers/README.md) |
-| Tally UI | My deals, Mediation desk, Companies, and Operator views. Read-only. | [UI instructions](ui/README.md) |
+| Tally UI | Demo views and a signed-in app edition with My deals, New deal, and signed party actions. | [UI instructions](ui/README.md) |
 | Wallet accounts | Sign in with a Cardano wallet (connected or created in the browser), pass KYC, and deposit test funds for live deals. Tally never holds wallet keys. | [Wallet accounts](docs/wallets.md) |
 
 ## Status
@@ -37,7 +39,8 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Scoring, pair decay, fees | Built with default parameters: weighted Beta scores, repeat-pair decay, and buyer and seller fee charges. Read [Reliability math](docs/reliability-math.md) |
 | Listings, offers, invoices | Built for paper orders. Read [Marketplace rules and writes](docs/marketplace.md) |
 | KYC | Mock provider. Enforced before sales, invoices, contracts, and key registration. Self-service through the Account page |
-| Sign-in | Wallet sign-in for accounts, with 24-hour sessions. Role views in the UI are still lenses, not access control |
+| Sign-in | Wallet sign-in with 24-hour sessions gates deals in the app edition. The demo keeps its public role lenses |
+| App deal actions | Wallet-derived deal keys, signed terms, delivery, acceptance, disputes, returns, redo, and ruling compliance. Tier 1 two-sided agreement, mutual termination, and inspector templates are not in the app yet |
 | Deposits | Live preprod deposits from proven wallets, credited after 3 confirmations. Needs the deposit address and the deposit worker. Read [Wallet accounts](docs/wallets.md) |
 
 Read [Implementation status](docs/implementation-status.md) for every feature and known gap.

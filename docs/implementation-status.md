@@ -1,8 +1,8 @@
 # Implementation status
 
-This page describes the marketplace after the priority 2 product logic.
+This page describes the marketplace and the signed-in app edition.
 The review date is 2026-10-07.
-The change builds on main at commit `f353625`.
+The app edition builds on the existing wallet accounts and signed contract engine.
 Update this page when a change removes a listed limit.
 
 The product is Tally: a B2B and B2C marketplace with escrowed contracts and a reliability checker.
@@ -37,7 +37,7 @@ Read [Contract lifecycle](contract-lifecycle.md).
 | Delivery evidence | Goods delivery and service acceptance checked against `terms.delivery` and `terms.service` | Carrier and inspector identity checks |
 | Listings | Listing writes, buyer offers, seller acceptance or decline, buyer withdrawal, and expiry | Caller authentication |
 | Contract lifecycle | Signed terms, milestones, dispute tiers, remedies, durable escrow recovery, audit history, KYC-gated key registration, and fee charges per milestone | Actual preprod testing, token receipt checks, and score-based escrow terms |
-| Tally UI | Read-only areas: My deals, Mediation desk, Companies, and Operator (transactions, attention, participants, listings, and contracts). A free chat with all three Coworkers, with follow-ups and automatic choice of the Coworker. A public demo with paper data | Sign-in, per-party visibility, pagination, clear source labels, and views for offers, invoices, and fee charges |
+| Tally UI | Public paper demo plus a signed-in app edition. App deals, terms, evidence, audit, and anchors need a party session. Users create deals and sign terms and actions in the browser. Mediation and Operator stay outside the app | Pagination; offers and invoices; Tier 1 two-sided agreement, mutual termination, and inspector templates in the app |
 | Coworkers | Three Coworkers on the Masumi registry, with engine-backed tools and instructions. People chat with them on the Tally website, free. The Task worker takes paid Tasks from other agents through Sokosumi and Masumi escrow, with Gemini or the fill-in format. The first paid Task was collected on preprod | Bedrock with the instance role, and the Mediator signing flow back into Tally |
 | Settlement anchors | Fingerprints of settled records, chained per company, posted to Cardano preprod as CIP-20 messages, with confirm-or-expire batch rules. The website shows anchor status | The first live batch (waits for the go-ahead), and a signed chain head for lenders |
 | Hosted demo | A preprod server with the payment service, the control API, the UI, and six showcase contracts | A live escrow run and a running contract worker |
@@ -76,7 +76,7 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for stage and evidence ru
 
 | Area | Remaining work |
 | --- | --- |
-| Caller identity | Authenticate participants, sellers, buyers, and resolvers. Key registration checks KYC, but not who sends the request. |
+| Caller identity | App contract routes now authenticate and authorize the session entity. Legacy marketplace writes and resolver actions still need caller authentication. |
 | External recovery | Add an operator reconciliation flow for a call that started but lost its response. Automatic resubmission stays blocked. |
 | Legacy records | Reconcile old live stages that lack proof. Repair score history when a valid baseline cannot be recovered. |
 | Policy history | Version the selected parameters. Keep a paper score history apart from live evidence. |
@@ -103,12 +103,17 @@ Live custody requires a separate implementation.
 
 Actual preprod settlement has not been tested.
 The v1 demo routes and the marketplace write routes do not authenticate callers.
-Contract actions check signatures. Key registration needs a KYC-verified entity.
+Contract actions check signatures. App key registration also checks the session entity and proven payout address.
+The app server uses its own database, contract worker, and deposit worker.
+Read [Two Amplify editions](amplify.md) for deployment.
+Tier 1 two-sided agreement, mutual termination, and inspector templates are not in the app yet.
 Invoice payments are paper. They record `settlementVerified: false`.
 
 ## Validation
 
-All 729 local tests pass under `packages`, `services`, and `ui`.
+The required checks cover `packages`, `services`, `ui`, and both web editions.
+App HTTP tests cover session expiry, party isolation, spoofed actions, rejected clocks, and a signed paper deal through settlement.
+Client tests compare canonical signing bytes with the engine and verify signatures with the server verifier.
 One intermittent failure appeared once in 13 full runs on 2026-10-07. It did not reproduce, and its test is not identified yet.
 The control and payment TypeScript checks pass.
 Lint passes.

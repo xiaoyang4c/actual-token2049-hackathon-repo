@@ -189,3 +189,63 @@ Current ids are in [the Coworker README](../../services/reliability/coworkers/RE
 | Logs | `sudo docker compose logs mps --since 15m`, `journalctl -u tally-services -u tally-ui --since -15min` |
 | Restart | `sudo docker compose restart mps` |
 | Wallet balances | Blockfrost `GET /addresses/<address>` with the preprod key |
+
+## App edition server
+
+The app edition uses the same release code as the demo.
+It runs separate processes and separate SQLite files.
+Read [Two Amplify editions](../../docs/amplify.md) for both website setups.
+
+| Part | Unit | Port or database |
+| --- | --- | --- |
+| App control API and payment service | `tally-app-services.service` | 8797 and 8799; `app-data/agent.sqlite` and `app-data/cardano.sqlite` |
+| App UI gate | `tally-app-ui.service` | `127.0.0.1:8798` |
+| App contract worker | `tally-app-contracts.service` | `app-data/agent.sqlite` |
+| App deposit worker | `tally-app-deposits.service` | `app-data/agent.sqlite` |
+
+1. Deploy the reviewed release with `deploy-app.sh`.
+2. Create `/home/ubuntu/tally-app/app-data` for the app databases.
+3. Copy `app.env.example` to `/home/ubuntu/tally-app/app.env` on the server.
+4. Set its file mode to 600.
+5. Replace the public placeholders with App B's domain, its deposit address, its agent identifier, and the mediator public key.
+6. Set `MASUMI_BUYER_API_KEY` and `MASUMI_SELLER_API_KEY` privately in that env file.
+7. Set `BLOCKFROST_PROJECT_ID_PREPROD` privately for the payment client.
+8. Put the deposit worker's `blockfrost_preprod` secret in `/home/ubuntu/tally-app-secrets`.
+9. Use a dedicated app purchasing wallet and app API keys in the preprod payment service.
+10. Fund the app payment wallets with preprod test ADA and test USDM.
+11. Copy the four `tally-app-*.service` files to `/etc/systemd/system`.
+12. Run `sudo systemctl daemon-reload`.
+13. Run `sudo systemctl enable --now tally-app-services tally-app-ui tally-app-contracts tally-app-deposits`.
+14. Add the app hostname block from `Caddyfile` to the server's Caddy config.
+15. Validate the Caddy config.
+16. Reload Caddy.
+
+Do not run `contracts:showcase` against the app database.
+Do not copy the demo SQLite file to `app-data`.
+Keep the app deposit pool separate from the demo pool.
+Both workers must use the same app pool address and confirmation setting.
+Keep ports 8797, 8798, and 8799 closed in the AWS security group.
+Only Caddy exposes the app gate at `https://app-13-210-42-0.sslip.io`.
+The existing hostname and demo units keep their ports and database.
+The demo UI unit now includes App A's Amplify origin in `TALLY_WEB_ORIGINS`.
+The app gateway uses the existing public Coworker preview on 8792.
+That worker keeps the demo database. Do not give it the private app database.
+
+`TALLY_EDITION=app` limits public reads and enables the signed-in deal proxy.
+`MARKETPLACE_REQUIRE_WALLET=on` requires proven wallets.
+`CARDANO_MODE=preprod` and `CARDANO_ALLOW_NETWORK=true` enable live preprod escrow.
+Each app action uses server time.
+The contract worker processes funding, confirmations, deadlines, and settlement.
+For a local paper check, set the two Cardano gates to `simulated` and `false` in the env file.
+Keep the contract worker running in paper mode so deadlines progress without traffic.
+
+After each code release, restart the four app units too.
+`deploy-app.sh` restarts only the existing demo units.
+To roll back, select the earlier release and restart both sets of units.
+Keep both sets of data directories.
+
+The browser account key stays with the user.
+The payment service uses platform test wallets for escrow.
+Read [Wallet accounts](../../docs/wallets.md) and [Contract lifecycle](../../docs/contract-lifecycle.md) before a live preprod run.
+Actual test USDM settlement verification still needs a live end-to-end run.
+No mainnet mode is supported.

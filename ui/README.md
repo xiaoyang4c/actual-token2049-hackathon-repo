@@ -2,7 +2,7 @@
 
 This display shows Tally: escrowed deals, disputes, company records, and the marketplace.
 It does not edit policy, accept offers, send orders, sign, or change KYC.
-One area takes input: Ask a Coworker sends a request to Tally's Coworkers and shows the answer. It pays nothing and stores nothing.
+The Coworker area takes input: Ask a Coworker sends a request to Tally's Coworkers and shows the answer. It pays nothing and stores nothing.
 
 The hosted demo is <https://13-210-42-0.sslip.io>. It shows paper data only.
 
@@ -17,7 +17,8 @@ The hosted demo is <https://13-210-42-0.sslip.io>. It shows paper data only.
 | Operator | The platform team | The marketplace ledger, participants, listings, and every contract |
 
 "Viewing as" in My deals is a lens, not sign-in. Anyone can choose any party.
-Before real data, add sign-in and show each party only its own deals. Keep the Mediation desk private.
+The signed-in web app uses `TALLY_EDITION=app` at this gateway. It shows each party only their own deals and keeps the Mediation desk private.
+The legacy display remains the demo. Read [the web app](../web/README.md).
 
 Every amount, deadline, payout, and score comes from the control API, which takes them from the contract engine.
 The UI formats them. It does not calculate them.
@@ -128,10 +129,27 @@ bun run typecheck:control
 bun run lint
 ```
 
-The server allows only listed GET and HEAD routes.
+In the demo edition, the server allows only listed GET and HEAD reads.
 It retains the existing `/agent/state` and `/audit` read proxies.
 It also forwards `GET /reliability/contracts/audit?id=` for each contract's audit log.
 It forwards the query string for receipts, lifecycle views, and KYC.
-POST, PUT, PATCH, and DELETE requests are rejected, except one route.
+Writes are rejected except the Coworker chat and the listed wallet account routes.
 `POST /coworkers/ask` and `GET /coworkers/ask?id=` go to the Coworker worker (`COWORKER_ASK_URL`, default `http://127.0.0.1:8792`).
-The server sends the visitor address from `X-Forwarded-For` (the last entry, set by Caddy) and refuses a body over 16 KiB.
+The server sends the visitor address from `X-Forwarded-For` (the last entry, set by Caddy) and refuses a chat body over 256 KiB.
+
+
+## App edition gateway
+
+Set `TALLY_EDITION=app` to forward the listed `/reliability/app/*` GET and POST routes.
+The control API validates each Bearer session and contract membership.
+The gateway forwards no cookie or client entity header.
+App evidence bodies can use up to 1,500,000 bytes.
+Account bodies keep their 256 KiB limit.
+`TALLY_WEB_ORIGINS` supplies CORS for accounts, app routes, and public app reads.
+
+Public reads are limited to profile search, profiles, company anchors, templates, draft templates, and sandbox drafts.
+The app blocks public contract lists, private contract views, mediation reads, operator reads, and the legacy `/agent/state` and `/audit` proxies.
+It retains wallet accounts and the Coworker chat.
+The app gateway serves API routes only. It does not serve the legacy operator display.
+The existing demo is the default edition.
+Read [Two Amplify editions](../docs/amplify.md) and [the app server setup](../deploy/preprod/README.md#app-edition-server).

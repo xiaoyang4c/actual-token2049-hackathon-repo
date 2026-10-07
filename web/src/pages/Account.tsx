@@ -1,6 +1,10 @@
 import {useCallback, useEffect, useState, type ReactNode} from 'react'
 import {Check, Circle, Copy, ExternalLink, KeyRound, Loader2, LogOut, Plug, Plus, ShieldCheck, Wallet} from 'lucide-react'
 import {toast} from 'sonner'
+import {APP_EDITION} from '@/lib/edition'
+import {useAppSession} from '@/lib/app-session'
+import {deals} from '@/lib/deals'
+import {DealSigning} from '@/components/DealSigning'
 import {Reveal} from '@/components/motion'
 import {ErrorNote, Hash, PageHeader, Section, Tag} from '@/components/kit'
 import {Input} from '@/components/ui/input'
@@ -341,12 +345,25 @@ function Deposits({session, account, refresh}: {session: Session; account: Accou
 }
 
 export function AccountPage() {
+  const appAccount = useAppSession()
   const [session, setSession] = useState<Session | null>(() => savedSession())
   const [account, setAccount] = useState<AccountView | null>(null)
   const [loading, setLoading] = useState(Boolean(session))
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile>({displayName: '', kind: 'business'})
   const [adding, setAdding] = useState(false)
+
+  useEffect(() => {
+    if (!APP_EDITION) return
+    const changed = (event: Event) => {
+      const next = event.type === 'storage' ? savedSession() : (event as CustomEvent<Session | null>).detail
+      setSession(next)
+      if (!next) setAccount(null)
+    }
+    window.addEventListener('tally-session-changed', changed)
+    window.addEventListener('storage', changed)
+    return () => { window.removeEventListener('tally-session-changed', changed); window.removeEventListener('storage', changed) }
+  }, [])
 
   const refresh = useCallback(async () => {
     if (!session) return
@@ -421,6 +438,7 @@ export function AccountPage() {
               <ol className="space-y-4">
                 <Step done={false} title="A wallet">Connect Lace or Eternl, or create one in this browser. The wallet signs in. It is your account.</Step>
                 <Step done={false} title="Identity checks (KYC)">Every sale and contract checks KYC again. This build uses a mock vendor.</Step>
+                {APP_EDITION ? <Step done={false} title="Deal signing">Your wallet derives a separate key for signed deal actions.</Step> : null}
                 <Step done={false} title="A deposit for live deals">Send test USDM from your wallet. Paper deals need no deposit.</Step>
               </ol>
             </Section>
@@ -431,11 +449,12 @@ export function AccountPage() {
       ) : (
         <div className="space-y-6">
           <Reveal>
-            <Section title="Ready to trade" aside={account.readiness.canTrade ? <Tag tone="up">ready</Tag> : <Tag tone="warn">not yet</Tag>}>
-              <ol className="grid gap-4 md:grid-cols-3">
+            <Section title="Ready to trade" aside={(APP_EDITION ? appAccount.me?.readiness.canTrade : account.readiness.canTrade) ? <Tag tone="up">ready</Tag> : <Tag tone="warn">not yet</Tag>}>
+              <ol className={APP_EDITION ? "grid gap-4 md:grid-cols-2 xl:grid-cols-4" : "grid gap-4 md:grid-cols-3"}>
                 <Step done={account.readiness.wallet} title="Wallet proven">{account.wallets.length} wallet{account.wallets.length === 1 ? '' : 's'}</Step>
                 <Step done={account.readiness.kyc} title="KYC passed">{account.readiness.kyc ? `Tier ${account.kyc.tier}` : account.readiness.kycMessage}</Step>
-                <Step done={account.readiness.deposit} title="Deposit credited">Needed for live deals only</Step>
+                {APP_EDITION ? <Step done={Boolean(appAccount.me?.readiness.dealKey)} title="Deal key registered">Your wallet signs each deal action</Step> : null}
+                {!APP_EDITION || appAccount.me?.mode === 'live' ? <Step done={account.readiness.deposit} title="Deposit credited">{APP_EDITION ? 'Preprod test funds for live deals' : 'Needed for live deals only'}</Step> : null}
               </ol>
             </Section>
           </Reveal>
@@ -443,7 +462,7 @@ export function AccountPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <Reveal>
               <Section title="Identity (KYC)">
-                <KycForm session={session} account={account} onChange={setAccount} />
+                <KycForm session={session} account={account} onChange={(view) => { setAccount(view); if (APP_EDITION) void appAccount.refresh() }} />
               </Section>
             </Reveal>
             <Reveal delay={0.05}>
@@ -462,6 +481,17 @@ export function AccountPage() {
               </Section>
             </Reveal>
           </div>
+
+          {APP_EDITION && appAccount.me ? <Reveal>
+            <Section title="Set up deal signing" aside={appAccount.me.party ? <Tag tone="up">registered</Tag> : <Tag tone="warn">needed</Tag>}>
+              <p className="mb-4 max-w-[65ch] text-[13.5px] text-ink-2">Your wallet signs a site-specific message to derive your deal key. The deal key stays in memory. Use the same wallet for every deal action. Anyone who gets this exact message signed can derive the key.</p>
+              {appAccount.me.party ? <p className="text-[13px] text-ink-2">Deal public key <Hash value={appAccount.me.party.publicKeyHex} n={10} /></p> : <DealSigning
+                session={session} me={appAccount.me} label="Set up deal signing" disabled={!account.readiness.kyc}
+                work={async (key) => { await deals.register(session, {publicKeyHex: key.publicKeyHex, cardanoAddress: key.cardanoAddress}); await appAccount.refresh(); toast.success('Deal signing is ready') }}
+              />}
+              {!account.readiness.kyc ? <p className="mt-3 text-[12.5px] text-ink-3">Pass mock KYC first.</p> : null}
+            </Section>
+          </Reveal> : null}
 
           <Reveal>
             <Section title="Deposits" aside="Masumi escrow is funded from these deposits">

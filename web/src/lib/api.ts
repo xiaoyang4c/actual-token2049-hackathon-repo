@@ -1,3 +1,5 @@
+import {APP_EDITION} from './edition'
+
 /*
  * Read client for the control API (/reliability/*) and the Coworker ask
  * server (/coworkers/ask). Every control API call is a GET; the Deal Desk
@@ -69,7 +71,7 @@ export interface ContractView {
     buyerId: string
     sellerId: string
     createdAt: number
-    termsSha256: string
+    termsSha256: string | null
     signatures: Record<string, string>
     terms: {
       network: string
@@ -92,7 +94,7 @@ export interface ContractView {
     state: string
     outcome: string | null
     pending: unknown
-    deadlines: {payByTime?: string; submitResultTime?: string; unlockTime?: string; externalDisputeUnlockTime?: string}
+    deadlines: {payByTime?: string; submitResultTime?: string; unlockTime?: string; externalDisputeUnlockTime?: string} | null
     inspectionCutoffAt: string | null
     tierDeadline: string | null
     obligations: Obligation[]
@@ -141,7 +143,7 @@ export interface DisputeCase {
     deliverable: Record<string, unknown>
     state: string
     escrows: Array<{role: string; amount: Money; onChainState: string}>
-    deadlines: Record<string, Moment>
+    deadlines: Record<string, Moment> | null
     deliveredOnTime: boolean | null
     dispute: {tierReached: number; tierDeadline: Moment | null; timeLeftInTier: Span | null} | null
   }
@@ -347,7 +349,8 @@ export interface CompanyAnchors {
 export class ApiError extends Error {}
 
 async function read<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init)
+  const base = APP_EDITION && path.startsWith('/reliability/') ? ((import.meta.env.VITE_TALLY_SERVER_URL as string | undefined) ?? '').replace(/\/$/, '') : ''
+  const response = await fetch(`${base}${path}`, init)
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new ApiError((body as {error?: string}).error ?? `${response.status} ${response.statusText}`)
   return body as T
