@@ -24,7 +24,7 @@ import {
   EscrowRejectedError, EscrowRetryableError, type ContractEscrow, type EscrowRequest,
   type EscrowResult, type EscrowStatus, type ScalarRecord,
 } from '../../packages/reliability/src/contract-lifecycle/ports';
-import type {Deadlines, OnChainState} from '../../packages/reliability/src/contract-lifecycle/types';
+import type {ConfirmedEscrowTransition, Deadlines, OnChainState} from '../../packages/reliability/src/contract-lifecycle/types';
 
 export interface MasumiContractEscrowConfig {
   /** Registered Masumi agent that receives the escrow. At least 57 characters. */
@@ -172,6 +172,7 @@ export class MasumiContractEscrow implements ContractEscrow {
       paidToSellerAtomic: toSeller,
       paidToBuyerAtomic: toBuyer,
       settlementTxHash: optionalText(payout?.txHash) ?? null,
+      history: confirmedHistory(transactions, view.ActionHistory),
     };
   }
 
@@ -297,7 +298,7 @@ export class MasumiContractEscrow implements ContractEscrow {
     }
     // MPS returns the existing record under `object` for a duplicate create.
     if (response.status === 409 && acceptExisting) return object(object(await response.json()).object);
-    if (response.status >= 500 || response.status === 429) {
+    if (response.status >= 500 || response.status === 429 || (response.status === 409 && !acceptExisting)) {
       throw new EscrowRetryableError(`Masumi ${path} failed (${response.status})`);
     }
     if (!response.ok) throw new EscrowRejectedError(`Masumi ${path} failed (${response.status})`);
@@ -328,6 +329,18 @@ function parseState(value: unknown): OnChainState|null {
   const state = ON_CHAIN_STATES.find((item) => item === value);
   if (!state) throw new EscrowRetryableError(`unknown on-chain state ${String(value)}`);
   return state;
+}
+
+/** MPS blockTime is Unix seconds. ActionHistory binds result hashes to transactions. */
+function confirmedHistory(transactions: {[key: string]: unknown}[], actions: unknown): ConfirmedEscrowTransition[] {
+  const history = Array.isArray(actions) ? actions.map(object) : [];
+  return transactions.flatMap((tx): ConfirmedEscrowTransition[] => {
+    if (tx.status !== 'Confirmed' || typeof tx.blockTime !== 'number' || !Number.isFinite(tx.blockTime)) return [];
+    const to = parseState(tx.newOnChainState);
+    if (!to) return [];
+    const action = history.find((entry) => entry.submittedTxHash === tx.txHash);
+    return [{at: tx.blockTime * 1000, from: parseState(tx.previousOnChainState), to, resultHash: optionalText(action?.resultHash)}];
+  }).sort((left, right) => left.at - right.at);
 }
 
 /** Sums the amounts of one asset unit. Returns null when the field is absent. */

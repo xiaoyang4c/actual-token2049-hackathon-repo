@@ -564,8 +564,9 @@ export class ContractLifecycle {
   private concedeRefund(ctx: Ctx, milestone: Milestone, actor: string): void {
     this.assertCan(milestone, 'refund_confirmed');
     this.assertNoPending(milestone);
-    for (const tranche of milestone.tranches) this.enqueue(ctx, milestone, tranche, 'authorize_refund', {});
+    this.assertRefundWindow(ctx, milestone);
     milestone.pending = {kind: 'concession', since: ctx.now};
+    this.driveRefunds(ctx, milestone);
     this.note(ctx, milestone, 'refund_conceded', actor, {});
   }
 
@@ -576,6 +577,7 @@ export class ContractLifecycle {
       const milestone = this.milestone(contract, milestoneId);
       this.assertCan(milestone, 'mutual_termination_confirmed');
       this.assertNoPending(milestone);
+      this.assertRefundWindow(ctx, milestone);
       const bytes = mutualTerminationBytes(contract.id, milestone.id);
       if (!verifyBytes(contract.terms.buyer.publicKeyHex, bytes, buyerSignatureHex)) {
         throw new ContractError('bad_signature', 'the buyer signature does not match the termination');
@@ -583,10 +585,30 @@ export class ContractLifecycle {
       if (!verifyBytes(contract.terms.seller.publicKeyHex, bytes, sellerSignatureHex)) {
         throw new ContractError('bad_signature', 'the seller signature does not match the termination');
       }
-      for (const tranche of milestone.tranches) this.enqueue(ctx, milestone, tranche, 'authorize_refund', {});
       milestone.pending = {kind: 'termination', since: ctx.now};
+      this.driveRefunds(ctx, milestone);
       this.note(ctx, milestone, 'mutual_termination_requested', 'parties', {buyerSignatureHex, sellerSignatureHex});
     });
+  }
+
+  private assertRefundWindow(ctx: Ctx, milestone: Milestone): void {
+    if (ctx.now >= this.deadlines(milestone).unlockTime && milestone.tranches.some((tranche) =>
+      tranche.chain.onChainState === 'FundsLocked' || tranche.chain.onChainState === 'ResultSubmitted')) {
+      throw new ContractError('deadline_passed', 'the refund request must reach the escrow before unlockTime');
+    }
+  }
+
+  /** The buyer requests a refund. The seller authorizes it after confirmation. */
+  private driveRefunds(ctx: Ctx, milestone: Milestone): void {
+    for (const tranche of milestone.tranches) {
+      if (!tranche.chain.confirmed) continue;
+      const state = tranche.chain.onChainState;
+      if ((state === 'FundsLocked' || state === 'ResultSubmitted') && ctx.now < this.deadlines(milestone).unlockTime) {
+        this.enqueue(ctx, milestone, tranche, 'request_refund', {});
+      } else if (state === 'RefundRequested' || state === 'Disputed') {
+        this.enqueue(ctx, milestone, tranche, 'authorize_refund', {});
+      }
+    }
   }
 
   // ===========================================================================
@@ -600,6 +622,7 @@ export class ContractLifecycle {
         `a party can leave tier_1_negotiation only (current state: ${milestone.state}); later tiers escalate at their deadline`,
       );
     }
+    this.assertBeforeDeadline(ctx, milestone.dispute.tierDeadline, 'Tier 1');
     this.escalateFrom(ctx, milestone, 1, actor, 'party_escalated');
   }
 
@@ -612,6 +635,7 @@ export class ContractLifecycle {
       const contract = ctx.contract;
       const milestone = this.milestone(contract, milestoneId);
       if (milestone.state !== 'tier_1_negotiation') throw new IllegalTransitionError(milestone.state, 'ruling_issued');
+      this.assertBeforeDeadline(ctx, milestone.dispute.tierDeadline, 'Tier 1');
       const decisions = decisionsForOutcome(outcome, milestone.tranches);
       const bytes = outcomeAgreementBytes(contract.id, milestone.id, outcome);
       if (!verifyBytes(contract.terms.buyer.publicKeyHex, bytes, buyerSignatureHex)) {
@@ -634,6 +658,7 @@ export class ContractLifecycle {
 
   private submitJudgeReport(ctx: Ctx, milestone: Milestone, actor: string, items: EvidenceInput[]): void {
     if (milestone.state !== 'tier_2_evidence_rule') throw new IllegalTransitionError(milestone.state, 'judge report');
+    this.assertBeforeDeadline(ctx, milestone.dispute.tierDeadline, 'Tier 2');
     const judge = ctx.contract.terms.judge;
     if (judge.type !== 'signed_report') throw new ContractError('wrong_judge', `the judge of this contract is ${judge.type}`);
     const rule: EvidenceRule = {type: judge.reportEvidenceType, min: 1, max: 1, signedBy: 'named_inspector'};
@@ -647,6 +672,7 @@ export class ContractLifecycle {
       const contract = ctx.contract;
       const milestone = this.milestone(contract, milestoneId);
       if (milestone.state !== 'tier_3_mediation') throw new IllegalTransitionError(milestone.state, 'ruling_issued');
+      this.assertBeforeDeadline(ctx, milestone.dispute.tierDeadline, 'Tier 3');
       const mediator = contract.terms.mediator;
       if (!mediator) throw new ContractError('mediator_required', 'this contract has no mediator');
       if (ruling.winner !== 'buyer' && ruling.winner !== 'seller') {
@@ -669,6 +695,7 @@ export class ContractLifecycle {
 
   private recordReturnShipment(ctx: Ctx, milestone: Milestone, actor: string, items: EvidenceInput[]): void {
     if (milestone.state !== 'return_pending') throw new IllegalTransitionError(milestone.state, 'return shipment');
+    this.assertBeforeDeadline(ctx, milestone.dispute.followUpDeadline, 'return');
     const [record] = this.storeEvidence(ctx, milestone, actor, items, [{type: RETURN_TRACKING_EVIDENCE, min: 1, max: 1}], 'return');
     if (!record) throw new ContractError('evidence_required', 'send the return tracking evidence');
     milestone.dispute.returnShipmentEvidenceId = record.id;
@@ -677,6 +704,7 @@ export class ContractLifecycle {
 
   private confirmReturnReceived(ctx: Ctx, milestone: Milestone, actor: string): void {
     this.assertCan(milestone, 'return_receipt_confirmed');
+    this.assertBeforeDeadline(ctx, milestone.dispute.followUpDeadline, 'return');
     // Confirming receipt is the seller's instruction to refund.
     this.applyRuling(ctx, milestone, this.ruling(ctx, milestone, 'buyer', 'seller', 'the seller confirmed receipt of the returned goods', true),
       'return_receipt_confirmed', actor, ['seller']);
@@ -693,6 +721,7 @@ export class ContractLifecycle {
 
   private acceptRedo(ctx: Ctx, milestone: Milestone, actor: string): void {
     this.assertCan(milestone, 'redo_accepted');
+    this.assertBeforeDeadline(ctx, milestone.dispute.followUpDeadline, 'redo inspection');
     milestone.buyerAcceptedAt = ctx.now;
     // Accepting the redo is the buyer's instruction to release.
     this.applyRuling(ctx, milestone, this.ruling(ctx, milestone, 'seller', 'buyer', 'the buyer accepted the redelivery', true),
@@ -701,6 +730,7 @@ export class ContractLifecycle {
 
   private rejectRedo(ctx: Ctx, milestone: Milestone, actor: string): void {
     this.assertCan(milestone, 'redo_rejected');
+    this.assertBeforeDeadline(ctx, milestone.dispute.followUpDeadline, 'redo inspection');
     this.applyRuling(ctx, milestone,
       this.ruling(ctx, milestone, 'buyer', 'buyer', 'the buyer rejected the redelivery; the one retry is used', true),
       'redo_rejected', actor);
@@ -876,6 +906,10 @@ export class ContractLifecycle {
     const allPaidOut = tranches.every((tranche) =>
       tranche.chain.confirmed && tranche.chain.onChainState !== null && PAID_OUT_STATES.has(tranche.chain.onChainState));
 
+    if (['concession', 'termination', 'expiry_unwind'].includes(milestone.pending?.kind ?? '')) {
+      this.driveRefunds(ctx, milestone);
+    }
+
     // Backstop: the Masumi admins settled a disputed escrow. Chain facts win.
     if (allPaidOut && tranches.some((tranche) => tranche.chain.onChainState === 'DisputedWithdrawn') &&
         canTransition(milestone.state, 'admin_settlement_confirmed')) {
@@ -899,12 +933,29 @@ export class ContractLifecycle {
       return true;
     }
 
+    if (allPaidOut && (milestone.pending?.kind === 'concession' || milestone.pending?.kind === 'termination')) {
+      const termination = milestone.pending.kind === 'termination';
+      if (!allIn('Withdrawn')) {
+        milestone.closedReason = allIn('RefundWithdrawn') ? 'seller_conceded' : 'refund_partially_executed';
+        this.settle(ctx, milestone, termination ? 'mutual_termination_confirmed' : 'refund_confirmed',
+          termination ? 'CANCELLED' : 'REFUNDED', SYSTEM, {reason: milestone.closedReason});
+        return true;
+      }
+      milestone.closedReason = 'refund_lost_to_release';
+      milestone.pending = null;
+      this.note(ctx, milestone, 'refund_lost_to_release', SYSTEM, {termination});
+      if (milestone.state === 'in_inspection') {
+        this.transition(ctx, milestone, 'inspection_window_expired', SYSTEM, {reason: milestone.closedReason});
+        return true;
+      }
+    }
+
     switch (milestone.state) {
       case 'awaiting_funding': {
         const deadlines = milestone.deadlines;
         if (!deadlines) return false; // a sequential milestone that is not funded yet
         if (allIn('FundsLocked')) {
-          milestone.fundedAt = now;
+          milestone.fundedAt = confirmedTime(tranches, ['FundsLocked']) ?? now;
           milestone.pending = null;
           this.transition(ctx, milestone, 'funding_confirmed', SYSTEM, {lockTxHashes: tranches.map((tranche) => tranche.chain.lastTxHash)});
           return true;
@@ -919,8 +970,8 @@ export class ContractLifecycle {
         }
         // Some escrows locked and some did not: refund the locked ones, then expire.
         if (milestone.pending?.kind !== 'expiry_unwind') {
-          for (const tranche of locked) this.enqueue(ctx, milestone, tranche, 'authorize_refund', {});
           milestone.pending = {kind: 'expiry_unwind', since: now};
+          this.driveRefunds(ctx, milestone);
           this.note(ctx, milestone, 'partial_funding_unwind', SYSTEM, {locked: locked.map((tranche) => tranche.id)});
           return false;
         }
@@ -934,12 +985,14 @@ export class ContractLifecycle {
 
       case 'funded': {
         if (milestone.pending?.kind === 'delivery' && tranches.every((tranche) =>
-          tranche.chain.confirmed && tranche.chain.onChainState === 'ResultSubmitted' && tranche.chain.resultHash === tranche.resultHash)) {
-          milestone.deliveredAt = now;
+          tranche.chain.confirmed && ['ResultSubmitted', 'WithdrawAuthorized', 'Withdrawn'].includes(tranche.chain.onChainState ?? '') &&
+          (tranche.chain.resultHash === tranche.resultHash || tranche.chain.history?.some((entry) =>
+            entry.to === 'ResultSubmitted' && entry.resultHash === tranche.resultHash)))) {
+          milestone.deliveredAt = confirmedTime(tranches, ['ResultSubmitted'], true) ?? now;
           milestone.pending = null;
           this.transition(ctx, milestone, 'delivery_confirmed', SYSTEM, {resultHashes: tranches.map((tranche) => tranche.resultHash)});
           const deadlines = this.deadlines(milestone);
-          milestone.inspectionCutoffAt = inspectionCutoff(now, windows, deadlines, this.settings.disputeSubmitSafetyMarginMs);
+          milestone.inspectionCutoffAt = inspectionCutoff(milestone.deliveredAt, windows, deadlines, this.settings.disputeSubmitSafetyMarginMs);
           this.transition(ctx, milestone, 'inspection_opened', SYSTEM, {inspectionCutoffAt: milestone.inspectionCutoffAt, unlockTime: deadlines.unlockTime});
           return true;
         }
@@ -957,10 +1010,15 @@ export class ContractLifecycle {
       }
 
       case 'in_inspection': {
-        if (milestone.pending?.kind === 'dispute' && allIn('Disputed')) {
+        if (milestone.pending?.kind === 'dispute' && tranches.every((tranche) => tranche.chain.confirmed) &&
+            !this.hasPendingOperation(ctx, milestone, 'request_refund') &&
+            tranches.some((tranche) => tranche.chain.onChainState === 'Disputed')) {
           milestone.disputedAt = now;
           milestone.pending = null;
-          this.transition(ctx, milestone, 'dispute_confirmed', SYSTEM, {});
+          this.transition(ctx, milestone, 'dispute_confirmed', SYSTEM, {
+            escrows: tranches.map((tranche) => ({id: tranche.id, state: tranche.chain.onChainState})),
+            partial: !allIn('Disputed'),
+          });
           const firstTier = terms.dispute.tiers[0];
           if (firstTier === undefined) throw new Error('the template lists no dispute tier');
           this.openTier(ctx, milestone, firstTier, SYSTEM);
@@ -1202,8 +1260,10 @@ export class ContractLifecycle {
       ctx.now + windows.rulingComplianceWindowMs,
       this.deadlines(milestone).externalDisputeUnlockTime - this.settings.disputeSubmitSafetyMarginMs,
     );
-    const release = milestone.tranches.filter((tranche) => decisions[tranche.id] === 'release').map((tranche) => tranche.id);
-    const refund = milestone.tranches.filter((tranche) => decisions[tranche.id] === 'refund').map((tranche) => tranche.id);
+    const release = milestone.tranches.filter((tranche) =>
+      decisions[tranche.id] === 'release' && tranche.chain.onChainState === 'Disputed').map((tranche) => tranche.id);
+    const refund = milestone.tranches.filter((tranche) =>
+      decisions[tranche.id] === 'refund' && ['RefundRequested', 'Disputed'].includes(tranche.chain.onChainState ?? '')).map((tranche) => tranche.id);
     const obligations: RulingObligation[] = [];
     if (release.length > 0) {
       obligations.push({party: 'buyer', action: 'authorize_withdrawal', trancheIds: release, dueAt, compliedAt: null, ignoredAt: null, forcedAt: null});
@@ -1253,8 +1313,22 @@ export class ContractLifecycle {
   ): void {
     this.transition(ctx, milestone, event, actor, details);
     milestone.outcome = outcome;
-    milestone.settledAt = ctx.now;
+    milestone.settledAt = confirmedTime(milestone.tranches, [...PAID_OUT_STATES]) ?? ctx.now;
     milestone.pending = null;
+    if (outcome === 'RESOLVED' && milestone.dispute.ruling?.trancheDecisions) {
+      const decisions = milestone.dispute.ruling.trancheDecisions;
+      const shortfalls = milestone.tranches.filter((tranche) => {
+        const amount = decisions[tranche.id] === 'refund' ? tranche.chain.paidToBuyerAtomic : tranche.chain.paidToSellerAtomic;
+        return amount !== tranche.amountAtomic;
+      });
+      if (shortfalls.length > 0) {
+        milestone.closedReason = 'ruling_partially_executed';
+        this.note(ctx, milestone, 'settlement_shortfall', SYSTEM, {
+          escrows: shortfalls.map((tranche) => ({id: tranche.id, decision: decisions[tranche.id],
+            paidToBuyerAtomic: tranche.chain.paidToBuyerAtomic, paidToSellerAtomic: tranche.chain.paidToSellerAtomic})),
+        });
+      }
+    }
     this.publish(ctx, milestone);
     this.afterTerminal(ctx, milestone);
   }
@@ -1329,7 +1403,7 @@ export class ContractLifecycle {
     milestone.evidenceSubmittedAt = ctx.now;
     for (const tranche of milestone.tranches) {
       tranche.resultHash = mip004ResultHash(this.purchaserId(tranche), manifest);
-      this.enqueue(ctx, milestone, tranche, 'submit_result', {resultHash: tranche.resultHash});
+      this.enqueue(ctx, milestone, tranche, 'submit_result', {resultHash: tranche.resultHash}, true);
     }
     milestone.pending = {kind, since: ctx.now};
     this.note(ctx, milestone, kind === 'delivery' ? 'delivery_submitted' : 'redelivery_submitted', actor, {
@@ -1472,9 +1546,21 @@ export class ContractLifecycle {
     ctx.audits.push({at: ctx.now, contractId: ctx.contract.id, milestoneId: milestone?.id ?? null, event, fromState, toState, actor, mode: ctx.contract.mode, details});
   }
 
-  private enqueue(ctx: Ctx, milestone: Milestone, tranche: Tranche, kind: EscrowOpKind, payload: {[key: string]: unknown}): void {
+  private enqueue(
+    ctx: Ctx, milestone: Milestone, tranche: Tranche, kind: EscrowOpKind,
+    payload: {[key: string]: unknown}, retryFailed = false,
+  ): void {
     // One operation of each kind per escrow, except result posts: a redo posts a new hash.
     const idempotencyKey = `${kind}:${tranche.id}${kind === 'submit_result' ? `:${String(payload.resultHash)}` : ''}`;
+    if (ctx.newOperations.some((operation) => operation.idempotencyKey === idempotencyKey)) return;
+    const existing = this.store.listOperations(ctx.contract.id).find((operation) => operation.idempotencyKey === idempotencyKey);
+    if (existing) {
+      if (existing.status === 'failed' && retryFailed) {
+        ctx.operationUpdates.push({id: existing.id, status: 'pending', lastError: null});
+        this.note(ctx, milestone, 'escrow_operation_retry_requested', SYSTEM, {kind, operationId: existing.id, attempts: existing.attempts});
+      }
+      return;
+    }
     ctx.newOperations.push({
       id: randomUUID(), contractId: ctx.contract.id, milestoneId: milestone.id, trancheId: tranche.id,
       kind, idempotencyKey, payload, createdAt: ctx.now,
@@ -1484,6 +1570,12 @@ export class ContractLifecycle {
   private hasPendingOperation(ctx: Ctx, milestone: Milestone, kind: EscrowOpKind): boolean {
     return ctx.newOperations.some((item) => item.milestoneId === milestone.id && item.kind === kind) ||
       this.store.listOperations(ctx.contract.id).some((item) => item.milestoneId === milestone.id && item.kind === kind && item.status === 'pending');
+  }
+
+  private assertBeforeDeadline(ctx: Ctx, deadline: number|null, label: string): void {
+    if (deadline === null || ctx.now >= deadline) {
+      throw new ContractError('deadline_passed', `the ${label} deadline has passed`);
+    }
   }
 
   private assertCan(milestone: Milestone, event: MilestoneEvent): void {
@@ -1543,5 +1635,16 @@ function sameChain(view: ChainView, status: EscrowStatus): boolean {
   return view.onChainState === status.onChainState && view.confirmed === status.confirmed &&
     view.lastTxHash === status.lastTxHash && view.resultHash === status.resultHash &&
     view.paidToSellerAtomic === status.paidToSellerAtomic && view.paidToBuyerAtomic === status.paidToBuyerAtomic &&
-    view.settlementTxHash === status.settlementTxHash;
+    view.settlementTxHash === status.settlementTxHash &&
+    JSON.stringify(view.history ?? []) === JSON.stringify(status.history ?? []);
+}
+
+/** Latest confirmation across the escrows. Missing history keeps the observation time. */
+function confirmedTime(tranches: readonly Tranche[], states: readonly OnChainState[], matchResult = false): number|null {
+  const times = tranches.map((tranche) => {
+    const entries = (tranche.chain.history ?? []).filter((entry) => states.includes(entry.to) &&
+      (!matchResult || (entry.resultHash ?? tranche.chain.resultHash) === tranche.resultHash));
+    return entries.length > 0 ? Math.max(...entries.map((entry) => entry.at)) : null;
+  });
+  return times.every((time): time is number => time !== null) ? Math.max(...times) : null;
 }

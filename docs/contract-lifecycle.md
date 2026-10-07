@@ -103,6 +103,21 @@ Terminal states: `settled`, `cancelled`, `expired`, `refunded`.
 `accepted_pending_release` means the buyer accepted. Money moves at the Masumi unlock time.
 A money state needs confirmed escrow status. A queued request is not a state change.
 
+A refund from `FundsLocked` or `ResultSubmitted` starts with the buyer's refund request.
+The seller authorizes the refund after `RefundRequested` or `Disputed` is confirmed.
+This procedure applies to concessions, mutual termination, and cleanup after partial funding.
+A new refund request must reach the escrow before `unlockTime`.
+If automatic payment finishes first, the engine records that payment.
+The audit log records `refund_lost_to_release`.
+If only part of a requested refund is paid, `closedReason` is `refund_partially_executed`.
+
+Each escrow has a separate confirmed state.
+If one dispute request fails, the other disputed escrow still goes through the dispute tiers.
+Completed payments remain in the settlement record.
+Payment obligations apply only to escrows that permit the required action.
+If the final payment does not meet the ruling, `closedReason` is `ruling_partially_executed`.
+The audit log records `settlement_shortfall` with the actual amounts.
+
 ## Masumi rules that the lifecycle enforces
 
 These rules come from masumi-payment-service rev `d569a33`. Check them against the node's `/api-docs` before a live run.
@@ -174,6 +189,17 @@ bun run contracts:smoke    # day 2 preprod proof (needs both gates)
 - A retry after an unknown result asks the escrow first. A timeout never sends the same write twice.
 - The audit log is append-only. A hash chain detects edits.
 - A restart continues from the stored state.
+
+The worker also reads confirmed transaction history.
+It can recover delivery after the escrow has completed automatic payment.
+The delivery and settlement times use confirmed history when available.
+An identical delivery submission uses the existing operation row.
+A retry keeps the attempt count and inspects the escrow before another write.
+
+Tier agreements, judge reports, mediator rulings, return actions, and redo decisions must arrive before their deadlines.
+An action at the deadline is late.
+The engine checks the deadline before it stores evidence or changes the contract.
+A late ruling compliance instruction remains permitted and receives the existing late penalty.
 
 ## Known gaps and next work
 

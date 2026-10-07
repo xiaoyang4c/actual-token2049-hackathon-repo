@@ -407,34 +407,41 @@ describe('remedy: full_refund_with_return', () => {
 });
 
 describe('refunds, expiry, cancellation, termination', () => {
-  test('the seller concedes during inspection: REFUNDED, failed with seller fault', async () => {
-    const kit = createKit();
-    const {id, mId} = await inspectingDigital(kit);
-    act(kit, id, kit.sellerId, 'concede_refund', {milestoneId: mId});
-    await runUntil(kit, id, 'refunded');
-    const published = outcome(kit, id);
-    expect([published.record.outcome, published.state, published.fault]).toEqual(['REFUNDED', 'failed', 'seller']);
-    kit.close();
-  });
-
-  test('a concession before delivery is a clean exit', async () => {
-    const kit = createKit();
-    const {id, mId} = await fundedDigital(kit);
-    act(kit, id, kit.sellerId, 'concede_refund', {milestoneId: mId});
-    await runUntil(kit, id, 'refunded');
-    expect([outcome(kit, id).state, outcome(kit, id).fault]).toEqual(['cancelled', 'none']);
-    kit.close();
-  });
-
-  test('both parties terminate a funded milestone: refunded, cancelled outcome, no fault', async () => {
-    const kit = createKit();
-    const {id, mId} = await fundedDigital(kit);
-    expectCode(() => kit.service.lifecycle.mutualTerminate(id, mId, 'aa'.repeat(64), 'bb'.repeat(64)), 'bad_signature');
-    terminate(kit, id, mId);
-    await runUntil(kit, id, 'refunded');
-    expect([outcome(kit, id).record.outcome, outcome(kit, id).record.closedReason, outcome(kit, id).fault]).toEqual(['CANCELLED', 'mutual_termination', 'none']);
-    kit.close();
-  });
+  for (const action of ['concession', 'termination'] as const) {
+    for (const state of ['funded', 'in_inspection'] as const) {
+      test(`${action} from ${state} waits for the refund request and publishes the correct outcome`, async () => {
+        const kit = createKit();
+        try {
+          const {id, mId} = state === 'funded' ? await fundedDigital(kit) : await inspectingDigital(kit);
+          if (action === 'concession') act(kit, id, kit.sellerId, 'concede_refund', {milestoneId: mId});
+          else {
+            expectCode(() => kit.service.lifecycle.mutualTerminate(id, mId, 'aa'.repeat(64), 'bb'.repeat(64)), 'bad_signature');
+            terminate(kit, id, mId);
+          }
+          const authorizations = () => kit.service.lifecycle.operations(id).filter((operation) => operation.kind === 'authorize_refund');
+          expect(authorizations()).toHaveLength(0);
+          await kit.service.tick();
+          expect(authorizations()).toHaveLength(0);
+          await runUntil(kit, id, 'refunded');
+          const ref = milestone(kit, id).tranches[0]!.escrowRef!;
+          const kinds = (kit.service.escrow as PaperContractEscrow).transactionLog(ref).map((tx) => tx.kind);
+          expect(kinds.filter((kind) => kind === 'SetRefundRequested')).toHaveLength(1);
+          expect(kinds.filter((kind) => kind === 'AuthorizeRefund')).toHaveLength(1);
+          expect(kinds.indexOf('SetRefundRequested')).toBeLessThan(kinds.indexOf('AuthorizeRefund'));
+          const published = outcome(kit, id);
+          const sellerFault = action === 'concession' && state === 'in_inspection';
+          expect([published.record.outcome, published.record.closedReason, published.state, published.fault]).toEqual([
+            action === 'termination' ? 'CANCELLED' : 'REFUNDED',
+            action === 'termination' ? 'mutual_termination' : 'seller_conceded',
+            sellerFault ? 'failed' : 'cancelled', sellerFault ? 'seller' : 'none',
+          ]);
+          expect(published.record.refundedToBuyerAtomic).toBe('25000000');
+        } finally {
+          kit.close();
+        }
+      });
+    }
+  }
 
   test('the seller misses the delivery deadline: refund by timeout, EXPIRED, seller fault', async () => {
     const kit = createKit();

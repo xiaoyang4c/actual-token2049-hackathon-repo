@@ -97,6 +97,14 @@ export class FakeMps {
     };
     const kind = kinds[path];
     if (!kind) return respond(404, {status: 'error'});
+    const status = await this.paper.status(record.paperRef);
+    const allowed: Partial<Record<EscrowOpKind, string[]>> = {
+      authorize_refund: ['RefundRequested', 'Disputed'],
+      authorize_withdrawal: ['Disputed'],
+      submit_result: ['FundsLocked', 'RefundRequested', 'Disputed'],
+      request_refund: ['FundsLocked', 'ResultSubmitted'],
+    };
+    if (!allowed[kind]?.includes(status.onChainState ?? '')) return respond(404, {status: 'error'});
     await this.paper.execute({
       kind, idempotencyKey: randomUUID(), ref: record.paperRef, terms: null,
       payload: {resultHash: body.submitResultHash},
@@ -175,7 +183,8 @@ export class FakeMps {
       sellerReturnAddress: null,
       NextAction: {requestedAction: action, errorType: null},
       CurrentTransaction: inFlight ? {txHash: null, status: 'Pending'} : (status.lastTxHash ? {txHash: status.lastTxHash, status: 'Confirmed'} : null),
-      TransactionHistory: log.map((tx) => ({txHash: tx.txId, status: 'Confirmed', newOnChainState: tx.to, previousOnChainState: tx.from})),
+      TransactionHistory: log.map((tx) => ({txHash: tx.txId, status: 'Confirmed', blockTime: tx.at / 1000, newOnChainState: tx.to, previousOnChainState: tx.from})),
+      ActionHistory: log.filter((tx) => tx.kind === 'SubmitResult').map((tx) => ({submittedTxHash: tx.txId, resultHash: tx.resultHash})),
       RequestedFunds: funds,
       PaidFunds: record.purchased ? funds : [],
       WithdrawnForSeller: status.paidToSellerAtomic && status.paidToSellerAtomic !== '0' ? [{amount: status.paidToSellerAtomic, unit: record.unit}] : [],
