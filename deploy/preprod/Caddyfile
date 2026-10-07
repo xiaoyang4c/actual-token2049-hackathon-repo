@@ -11,6 +11,6 @@
 		file_server
 	}
 	handle {
-		respond "Tally" 200
+		reverse_proxy 127.0.0.1:8791
 	}
 }

@@ -11,7 +11,9 @@ Nothing here holds a secret. Secrets stay on the server in `~/tally-secrets` (mo
 | --- | --- | --- |
 | MPS at revision `d569a33` | Docker, `compose.yaml` service `mps` | `127.0.0.1:3001` only. Use an SSH tunnel |
 | PostgreSQL 16 | Docker, service `postgres` | Docker network only |
-| Caddy | systemd, [`Caddyfile`](Caddyfile) | Ports 80 and 443. Serves `/brand/*` and, later, the Coworker APIs |
+| Control API and demo services | systemd, [`tally-services.service`](tally-services.service) | Ports 8787 to 8790 on all interfaces. **Only the AWS security group blocks them.** Never open these ports |
+| Operator UI | systemd, [`tally-ui.service`](tally-ui.service) | `127.0.0.1:8791`, public through Caddy |
+| Caddy | systemd, [`Caddyfile`](Caddyfile) | Ports 80 and 443. Serves `/brand/*` and the operator UI at `/` |
 
 The current server: AWS EC2 `t3.medium`, Ubuntu 24.04, region `ap-southeast-2`, Elastic IP `13.210.42.0`, hostname `13-210-42-0.sslip.io`.
 The hackathon AWS account allows EC2 only in `ap-southeast-2`.
@@ -71,6 +73,26 @@ The hackathon AWS account allows EC2 only in `ap-southeast-2`.
 7. Read the wallet addresses (`GET /api/v1/wallet/list`, header `token` = the admin key). Fund both at <https://dispenser.masumi.network>: the purchasing wallet needs tADA and test USDM, the selling wallet needs tADA.
 8. Configure Caddy with [`Caddyfile`](Caddyfile). Copy the brand images from [`docs/brand`](../../docs/brand) to `/srv/tally/brand`.
 
+## Operator UI
+
+The public address <https://13-210-42-0.sslip.io> shows the team's operator UI ([`ui/`](../../ui)).
+It is read-only. The UI server forwards only GET requests on a fixed list of `/reliability` read routes. It refuses every other method with 405.
+The control API, the demo services, and the payment service are not reachable from the internet.
+
+The services run in paper mode: `CARDANO_MODE` is not set, so escrow is simulated.
+The database is `~/tally-app/data/agent.sqlite` (`CONTROL_DB_PATH`). Each release links `services/.data` to `~/tally-app/data`, so data survives deploys.
+
+Deploy a git ref from the repo root:
+
+```sh
+deploy/preprod/deploy-app.sh lane-a/coworkers
+```
+
+The script copies the ref with `git archive` (the server needs no GitHub access), installs packages, switches `~/tally-app/current`, restarts both services, and checks the public address.
+To roll back, point `~/tally-app/current` at an older folder in `~/tally-app/releases` and restart `tally-services` and `tally-ui`.
+
+First setup on a new server: copy the two unit files to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, run the deploy script, then `sudo systemctl enable tally-services tally-ui`.
+
 ## Register the Coworkers
 
 ### Masumi registry (on-chain)
@@ -109,6 +131,6 @@ Current ids are in [the Coworker README](../../services/reliability/coworkers/RE
 | --- | --- |
 | Dashboard | `ssh -i <key> -L 3001:127.0.0.1:3001 ubuntu@13.210.42.0`, then open <http://localhost:3001/admin> |
 | Service state | `sudo docker compose ps` |
-| Logs | `sudo docker compose logs mps --since 15m` |
+| Logs | `sudo docker compose logs mps --since 15m`, `journalctl -u tally-services -u tally-ui --since -15min` |
 | Restart | `sudo docker compose restart mps` |
 | Wallet balances | Blockfrost `GET /addresses/<address>` with the preprod key |
