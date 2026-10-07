@@ -10,7 +10,7 @@ Every finished deal updates a reliability record for both sides.
 Tally was built for the TOKEN2049 Origins hackathon.
 It runs on Cardano **preprod** with **test USDM**. Nothing has real value.
 
-**Live demo:** <https://13-210-42-0.sslip.io>.
+**Live demo:** <https://13-210-42-0.sslip.io>. 
 The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 
 ## What Tally does
