@@ -78,3 +78,49 @@ export function getFeeCharge(db: Database, transactionId: string): FeeCharge|und
   ).get(transactionId);
   return row ? JSON.parse(row.chargeJson) as FeeCharge : undefined;
 }
+
+/** Stored payment observation for one invoice (migration 009). */
+export interface InvoiceSettlementRecord {
+  transactionId: string;
+  reference: string;
+  mode: 'paper'|'live';
+  verified: boolean;
+  settledAt: string;
+  amountMinor: string;
+  currency: string;
+  recordedAt: string;
+}
+
+/** Inserts or replaces the observation for one invoice. A reused reference fails. */
+export function saveInvoiceSettlement(db: Database, record: InvoiceSettlementRecord): void {
+  db.query(`INSERT INTO reliability_invoice_settlements (transaction_id, reference,
+      mode, verified, settled_at, amount_minor, currency, recorded_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(transaction_id) DO UPDATE SET reference = excluded.reference,
+        mode = excluded.mode, verified = excluded.verified,
+        settled_at = excluded.settled_at, amount_minor = excluded.amount_minor,
+        currency = excluded.currency, recorded_at = excluded.recorded_at`).run(
+    requireText(record.transactionId, 'transactionId'), requireText(record.reference, 'reference'),
+    record.mode, record.verified ? 1 : 0, record.settledAt, record.amountMinor,
+    record.currency, record.recordedAt,
+  );
+}
+
+export function getInvoiceSettlement(
+  db: Database, transactionId: string,
+): InvoiceSettlementRecord|undefined {
+  const row = db.query<Omit<InvoiceSettlementRecord, 'verified'> & {verified: number}, [string]>(
+    `SELECT transaction_id AS transactionId, reference, mode, verified,
+       settled_at AS settledAt, amount_minor AS amountMinor, currency,
+       recorded_at AS recordedAt
+     FROM reliability_invoice_settlements WHERE transaction_id = ?`,
+  ).get(transactionId);
+  return row ? {...row, verified: row.verified === 1} : undefined;
+}
+
+/** Invoice that already used a payment reference, if any. */
+export function invoiceForSettlementReference(db: Database, reference: string): string|undefined {
+  return db.query<{transactionId: string}, [string]>(
+    'SELECT transaction_id AS transactionId FROM reliability_invoice_settlements WHERE reference = ?',
+  ).get(reference)?.transactionId;
+}

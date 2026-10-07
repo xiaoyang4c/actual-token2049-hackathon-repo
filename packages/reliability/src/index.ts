@@ -142,12 +142,27 @@ export type {
   PaperPoolTransfer,
 } from './omnibus-funding';
 export {
+  INVOICE_EVIDENCE_VERSION,
+  INVOICE_TERMS_SCHEMA,
+  InvoiceEvidenceError,
+  invoiceDeadline,
+  invoiceOutcome,
+  invoiceTermsHash,
   STUB_PAYMENT_EVIDENCE_VERSION,
   hashInvoiceTerms,
   StubPaymentEvidenceProducer,
+  validateInvoiceTerms,
+  type InvoiceSettlement,
+  type InvoiceTerms,
   type PaymentEvidenceProducer,
   type PaymentVerificationInput,
 } from './evidence-payment';
+export {
+  checkDeliveryAgainstTerms,
+  DELIVERY_TERMS_CHECK_VERSION,
+  type DeliveryTermsCheck,
+  type DeliveryTermsViolation,
+} from './evidence-delivery';
 export {
   DEMO_KYC_SCRIPTS,
   KYC_BADGES,

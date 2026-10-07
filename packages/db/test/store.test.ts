@@ -94,6 +94,7 @@ describe('AgentStore', () => {
         'reliability_event_weights',
         'reliability_events',
         'reliability_fee_charges',
+        'reliability_invoice_settlements',
         'reliability_kyc_identifiers',
         'reliability_kyc_profiles',
         'reliability_kyc_status_records',
@@ -124,8 +125,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-008, 010-014, and 016. 009 is reserved. 015 is reserved for anchors.
-      expect(versions.versions).toBe(14);
+      // 001-014 and 016. 015 is reserved for the settlement anchor branch.
+      expect(versions.versions).toBe(15);
     } finally {
       db.close();
     }

@@ -508,6 +508,19 @@ export class AgentStore {
     return marketplaceRecords.getFeeCharge(this.db, transactionId);
   }
 
+  /** Payment observation for one invoice (migration 009). */
+  saveInvoiceSettlement(record: marketplaceRecords.InvoiceSettlementRecord): void {
+    marketplaceRecords.saveInvoiceSettlement(this.db, record);
+  }
+
+  getInvoiceSettlement(transactionId: string): marketplaceRecords.InvoiceSettlementRecord|undefined {
+    return marketplaceRecords.getInvoiceSettlement(this.db, transactionId);
+  }
+
+  invoiceForSettlementReference(reference: string): string|undefined {
+    return marketplaceRecords.invoiceForSettlementReference(this.db, reference);
+  }
+
   /** Archives and replaces the active events after an outcome correction. */
   replaceReliabilityEvents(transactionId: string, events: ReliabilityEvent[], at: string): void {
     const previous = this.listReliabilityEventsForTransaction(transactionId);
