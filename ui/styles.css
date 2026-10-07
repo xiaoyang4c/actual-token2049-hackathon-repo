@@ -1,33 +1,35 @@
 :root {
   color-scheme: light;
+  /* Tally brand: near-black #0b0e0f, white, and yellow #ffd400 as the highlight.
+     Yellow is never text on white: it marks, underlines, and highlights only. */
   --page: #ffffff;
-  --surface: #f8f6f1;
-  --text: #14213d;
-  --muted: #5b6474;
-  --line: #e7e3da;
-  --accent: #14213d;
-  --selected: #fbf3e2;
-  --warning: #8a5a00;
-  --danger: #a13e39;
+  --surface: #f6f6f4;
+  --text: #0b0e0f;
+  --muted: #5f6467;
+  --line: #e6e6e2;
+  --accent: #0b0e0f;
+  --selected: #fffbe0;
+  --warning: #7a5d00;
+  --danger: #b3261e;
   --on-accent: #ffffff;
-  --selection: #fbe3b8;
-  --secondary: #4a5466;
-  --placeholder: #7a8291;
-  --input-line: #d9d4c8;
-  --notice-line: #f2d9a6;
-  --notice: #fff7e6;
+  --selection: #ffec80;
+  --secondary: #3f4447;
+  --placeholder: #74797c;
+  --input-line: #d6d6d0;
+  --notice-line: #f0dc6e;
+  --notice: #fffbe5;
   --connection-notice: #fff2e9;
   --connection-line: #eed6c5;
-  --table-header: #fbfaf7;
-  --badge: #f1eee6;
-  --danger-surface: #f9e7e4;
-  --timeline-line: #e9c88a;
-  --accent-hover: #22335c;
-  --success: #238653;
-  --pending: #c27c0e;
-  --neutral: #8a909c;
-  --amber: #f2a541;
-  --mine: #fff1d6;
+  --table-header: #fafaf8;
+  --badge: #f0f0ec;
+  --danger-surface: #fbe9e7;
+  --timeline-line: #e3cf52;
+  --accent-hover: #2b3033;
+  --success: #1f8a4c;
+  --pending: #a37a00;
+  --neutral: #8b8f91;
+  --highlight: #ffd400;
+  --mine: #fff6bf;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
@@ -38,34 +40,34 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0f1626;
-  --surface: #162036;
-  --text: #e8ebf2;
-  --muted: #a3acbf;
-  --line: #263252;
-  --accent: #f2a541;
-  --on-accent: #14213d;
-  --accent-hover: #f6bd6e;
-  --selected: #1f2b47;
-  --warning: #f2c46d;
-  --danger: #f19b91;
-  --selection: #4a3a1c;
-  --secondary: #b9c1d3;
-  --placeholder: #8f99ad;
-  --input-line: #34426a;
-  --notice-line: #6b5426;
-  --notice: #2a2416;
-  --connection-notice: #35271e;
+  --page: #0b0e0f;
+  --surface: #15191b;
+  --text: #f1f2f2;
+  --muted: #a6abad;
+  --line: #2a3033;
+  --accent: #ffd400;
+  --on-accent: #0b0e0f;
+  --accent-hover: #ffe14d;
+  --selected: #1f2426;
+  --warning: #ffd84d;
+  --danger: #ff8a80;
+  --selection: #5c4f00;
+  --secondary: #c3c7c9;
+  --placeholder: #8d9295;
+  --input-line: #3a4144;
+  --notice-line: #5c5214;
+  --notice: #1f1c0a;
+  --connection-notice: #2e231b;
   --connection-line: #6a4835;
-  --table-header: #162036;
-  --badge: #222e4a;
-  --danger-surface: #462925;
-  --timeline-line: #6b5426;
-  --success: #74c696;
-  --pending: #f2c46d;
-  --neutral: #9aa3b5;
-  --amber: #f2a541;
-  --mine: #3a2e14;
+  --table-header: #15191b;
+  --badge: #23292c;
+  --danger-surface: #3d1f1c;
+  --timeline-line: #6b5f14;
+  --success: #53fc18;
+  --pending: #ffd400;
+  --neutral: #9aa0a3;
+  --highlight: #ffd400;
+  --mine: #2e2a0d;
 }
 
 * { box-sizing: border-box; }
@@ -95,8 +97,8 @@ small { display: block; font-size: 12px; color: var(--muted); line-height: 1.5; 
 .brand-svg { width: 34px; height: 29px; color: var(--text); }
 nav { display: flex; align-self: stretch; gap: 30px; }
 nav button { border: 0; border-bottom: 3px solid transparent; background: none; padding: 0 6px; font-weight: 500; }
-nav button[aria-current] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 650; }
-nav button:hover { color: var(--accent); }
+nav button[aria-current] { color: var(--text); border-bottom-color: var(--highlight); font-weight: 650; }
+nav button:hover { color: var(--text); border-bottom-color: var(--line); }
 .header-status { display: flex; align-items: center; gap: 22px; margin-left: auto; white-space: nowrap; font-size: 13px; }
 .connection { display: flex; align-items: center; gap: 9px; }
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: 0 0 auto; }
@@ -253,7 +255,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
 .deal-card { border-top: 1px solid var(--line); padding: 14px 18px; }
 .deal-card:first-child { border-top: 0; }
 .toolbar + .deal-card { border-top: 1px solid var(--line); }
-.deal-selected { background: var(--selected); box-shadow: inset 3px 0 0 var(--amber); }
+.deal-selected { background: var(--selected); box-shadow: inset 3px 0 0 var(--highlight); }
 .deal-open { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; }
 .deal-open:hover strong { color: var(--accent); text-decoration: underline; }
 .deal-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
@@ -261,7 +263,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
 .deal-milestone { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 8px; }
 .deal-milestone small { display: inline; }
 .next-action { font-size: 13px; color: var(--secondary); margin: 0; flex-basis: 100%; }
-.next-mine { background: var(--mine); border-left: 3px solid var(--amber); padding: 6px 10px; border-radius: 4px; color: var(--text); }
+.next-mine { background: var(--mine); border-left: 3px solid var(--highlight); padding: 6px 10px; border-radius: 4px; color: var(--text); }
 .next-done { color: var(--muted); }
 .due { color: var(--muted); white-space: nowrap; }
 .party-picker { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; flex: 1; }
@@ -269,9 +271,9 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
 .steps { list-style: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; padding: 0; margin: 10px 0 12px; }
 .step { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; }
 .step > span { height: 5px; border-radius: 3px; background: var(--line); }
-.step-done > span { background: var(--accent); }
+.step-done > span { background: var(--secondary); }
 .step-current { color: var(--text); font-weight: 650; }
-.step-current > span { background: var(--amber); }
+.step-current > span { background: var(--highlight); }
 .step-dispute { color: var(--danger); font-weight: 650; }
 .step-dispute > span { background: var(--danger); }
 .detail-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
