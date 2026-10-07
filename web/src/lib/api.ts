@@ -97,7 +97,7 @@ export interface ContractView {
     tierDeadline: string | null
     obligations: Obligation[]
     escrows: Escrow[]
-    reliability: {transactionId: string; state: string; fault: string; evidence: Record<string, unknown>; verificationConfidence?: number} | null
+    reliability: {transactionId: string; state: string; fault?: string; evidence: Record<string, unknown>; verificationConfidence?: number} | null
   }>
   auditChainIntact: boolean
 }
