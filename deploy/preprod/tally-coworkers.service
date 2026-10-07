@@ -10,7 +10,7 @@ Environment=CONTROL_DB_PATH=/home/ubuntu/tally-app/data/agent.sqlite
 Environment=COWORKER_STATE_DIR=/home/ubuntu/tally-app/data/coworker-worker
 Environment=TALLY_SECRETS_DIR=/home/ubuntu/tally-secrets
 # none (fill-in answers), gemini, bedrock, or openai-compatible. Change it here, then: sudo systemctl restart tally-coworkers
-Environment=COWORKER_MODEL_PROVIDER=gemini
+Environment=COWORKER_MODEL_PROVIDER=openai-compatible
 # Tried in order. The free tier allows 20 requests a day per model; one answer takes 2 to 4.
 # gemini-2.5-flash is closed to new API keys (October 2026).
 Environment=COWORKER_GEMINI_MODEL=gemini-3.8-flash,gemini-3.5-flash,gemini-3.1-flash-lite
@@ -23,7 +23,9 @@ Environment=COWORKER_OPENAI_MODEL=mistral-large-latest,mistral-medium-latest
 Environment=COWORKER_OPENAI_MIN_INTERVAL_MS=1100
 # Ask a Coworker on the website: a free preview served on 127.0.0.1 only.
 Environment=COWORKER_ASK_PORT=8792
-Environment=COWORKER_ASK_MODEL_PER_DAY=10
+# Model answers for the website each UTC day, and for one visitor. Mistral allows far more.
+Environment=COWORKER_ASK_MODEL_PER_DAY=100
+Environment=COWORKER_ASK_MODEL_PER_VISITOR=20
 ExecStart=/home/ubuntu/.bun/bin/bun run services/reliability/coworker-worker.ts
 Restart=always
 RestartSec=10
