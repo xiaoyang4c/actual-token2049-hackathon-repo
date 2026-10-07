@@ -110,6 +110,24 @@ nav button:hover { color: var(--accent); }
 .metrics > div:last-child { border: 0; }
 .metrics dt { color: var(--secondary); font-weight: 500; }
 .metrics dd { margin: 2px 0 0; font-size: 27px; line-height: 1.2; font-weight: 650; font-variant-numeric: tabular-nums; }
+.metrics small { margin-top: 4px; font-size: 11px; }
+.text-button { border: 0; padding: 0; background: none; color: var(--accent); font-weight: inherit; text-align: left; }
+.text-button:hover { text-decoration: underline; }
+.secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--input-line); border-radius: 6px; padding: 7px 10px; background: var(--page); font-size: 12px; white-space: nowrap; }
+.secondary-button:hover { background: var(--surface); border-color: var(--accent); }
+.secondary-button svg { width: 15px; height: 15px; }
+.receipt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.copy-message:not(:empty) { margin-top: 8px; }
+.copy-fallback { display: block; font-size: 12px; margin-top: 8px; }
+.copy-fallback input { display: block; width: 100%; padding: 8px; border: 1px solid var(--input-line); border-radius: 6px; margin-top: 4px; }
+.attention-reason { color: var(--warning); font-size: 12px; margin-top: 5px; max-width: 230px; }
+.attention-participants { margin-top: 24px; }
+.attention-heading { padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.attention-heading p { margin-top: 4px; }
+.attention-list { list-style: none; padding: 0; margin: 0; }
+.attention-list li { display: flex; gap: 24px; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.attention-list li:last-child { border: 0; }
+.attention-list li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .demo-notice { border: 1px solid var(--notice-line); background: var(--notice); padding: 12px 18px; display: flex; gap: 16px; align-items: center; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
 .demo-notice svg { color: var(--warning); }
 .demo-notice strong { white-space: nowrap; }
@@ -230,6 +248,9 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
   .local-label { display: none; }
 }
 @media (max-width: 980px) {
+  .app-header { flex-wrap: wrap; height: auto; padding-top: 16px; gap: 12px; }
+  nav { order: 3; flex: 1 0 100%; min-width: 0; overflow-x: auto; height: 46px; }
+  nav button { flex: 0 0 auto; white-space: nowrap; }
   .workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .receipt { max-width: none; }
   .kyc-examples { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -239,8 +260,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
   .brand { font-size: 17px; gap: 10px; }
   .brand-mark { width: 29px; height: 29px; font-size: 21px; }
   .header-status { font-size: 11px; gap: 4px; }
-  nav { order: 3; flex: 1 0 100%; gap: 14px; height: 46px; }
-  nav button { padding: 0 8px; font-size: 13px; }
+  nav { order: 3; flex: 1 0 100%; gap: 8px; height: 46px; }
+  nav button { padding: 0 4px; font-size: 12px; }
   .main-shell { padding: 24px 16px 16px; }
   h1 { font-size: 28px; }
   .page-heading { margin-bottom: 20px; }
@@ -273,6 +294,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
   .lookup-section form > div { flex-wrap: wrap; }
   .lookup-section input { flex-basis: 100%; }
   .app-footer { flex-direction: column; gap: 4px; }
+  .attention-list li { flex-wrap: wrap; gap: 14px; padding: 16px; }
+  .attention-list li > div { flex: 1 0 100%; }
 }
 @media (prefers-reduced-motion: no-preference) {
   button { transition: background-color 120ms ease, color 120ms ease; }
