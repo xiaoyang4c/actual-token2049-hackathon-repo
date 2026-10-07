@@ -99,8 +99,11 @@ Use paper data only.
 
 1. Create an API key at <https://console.mistral.ai>.
 2. On the server, run `tally-set-secret openai_compatible_api_key` and paste the key.
-3. Set `COWORKER_MODEL_PROVIDER=openai-compatible` in `tally-coworkers.service`.
+3. Copy `tally-coworkers.service` to `/etc/systemd/system`. It sets `COWORKER_MODEL_PROVIDER=openai-compatible`.
 4. Run `sudo systemctl daemon-reload && sudo systemctl restart tally-coworkers`.
+5. Check that the log line `worker_started` shows `"provider":"openai-compatible"`.
+
+Preprod runs Mistral this way since 7 October 2026.
 
 Read the workspace limits at <https://admin.mistral.ai/plateforme/limits>.
 `COWORKER_OPENAI_MIN_INTERVAL_MS` is the shortest time between two requests. Set it from the requests-per-second limit.
@@ -132,6 +135,7 @@ The chat is free: no Masumi payment, no Sokosumi Task, and nothing is stored. Ev
 - A request in the fill-in format never uses the model.
 - At most 10 website answers a day use the model (`COWORKER_ASK_MODEL_PER_DAY`). After that, a plain-English request gets the fill-in format.
 - One visitor gets at most 5 of those model answers a day (`COWORKER_ASK_MODEL_PER_VISITOR`).
+- The preprod service file raises these limits to 100 and 20 for Mistral.
 - Each visitor can send 20 messages every 10 minutes.
 - One answer runs at a time, and at most 5 wait.
 - A model answer gets 2 minutes. After that, the request gets the fill-in format, and the next answer starts.
