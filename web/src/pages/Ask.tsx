@@ -43,6 +43,8 @@ interface Message {
 }
 
 const STORE_KEY = 'tally-coworker-chat'
+/** The server stops a model answer after two minutes. A job that runs much longer is stuck, so the page stops waiting. */
+const RUNNING_LIMIT_MS = 4 * 60_000
 /** The server reads at most 12 earlier messages. */
 const HISTORY = 12
 
@@ -145,13 +147,18 @@ export function AskPage() {
     text: job.answer ?? '', error: job.error,
   })
 
-  const poll = (id: string, ticket: AskTicket) => {
+  const poll = (id: string, ticket: AskTicket, runningSince: number | null = null) => {
     const timer = setTimeout(async () => {
       timers.current.delete(timer)
       try {
         const {job} = await api.askStatus(ticket)
+        const since = job.status === 'running' ? runningSince ?? Date.now() : null
+        if (since !== null && Date.now() - since > RUNNING_LIMIT_MS) {
+          update(id, {status: 'failed', error: 'The Coworker took too long to answer. Send the message again, or use the fill-in format.'})
+          return
+        }
         update(id, fromJob(job))
-        if (job.status === 'queued' || job.status === 'running') poll(id, ticket)
+        if (job.status === 'queued' || job.status === 'running') poll(id, ticket, since)
       } catch (e) {
         update(id, {status: 'failed', error: e instanceof Error ? e.message : String(e)})
       }
