@@ -121,6 +121,7 @@ While every model is out of quota or overloaded, the worker answers in the fill-
 The chat on the Tally website sends messages to the same Coworkers. Users do not need Sokosumi or a wallet.
 The worker answers them when `COWORKER_ASK_PORT` is set, on `127.0.0.1` only. The website forwards two routes to it.
 The chat is free: no Masumi payment, no Sokosumi Task, and nothing is stored. Every tool only reads, and a draft uses a sandbox.
+A Deal Desk answer returns the last draft that the engine accepted (`draft`). In the app, **Use this draft in New deal** opens New deal with its template, milestones, and remedy. The user then chooses the other party.
 
 - One chat serves all three Coworkers. A message with `coworker: "auto"` goes to the Coworker that its words point to. A message with no clear words stays with the Coworker that answered last.
 - The browser sends the earlier messages with each new message (`history`). The server keeps no conversation. It reads at most 12 earlier messages and cuts each one to 6,000 characters.
