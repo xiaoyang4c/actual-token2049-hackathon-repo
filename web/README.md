@@ -40,6 +40,10 @@ its own origin.
 The tests cover outcomes that omit `fault`. The tests use a temporary database and remove it after the run.
 CI runs all three checks. Read the [Bun testing guide](https://bun.com/docs/test/writing-tests) for the test runner.
 
+The Deals and Operator filters wrap on narrow screens.
+Their tab bars grow to keep each button inside the bar.
+Read the [MDN flex-wrap guide](https://developer.mozilla.org/en-US/docs/Web/CSS/flex-wrap).
+
 ## Run the app edition
 
 Set `CONTRACT_MEDIATOR_PUBLIC_KEY_HEX` to the mediator's raw Ed25519 public key first.
