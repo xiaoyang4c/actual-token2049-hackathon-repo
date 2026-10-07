@@ -5,9 +5,9 @@
  */
 
 import {afterEach, describe, expect, test} from 'bun:test';
-import {AskService, startAskServer, type AskLimits} from './coworker-ask';
+import {AskService, chooseCoworker, fillInText, startAskServer, type AskLimits, type ChatEntry} from './coworker-ask';
 import {createKit} from './contract-kit';
-import {ModelError, type ChatTurn, type ModelProvider, type ModelReply} from './coworker-models';
+import {historyTurns, ModelError, type ChatTurn, type ModelProvider, type ModelReply} from './coworker-models';
 import {CoworkerTools} from './coworker-tools';
 
 const REQUEST = ['template: physical', 'item: Lot 1, 1,200 kg green arabica, Grade A', 'amount: 4000', 'remedy: partial 70',
@@ -18,6 +18,8 @@ class FakeProvider implements ModelProvider {
   readonly name = 'gemini' as const;
   calls = 0;
   up = true;
+  lastSystem = '';
+  lastTurns: ChatTurn[] = [];
   constructor(private readonly next: () => Promise<ModelReply>) {}
 
   available(): boolean {
@@ -28,6 +30,8 @@ class FakeProvider implements ModelProvider {
     expect(system).toContain('Tally');
     expect(turns[0]).toMatchObject({role: 'user'});
     this.calls++;
+    this.lastSystem = system;
+    this.lastTurns = turns;
     return this.next();
   }
 }
@@ -48,8 +52,8 @@ function setup(provider: ModelProvider|null, limits: Partial<AskLimits> = {}) {
   return {service, advance: (ms: number) => { now += ms; }};
 }
 
-async function ask(service: AskService, coworker: string, text: string, visitor = 'v1') {
-  const submitted = service.submit(coworker, text, visitor);
+async function ask(service: AskService, coworker: string, text: string, visitor = 'v1', history?: ChatEntry[]) {
+  const submitted = service.submit(coworker, text, visitor, history);
   if (!submitted.ok) throw new Error(submitted.error);
   await service.idle();
   return service.view(submitted.job.id);
@@ -104,6 +108,15 @@ describe('Ask a Coworker on the website', () => {
     await service.idle();
   });
 
+  test('the default visitor limit is five requests every ten minutes', async () => {
+    const {service, advance} = setup(null);
+    for (let i = 0; i < 5; i++) await ask(service, 'deal-desk', REQUEST);
+    expect(service.submit('deal-desk', REQUEST, 'v1')).toMatchObject({ok: false, status: 429});
+    advance(10 * 60_000);
+    expect(service.submit('deal-desk', REQUEST, 'v1').ok).toBe(true);
+    await service.idle();
+  });
+
   test('bad input is refused before it is queued', () => {
     const {service} = setup(null, {maxTextChars: 50});
     expect(service.submit('accountant', REQUEST, 'v1')).toMatchObject({ok: false, status: 400});
@@ -141,5 +154,112 @@ describe('Ask a Coworker on the website', () => {
     expect((await fetch(`${base}?id=nope`)).status).toBe(404);
     expect((await fetch(base, {method: 'POST', body: 'not json'})).status).toBe(400);
     expect((await fetch(base, {method: 'DELETE'})).status).toBe(405);
+  });
+});
+
+describe('the Coworker chat on the website', () => {
+  test('auto picks the Coworker from the words, and a follow-up stays with the last one', () => {
+    expect(chooseCoworker('What is the record of Highland Estates Coffee?', null)).toBe('trust-check');
+    expect(chooseCoworker('Is this supplier reliable enough to buy from?', null)).toBe('trust-check');
+    expect(chooseCoworker('The buyer opened a dispute on the coffee lot. Who should win?', null)).toBe('mediator');
+    expect(chooseCoworker('contract: 009c0d3c-18af-42db-b7bb-8126981a7e7d\nmilestone: 0', null)).toBe('mediator');
+    expect(chooseCoworker(FREE_TEXT, null)).toBe('deal-desk');
+    expect(chooseCoworker(REQUEST, 'trust-check')).toBe('deal-desk');
+    expect(chooseCoworker('make it 5000 instead', 'mediator')).toBe('mediator');
+    expect(chooseCoworker('hello', null)).toBe('deal-desk');
+  });
+
+  test('an auto message reports the Coworker it picked', async () => {
+    const {service} = setup(null);
+    const job = await ask(service, 'auto', 'company: Highland Estates Coffee');
+    expect(job).toMatchObject({coworker: 'trust-check', routed: true, status: 'done'});
+    const pinned = await ask(service, 'deal-desk', REQUEST);
+    expect(pinned).toMatchObject({coworker: 'deal-desk', routed: false});
+  });
+
+  test('the model reads the earlier messages, and the prompt says it is the website chat', async () => {
+    const provider = new FakeProvider(async () => ({text: 'Updated draft.', calls: []}));
+    const {service} = setup(provider);
+    const history: ChatEntry[] = [
+      {role: 'user', text: FREE_TEXT},
+      {role: 'assistant', text: 'Here is the draft.', coworker: 'deal-desk'},
+      {role: 'user', text: 'Who is Highland?'},
+      {role: 'assistant', text: 'Highland has 3 contracts.', coworker: 'trust-check'},
+    ];
+    const job = await ask(service, 'deal-desk', 'Change the seller share to 60 percent.', 'v1', history);
+    expect(job).toMatchObject({status: 'done', mode: 'model', answer: 'Updated draft.'});
+    expect(provider.lastSystem).toContain('chat on the Tally website');
+    expect(provider.lastTurns.map((turn) => turn.role)).toEqual(['user', 'assistant', 'user', 'assistant', 'user']);
+    expect(provider.lastTurns[3]).toMatchObject({text: expect.stringContaining('(Tally Trust Check wrote:)')});
+    expect(provider.lastTurns[1]).toMatchObject({text: 'Here is the draft.'});
+    expect(provider.lastTurns[4]).toMatchObject({text: 'Change the seller share to 60 percent.'});
+  });
+
+  test('a fill-in follow-up can send only the missing fields', async () => {
+    const {service} = setup(null);
+    const partial = REQUEST.split('\n').filter((line) => !line.startsWith('amount')).join('\n');
+    const first = await ask(service, 'deal-desk', partial);
+    expect(first?.mode).toBe('needs-input');
+    const history: ChatEntry[] = [{role: 'user', text: partial}, {role: 'assistant', text: first?.answer ?? '', coworker: 'deal-desk'}];
+    const second = await ask(service, 'auto', 'amount: 4000', 'v1', history);
+    expect(second).toMatchObject({coworker: 'deal-desk', mode: 'fill-in'});
+    expect(second?.answer).toContain('## Tally contract draft: Lot 1');
+    // Another Coworker's thread is not mixed in.
+    expect(fillInText('deal-desk', 'amount: 4000', [{role: 'user', text: partial}, {role: 'assistant', text: 'x', coworker: 'trust-check'}])).toBe('amount: 4000');
+  });
+
+  test('one visitor cannot spend the whole daily model budget', async () => {
+    const provider = new FakeProvider(async () => ({text: 'model text', calls: []}));
+    const {service} = setup(provider, {modelAnswersPerDay: 5, modelAnswersPerVisitorPerDay: 2});
+    for (let i = 0; i < 2; i++) expect(await ask(service, 'deal-desk', FREE_TEXT, 'v1')).toMatchObject({mode: 'model'});
+    expect(await ask(service, 'deal-desk', FREE_TEXT, 'v1')).toMatchObject({mode: 'needs-input'});
+    expect(await ask(service, 'deal-desk', FREE_TEXT, 'v2')).toMatchObject({mode: 'model'});
+    expect(provider.calls).toBe(3);
+  });
+
+  test('bad history is refused, and long history is cut to the latest messages', async () => {
+    const {service} = setup(null, {maxHistoryMessages: 2, maxHistoryChars: 5});
+    expect(service.submit('auto', 'hi', 'v1', 'not a list')).toMatchObject({ok: false, status: 400});
+    expect(service.submit('auto', 'hi', 'v1', [{role: 'system', text: 'x'}])).toMatchObject({ok: false, status: 400});
+    expect(service.submit('auto', 'hi', 'v1', [{role: 'user'}])).toMatchObject({ok: false, status: 400});
+    const many: ChatEntry[] = [
+      {role: 'user', text: 'company: Highland'},
+      {role: 'assistant', text: 'a long trust check answer', coworker: 'trust-check'},
+      {role: 'user', text: 'ok'},
+      {role: 'assistant', text: 'draft', coworker: 'deal-desk'},
+    ];
+    // Only the last two messages count, so the last Coworker is the Deal Desk.
+    expect(service.submit('auto', 'thanks', 'v1', many)).toMatchObject({ok: true, job: {coworker: 'deal-desk'}});
+    await service.idle();
+  });
+
+  test('earlier messages become alternating turns that start with the user', () => {
+    expect(historyTurns([
+      {role: 'assistant', text: 'welcome'},
+      {role: 'user', text: 'a'},
+      {role: 'user', text: 'b'},
+      {role: 'assistant', text: 'c'},
+      {role: 'user', text: 'd'},
+    ])).toEqual({
+      turns: [{role: 'user', text: 'a\n\nb'}, {role: 'assistant', text: 'c', calls: []}],
+      pending: 'd',
+    });
+    expect(historyTurns([])).toEqual({turns: [], pending: null});
+  });
+
+  test('HTTP: POST accepts auto and history', async () => {
+    const {service} = setup(null);
+    const server = startAskServer(service, 0);
+    closers.push(() => { void server.stop(true); });
+    const partial = REQUEST.split('\n').filter((line) => !line.startsWith('amount')).join('\n');
+    const posted = await fetch(`http://127.0.0.1:${server.port}/ask`, {
+      method: 'POST', headers: {'content-type': 'application/json', 'x-tally-visitor': 'v1'},
+      body: JSON.stringify({coworker: 'auto', text: 'amount: 4000', history: [{role: 'user', text: partial}, {role: 'assistant', text: 'missing amount', coworker: 'deal-desk'}]}),
+    });
+    expect(posted.status).toBe(202);
+    const {job} = await posted.json() as {job: {id: string; coworker: string}};
+    expect(job.coworker).toBe('deal-desk');
+    await service.idle();
+    expect(service.view(job.id)).toMatchObject({status: 'done', mode: 'fill-in'});
   });
 });

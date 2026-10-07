@@ -130,6 +130,7 @@ bun run lint
 
 The server allows only listed GET and HEAD routes.
 It retains the existing `/agent/state` and `/audit` read proxies.
+It also forwards `GET /reliability/contracts/audit?id=` for each contract's audit log.
 It forwards the query string for receipts, lifecycle views, and KYC.
 POST, PUT, PATCH, and DELETE requests are rejected, except one route.
 `POST /coworkers/ask` and `GET /coworkers/ask?id=` go to the Coworker worker (`COWORKER_ASK_URL`, default `http://127.0.0.1:8792`).

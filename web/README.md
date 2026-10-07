@@ -24,6 +24,9 @@ The dev server proxies `/reliability/*` to the control API (`TALLY_API_URL`, def
 that the Coworkers are offline; every other view works.
 
 `bun run build` type-checks and writes `dist/`. `bun run lint` runs oxlint.
+`bun run test` renders the contract page with actual API responses from the paper showcase.
+The tests cover outcomes that omit `fault`. The tests use a temporary database and remove it after the run.
+CI runs all three checks. Read the [Bun testing guide](https://bun.com/docs/test/writing-tests) for the test runner.
 
 ## Views and routes
 
@@ -56,12 +59,19 @@ for the white-to-gray theme. Type: Unbounded, Sora, JetBrains Mono.
 
 <https://tally-origins.vercel.app> is built from this repository. [`vercel.json`](../vercel.json) builds
 `web/` and routes `/reliability/*` and `/coworkers/ask` to [`api/demo.ts`](../api/demo.ts), a Vercel
-function on the Bun runtime. The build runs [`api/_seed.ts`](../api/_seed.ts), which seeds one paper
-database with the six showcase contracts and their settlement fingerprints (`submit: false`, nothing goes
-to the chain), so every function instance serves the same ids. The function the control API's GET routes only. Ask a Coworker runs without a model and answers in the same
-request, so the fill-in format works and plain English gets the fill-in instructions.
+function on the Bun runtime. The function forwards allowlisted GET routes to the public EC2 demo.
+The website and its hosted Coworker therefore use the same contract IDs.
+`COWORKER_DEMO_URL` sets the read server. Its default matches the hosted chat address in `vercel.json`.
+The proxy uses [Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) with a five-second timeout.
 
-```sh
-bunx vercel link --project tally-origins   # once
-bunx vercel deploy --prod
-```
+The build runs [`api/_seed.ts`](../api/_seed.ts) to create a paper database for offline reads.
+It contains six showcase contracts and their settlement fingerprints. The build sends nothing to the chain.
+Each function instance uses the same fallback IDs.
+When the hosted Coworker is offline, Ask a Coworker answers without a model in the same request.
+The fallback accepts the fill-in format. Plain English gets the fill-in instructions.
+
+Deploy production from `main`. Merge changes through a pull request.
+In the Vercel project, open **Settings > Environments > Production > Branch Tracking**.
+Set the production branch to `main` and save it. Later merges into `main` start production deployments.
+If the merge already happened, create a deployment from `main` in the project's **Deployments** page.
+Read the [Vercel Git deployment guide](https://vercel.com/docs/git#production-branch) for these project settings.

@@ -14,7 +14,7 @@ const NAV = [
   {to: '/mediation', label: 'Mediation', icon: Gavel},
   {to: '/companies', label: 'Companies', icon: Building2},
   {to: '/deal-desk', label: 'Deal Desk', icon: FilePenLine},
-  {to: '/ask', label: 'Ask a Coworker', icon: MessageSquareText},
+  {to: '/ask', label: 'Chat', icon: MessageSquareText},
   {to: '/coworkers', label: 'Coworkers', icon: Bot},
   {to: '/operator', label: 'Operator', icon: TableProperties},
   {to: '/evidence', label: 'Evidence checker', icon: ShieldCheck},

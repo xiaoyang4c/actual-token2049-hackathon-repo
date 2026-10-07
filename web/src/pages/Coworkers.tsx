@@ -9,22 +9,22 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/c
 /* From services/reliability/coworkers/README.md in the copied repository. */
 const COWORKERS = [
   {
-    name: 'Tally Deal Desk', avatar: '/brand/deal-desk-avatar.png', to: '/ask?coworker=deal-desk', open: 'Ask the Deal Desk',
+    name: 'Tally Deal Desk', avatar: '/brand/deal-desk-avatar.png', to: '/ask?coworker=deal-desk', open: 'Chat with the Deal Desk',
     job: 'Turns a plain-English deal into a ready-to-sign escrow contract draft.',
     detail: 'Runs createContract in an in-memory sandbox, so the engine validates every draft. Returns escrows, payouts per outcome, Tier 1 options, the timeline, the maximum lock time, fees and a live deadline check.',
     tools: ['listTemplates()', 'draftContract(input)'],
     sokosumi: '01a11354-0a28-745c-8424-c0f06b1331cb', spotlight: 'rgba(255, 212, 0, 0.22)' as const,
   },
   {
-    name: 'Tally Mediator', avatar: '/brand/mediator-avatar.png', to: '/ask?coworker=mediator', open: 'Ask the Mediator',
+    name: 'Tally Mediator', avatar: '/brand/mediator-avatar.png', to: '/ask?coworker=mediator', open: 'Chat with the Mediator',
     job: 'Drafts a Tier 3 ruling for a human mediator to sign.',
     detail: 'Reads the case file and simulates each ruling with the real engine on a copy. Returns the exact bytes the mediator signs. The Coworker never signs.',
     tools: ['disputeCase(contractId, milestone)', 'rulingOptions(contractId, milestone)', 'rulingSigningPayload(…)'],
     sokosumi: '01a11354-2a34-71af-917c-8114f24fc1cb', spotlight: 'rgba(0, 51, 173, 0.14)' as const,
   },
   {
-    name: 'Tally Trust Check', avatar: '/brand/trust-check-avatar.png', to: '/ask?coworker=trust-check', open: 'Ask Trust Check',
-    job: "Explains a company's Tally record before a deal.",
+    name: 'Tally Trust Check', avatar: '/brand/trust-check-avatar.png', to: '/ask?coworker=trust-check', open: 'Chat with Trust Check',
+    job: "Explains a company's Tally credit record before a deal.",
     detail: 'Reads scores through the scoring policy, stored terms decisions and contract history. Labels paper records SIMULATED and never gives a verdict.',
     tools: ['findEntities(query)', 'reliabilityProfile(entityId)'],
     sokosumi: '01a11354-467b-7049-826a-0e7087f78a59', spotlight: 'rgba(83, 252, 24, 0.16)' as const,
@@ -44,9 +44,10 @@ export function CoworkersPage() {
   return (
     <div className="space-y-12">
       <PageHeader
-        eyebrow="Coworkers · Sokosumi"
+        eyebrow="Coworkers · Masumi"
         title="Three agents, one rule"
-        description="Tally's contract features, sold as paid tasks on Sokosumi. The language model reads the request, calls Tally's tools and explains the results. Every number comes from Tally's code."
+        description="Deal Desk, Mediator and Trust Check work inside Tally. Chat with them on this site. You need no Sokosumi account and no wallet, and the chat is free. The same three agents are registered on Masumi, so other agents can also hire them as paid tasks on Sokosumi. Every number comes from Tally's code."
+        actions={<Link to="/ask" className="inline-flex h-10 items-center gap-2 rounded-[9px] bg-ink px-4 text-[13.5px] font-semibold text-white transition-colors hover:bg-ink-2">Open the chat<ArrowRight className="size-4" /></Link>}
       />
 
       <Stagger className="grid gap-5 lg:grid-cols-3">
@@ -81,7 +82,8 @@ export function CoworkersPage() {
       </section>
 
       <Reveal className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <Section title="How a task gets paid" aside="Masumi escrow on Cardano preprod">
+        <Section title="When another agent hires a Coworker" aside="Masumi escrow on Cardano preprod">
+          <p className="mb-5 text-[13.5px] leading-relaxed text-ink-2">The chat on this site is free. Agents and Sokosumi users pay for each task through the Masumi payment service:</p>
           <ol className="space-y-5">
             {FLOW.map(([title, body], i) => (
               <li key={title} className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3">

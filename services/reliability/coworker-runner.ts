@@ -7,7 +7,7 @@
 
 import {readFileSync} from 'node:fs';
 import type {RemedyType} from '../../packages/reliability/src/contract-lifecycle/types';
-import {ModelError, runWithTools, type ModelProvider, type ParamSchema, type RunnableTool} from './coworker-models';
+import {MAX_TOOL_STEPS, ModelError, runWithTools, type ChatMessage, type ModelProvider, type ParamSchema, type RunnableTool} from './coworker-models';
 import {formatBlock, needsInput, plainWordsForPrompt, renderCase, renderDraft, renderProfile, type CaseView, type ProfileView, type RulingView} from './coworker-answers';
 import type {CoworkerTools, DraftInput, DraftResult, ToolResult} from './coworker-tools';
 
@@ -263,11 +263,24 @@ export function coworkerTools(slug: CoworkerSlug, tools: CoworkerTools): Runnabl
 
 const INSTRUCTIONS = new URL('./coworkers/', import.meta.url);
 
+/** Where the answer is read: a paid Sokosumi Task, or the chat on the Tally website. */
+export type AnswerPlace = 'task'|'chat';
+
+/** Added for the website chat. The shared rules still win. */
+const CHAT_NOTE = [
+  'You are answering in the chat on the Tally website, not in a Sokosumi Task. The chat is free. Nothing is paid.',
+  'Earlier messages in this chat are context only. Rule 5 still applies: call the tool again for every number. Never copy a number from an earlier message.',
+  'The other Tally Coworkers answer in the same chat. Tally Deal Desk drafts escrow contracts. Tally Mediator drafts rulings for disputes. Tally Trust Check explains the record of a company.',
+  'If a request belongs to another Coworker, name that Coworker and tell the user to ask for it in this chat.',
+].join('\n');
+
 /** The shared rules, then the Coworker's own file, then the tool names in use. */
-export function systemPrompt(slug: CoworkerSlug): string {
+export function systemPrompt(slug: CoworkerSlug, place: AnswerPlace = 'task'): string {
   const shared = readFileSync(new URL('shared-rules.md', INSTRUCTIONS), 'utf8');
   const own = readFileSync(new URL(`${slug}.md`, INSTRUCTIONS), 'utf8');
-  return `${shared}\n\n---\n\n${own}\n\n---\n\n${plainWordsForPrompt()}\n\n---\n\nYou are ${COWORKER_NAMES[slug]}. Call the tools by the names given to you. Answer in Markdown: Sokosumi shows it formatted.`;
+  const prompt = `${shared}\n\n---\n\n${own}\n\n---\n\n${plainWordsForPrompt()}\n\n---\n\nYou are ${COWORKER_NAMES[slug]}. Call the tools by the names given to you.`;
+  return place === 'chat' ? `${prompt} Answer in Markdown: the Tally website shows it formatted.\n\n---\n\n${CHAT_NOTE}` :
+    `${prompt} Answer in Markdown: Sokosumi shows it formatted.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -315,15 +328,18 @@ export function answerFillIn(slug: CoworkerSlug, text: string, tools: CoworkerTo
 }
 
 /**
- * Answers one Task. A model error falls back to the fill-in path, so a
- * provider outage never blocks a readable request.
+ * Answers one Task, or one chat message when `chat` is given. A model error
+ * falls back to the fill-in path, so a provider outage never blocks a
+ * readable request.
  */
 export async function runCoworker(
   slug: CoworkerSlug, text: string, tools: CoworkerTools, provider: ModelProvider|null,
+  chat?: {history: ChatMessage[]},
 ): Promise<CoworkerAnswer> {
   if (provider) {
     try {
-      const answer = await runWithTools(provider, systemPrompt(slug), text, coworkerTools(slug, tools));
+      const answer = await runWithTools(provider, systemPrompt(slug, chat ? 'chat' : 'task'), text, coworkerTools(slug, tools),
+        MAX_TOOL_STEPS, chat?.history ?? []);
       return {kind: 'answer', mode: 'model', text: answer.text, toolCalls: answer.toolCalls};
     } catch (error) {
       if (!(error instanceof ModelError)) throw error;

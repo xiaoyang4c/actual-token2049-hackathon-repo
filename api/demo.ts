@@ -1,11 +1,14 @@
 /**
  * @fileoverview The public read-only demo of the Tally web app on Vercel
- * (Bun runtime). It serves the control API's reliability and contract read
- * routes from a paper database with the six showcase contracts and their
+ * (Bun runtime). It reads the public preprod demo so the website and the
+ * Coworker see the same contract ids. When preprod is offline, it serves
+ * read routes from a paper database with six showcase contracts and their
  * settlement fingerprints. The build seeds it once (api/_seed.ts), so every
  * instance serves the same ids; a cold start copies it to /tmp, the only
- * writable path. Nothing is sent to a chain. Ask a Coworker answers in the request itself, without a model, so
- * the fill-in format works and plain English gets the fill-in instructions.
+ * writable path. Nothing is sent to a chain. The web app sends the Coworker chat to the
+ * preprod Coworker worker first (VITE_COWORKER_ASK_URL). This function is its fallback: it
+ * answers in the request itself, without a model, so the fill-in format works and plain
+ * English gets the fill-in instructions.
  *
  * vercel.json routes /reliability/* and /coworkers/ask here and serves web/dist.
  */
@@ -15,6 +18,7 @@ import {join} from 'node:path';
 import {AgentStore} from '../packages/db/src/index';
 import {AskService} from '../services/reliability/coworker-ask';
 import {CoworkerTools} from '../services/reliability/coworker-tools';
+import {readHostedDemo} from '../services/reliability/coworker-demo';
 import {contractServiceFor} from '../services/reliability/contract-service';
 import {reliabilityRoutes} from '../services/reliability/index';
 import {createEvidenceProxyRoutes} from '../services/reliability/routes-evidence';
@@ -25,9 +29,9 @@ process.env.CARDANO_ALLOW_NETWORK = 'false';
 const SEED = join(process.cwd(), '.demo-data/demo.sqlite');
 const DATABASE = '/tmp/tally-demo.sqlite';
 const json = (body: unknown, status = 200) => Response.json(body, {status, headers: {'cache-control': 'no-store'}});
-const routes = new Map(reliabilityRoutes.filter((route) => route.method === 'GET').map((route) => [route.path, route]));
-// Only these two reads reach EC2. The rest of the Vercel demo stays on paper data.
-for (const route of createEvidenceProxyRoutes(process.env.CHAINLINK_EVIDENCE_URL ?? 'https://13-210-42-0.sslip.io')) routes.set(route.path, route);
+// The evidence reads use their dedicated EC2 service.
+const evidenceRoutes = new Map(createEvidenceProxyRoutes(process.env.CHAINLINK_EVIDENCE_URL ?? 'https://13-210-42-0.sslip.io').map((route) => [route.path, route]));
+const routes = new Map(reliabilityRoutes.filter((route) => route.method === 'GET' && !evidenceRoutes.has(route.path)).map((route) => [route.path, route]));
 
 function open() {
   if (!existsSync(DATABASE)) copyFileSync(SEED, DATABASE);
@@ -50,12 +54,19 @@ export default {
       url.searchParams.delete('__path');
     }
     try {
+      const evidenceRoute = request.method === 'GET' ? evidenceRoutes.get(url.pathname) : undefined;
+      if (evidenceRoute) return await evidenceRoute.handler(request, url);
+      const route = request.method === 'GET' ? routes.get(url.pathname) : undefined;
+      if (route) {
+        const hosted = await readHostedDemo(url, process.env.COWORKER_DEMO_URL ?? 'https://13-210-42-0.sslip.io');
+        if (hosted) return hosted;
+      }
       ready ??= open();
       const {store, ask} = await ready;
       if (url.pathname === '/coworkers/ask' && request.method === 'POST') {
-        const body = await request.json().catch(() => null) as {coworker?: unknown; text?: unknown}|null;
+        const body = await request.json().catch(() => null) as {coworker?: unknown; text?: unknown; history?: unknown}|null;
         const visitor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-        const submitted = ask.submit(body?.coworker, body?.text, visitor);
+        const submitted = ask.submit(body?.coworker, body?.text, visitor, body?.history);
         if (!submitted.ok) return json({error: submitted.error}, submitted.status);
         // Answer before responding: the next request may reach another instance.
         await ask.idle();
@@ -63,7 +74,6 @@ export default {
       }
       if (url.pathname === '/coworkers/ask') return json({error: 'This answer is no longer available.'}, 404);
       // Read-only: GET routes only, like the hosted UI server.
-      const route = request.method === 'GET' ? routes.get(url.pathname) : undefined;
       if (!route) return json({error: 'not found'}, 404);
       return await route.handler(request, url, store);
     } catch (error) {

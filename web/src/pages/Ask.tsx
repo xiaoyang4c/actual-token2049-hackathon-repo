@@ -3,11 +3,11 @@ import {useSearchParams} from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {motion} from 'motion/react'
-import {Loader2, Send, Sparkles} from 'lucide-react'
-import {ErrorNote, PageHeader, Section, Tag} from '@/components/kit'
+import {ArrowUp, Loader2, RotateCcw, Sparkles, Wand2} from 'lucide-react'
+import {PageHeader, Tag} from '@/components/kit'
 import {Reveal} from '@/components/motion'
 import {Textarea} from '@/components/ui/textarea'
-import {api, type AskJob, type CoworkerSlug} from '@/lib/api'
+import {api, type AskJob, type AskTicket, type ChatEntry, type CoworkerSlug} from '@/lib/api'
 import {useAsync} from '@/lib/useAsync'
 import {cn} from '@/lib/utils'
 
@@ -16,9 +16,11 @@ const COWORKERS: Array<{slug: CoworkerSlug; name: string; does: string; avatar: 
     example: 'We are buying 1,200 kg of Grade A green arabica from a farm in Sumatra for 4,000 USDM. A lab checks the quality. If the coffee is off-spec, the seller keeps 70%.'},
   {slug: 'mediator', name: 'Mediator', does: 'Drafts a ruling for a dispute', avatar: '/brand/mediator-avatar.png',
     example: 'contract: <contract id>\nmilestone: 0'},
-  {slug: 'trust-check', name: 'Trust Check', does: "Explains a company's record", avatar: '/brand/trust-check-avatar.png',
+  {slug: 'trust-check', name: 'Trust Check', does: "Explains a company's credit record", avatar: '/brand/trust-check-avatar.png',
     example: 'What is the record of Highland Estates Coffee?'},
 ]
+
+const coworkerOf = (slug: CoworkerSlug | undefined) => COWORKERS.find((c) => c.slug === slug) ?? COWORKERS[0]
 
 const MODE: Record<string, {label: string; tone: 'blue' | 'up' | 'warn'}> = {
   model: {label: 'AI answer', tone: 'blue'},
@@ -26,141 +28,255 @@ const MODE: Record<string, {label: string; tone: 'blue' | 'up' | 'warn'}> = {
   'needs-input': {label: 'Needs more detail', tone: 'warn'},
 }
 
+type Target = CoworkerSlug | 'auto'
+
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  coworker?: CoworkerSlug
+  routed?: boolean
+  mode?: AskJob['mode']
+  status?: AskJob['status']
+  position?: number
+  error?: string | null
+}
+
+const STORE_KEY = 'tally-coworker-chat'
+/** The server reads at most 12 earlier messages. */
+const HISTORY = 12
+
+/** Finished messages survive a page change in this tab. Storage can be missing; the chat still works. */
+function loadChat(): Message[] {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(STORE_KEY) ?? '[]') as Message[]
+    return Array.isArray(saved) ? saved.filter((m) => m.role === 'user' || m.status === 'done') : []
+  } catch {
+    return []
+  }
+}
+
+function saveChat(messages: Message[]) {
+  try {
+    sessionStorage.setItem(STORE_KEY, JSON.stringify(messages.filter((m) => m.role === 'user' || m.status === 'done')))
+  } catch { /* storage unavailable */ }
+}
+
+/** Earlier messages for the server: what the user wrote and the finished answers. */
+const historyOf = (messages: Message[]): ChatEntry[] => messages
+  .filter((m) => m.role === 'user' || (m.status === 'done' && m.text))
+  .map((m) => ({role: m.role, text: m.text, ...(m.coworker ? {coworker: m.coworker} : {})}))
+  .slice(-HISTORY)
+
 /** The answer is untrusted model text: no raw HTML, and links and images stay plain text. */
 function Answer({text}: {text: string}) {
   return (
-    <div className="answer text-[14px] leading-relaxed text-ink-2 [&_code]:mono [&_code]:rounded-[4px] [&_code]:bg-black/[0.05] [&_code]:px-1 [&_code]:text-[12.5px] [&_h1]:display [&_h1]:mb-3 [&_h1]:text-[20px] [&_h1]:text-ink [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:font-[family-name:var(--font-display)] [&_h2]:text-[15px] [&_h2]:text-ink [&_h3]:mt-4 [&_h3]:font-semibold [&_h3]:text-ink [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2.5 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-[10px] [&_pre]:bg-black/[0.04] [&_pre]:p-3 [&_strong]:text-ink [&_table]:my-3 [&_table]:w-full [&_table]:text-[13px] [&_td]:border-t [&_td]:border-border [&_td]:py-1.5 [&_td]:pr-3 [&_th]:py-1.5 [&_th]:pr-3 [&_th]:text-left [&_th]:font-semibold [&_th]:text-ink [&_ul]:list-disc [&_ul]:pl-5">
+    <div className="answer text-[14px] leading-relaxed text-ink-2 [&_code]:mono [&_code]:rounded-[4px] [&_code]:bg-black/[0.05] [&_code]:px-1 [&_code]:text-[12.5px] [&_h1]:display [&_h1]:mb-3 [&_h1]:text-[20px] [&_h1]:text-ink [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:font-[family-name:var(--font-display)] [&_h2]:text-[15px] [&_h2]:text-ink [&_h3]:mt-4 [&_h3]:font-semibold [&_h3]:text-ink [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2.5 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-[10px] [&_pre]:bg-black/[0.04] [&_pre]:p-3 [&_strong]:text-ink [&_table]:my-3 [&_table]:block [&_table]:overflow-x-auto [&_table]:text-[13px] [&_td]:border-t [&_td]:border-border [&_td]:py-1.5 [&_td]:pr-3 [&_th]:py-1.5 [&_th]:pr-3 [&_th]:text-left [&_th]:font-semibold [&_th]:text-ink [&_ul]:list-disc [&_ul]:pl-5">
       <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml disallowedElements={['a', 'img']} unwrapDisallowed>{text}</ReactMarkdown>
     </div>
   )
 }
 
+function Bubble({message}: {message: Message}) {
+  if (message.role === 'user') {
+    return (
+      <motion.div initial={{opacity: 0, y: 6}} animate={{opacity: 1, y: 0}} className="flex justify-end">
+        <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-[14px] rounded-br-[4px] bg-ink px-4 py-2.5 text-[14px] leading-relaxed text-white">{message.text}</p>
+      </motion.div>
+    )
+  }
+  // Until the server picks a Coworker for an auto message, Tally speaks.
+  const who = message.coworker ? coworkerOf(message.coworker) : {name: 'Tally', avatar: '/brand/tally-mark.svg'}
+  const working = message.status === 'queued' || message.status === 'running'
+  return (
+    <motion.div initial={{opacity: 0, y: 6}} animate={{opacity: 1, y: 0}} className="flex gap-3">
+      <img src={who.avatar} alt="" className="mt-0.5 size-8 shrink-0 rounded-[8px] bg-white object-contain" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-[family-name:var(--font-display)] text-[13.5px]">{who.name}</span>
+          {message.routed ? <span className="text-[11.5px] text-ink-3">picked for you</span> : null}
+          {message.mode ? <Tag tone={MODE[message.mode].tone} className="ml-auto">{MODE[message.mode].label}</Tag> : null}
+        </div>
+        {working ? (
+          <p className="mt-2 flex items-center gap-2 text-[13.5px] text-ink-3" role="status">
+            <Loader2 className="size-4 animate-spin" />Working{message.position ? ` (${message.position} ahead of you)` : ''}…
+          </p>
+        ) : message.status === 'failed' ? (
+          <p className="mt-2 rounded-[10px] bg-down-wash px-3.5 py-2.5 text-[13.5px] text-down">{message.error ?? 'The Coworker could not answer.'}</p>
+        ) : (
+          <div className="mt-1 rounded-[14px] rounded-tl-[4px] border border-border bg-white px-4 py-1"><Answer text={message.text} /></div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
 export function AskPage() {
   const [params] = useSearchParams()
-  const initial = (COWORKERS.find((c) => c.slug === params.get('coworker'))?.slug ?? 'deal-desk') as CoworkerSlug
-  const [coworker, setCoworker] = useState<CoworkerSlug>(initial)
+  const pinned = COWORKERS.find((c) => c.slug === params.get('coworker'))?.slug
+  const [target, setTarget] = useState<Target>(pinned ?? 'auto')
+  const [messages, setMessages] = useState<Message[]>(loadChat)
   const [text, setText] = useState('')
-  const [job, setJob] = useState<AskJob | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const busy = messages.some((m) => m.status === 'queued' || m.status === 'running')
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>())
+  const end = useRef<HTMLDivElement>(null)
   const disputes = useAsync(() => api.contracts({disputes: true}), 'disputes')
-  const chosen = COWORKERS.find((c) => c.slug === coworker)!
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  useEffect(() => {
+    const pending = timers.current
+    return () => { for (const timer of pending) clearTimeout(timer) }
+  }, [])
+  useEffect(() => { saveChat(messages) }, [messages])
+  useEffect(() => { end.current?.scrollIntoView({behavior: 'smooth', block: 'end'}) }, [messages.length, busy])
 
   // The Mediator's example names a real dispute from the contract list.
   const example = (slug: CoworkerSlug) => {
-    if (slug !== 'mediator') return COWORKERS.find((c) => c.slug === slug)!.example
+    if (slug !== 'mediator') return coworkerOf(slug).example
     const tier3 = disputes.data?.find((c) => c.milestones[0]?.state === 'tier_3_mediation') ?? disputes.data?.[0]
     return tier3 ? `contract: ${tier3.id}\nmilestone: 0` : COWORKERS[1].example
   }
 
-  const poll = (id: string) => {
-    timer.current = setTimeout(async () => {
+  const update = (id: string, patch: Partial<Message>) =>
+    setMessages((all) => all.map((m) => (m.id === id ? {...m, ...patch} : m)))
+
+  const fromJob = (job: AskJob): Partial<Message> => ({
+    coworker: job.coworker, routed: job.routed, status: job.status, position: job.position, mode: job.mode,
+    text: job.answer ?? '', error: job.error,
+  })
+
+  const poll = (id: string, ticket: AskTicket) => {
+    const timer = setTimeout(async () => {
+      timers.current.delete(timer)
       try {
-        const {job: next} = await api.askStatus(id)
-        setJob(next)
-        if (next.status === 'queued' || next.status === 'running') poll(id)
-        else setBusy(false)
+        const {job} = await api.askStatus(ticket)
+        update(id, fromJob(job))
+        if (job.status === 'queued' || job.status === 'running') poll(id, ticket)
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
-        setBusy(false)
+        update(id, {status: 'failed', error: e instanceof Error ? e.message : String(e)})
       }
     }, 1200)
+    timers.current.add(timer)
   }
 
-  const submit = async () => {
-    if (!text.trim() || busy) return
-    setBusy(true); setError(null); setJob(null)
+  const send = async (request = text) => {
+    const clean = request.trim()
+    if (!clean || busy) return
+    const history = historyOf(messages)
+    const stamp = `${Date.now()}`
+    const reply: Message = {id: `a-${stamp}`, role: 'assistant', text: '', coworker: target === 'auto' ? undefined : target, status: 'queued'}
+    setMessages((all) => [...all, {id: `u-${stamp}`, role: 'user', text: clean}, reply])
+    setText('')
     try {
-      const {job: started} = await api.ask(coworker, text.trim())
-      setJob(started)
-      if (started.status === 'done' || started.status === 'failed') setBusy(false)
-      else poll(started.id)
+      const {job} = await api.ask(target, clean, history)
+      update(reply.id, fromJob(job))
+      if (job.status === 'queued' || job.status === 'running') poll(reply.id, job)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-      setBusy(false)
+      update(reply.id, {status: 'failed', error: e instanceof Error ? e.message : String(e)})
     }
+  }
+
+  const restart = () => {
+    for (const timer of timers.current) clearTimeout(timer)
+    timers.current.clear()
+    setMessages([])
   }
 
   return (
     <div className="space-y-10">
       <PageHeader
-        eyebrow="Ask a Coworker"
-        title="Ask a Coworker"
-        description="A free preview of Deal Desk, Mediator and Trust Check. Nothing is paid and nothing is saved. Plain English uses an AI model with a small daily allowance; the fill-in format always works. For a paid Task with escrow, hire the Coworker on Sokosumi."
+        eyebrow="Coworkers"
+        title="Chat with Tally"
+        description="Deal Desk drafts an escrow contract, Mediator drafts a ruling for a dispute, and Trust Check explains a company's credit record. Write in plain English here. The chat picks the right Coworker, and every number comes from Tally's code. The chat is free. Nothing is paid, signed or saved."
+        actions={messages.length ? (
+          <button type="button" onClick={restart} className="inline-flex h-10 items-center gap-2 rounded-[9px] border border-border bg-white px-3.5 text-[13px] font-medium text-ink-2 hover:text-ink">
+            <RotateCcw className="size-4" />New chat
+          </button>
+        ) : null}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <Reveal>
-          <Section title="Your request">
-            <div className="grid gap-2.5 sm:grid-cols-3 lg:grid-cols-1 2xl:grid-cols-3" role="radiogroup" aria-label="Coworker">
-              {COWORKERS.map((c) => (
-                <button
-                  key={c.slug}
-                  type="button"
-                  role="radio"
-                  aria-checked={c.slug === coworker}
-                  onClick={() => setCoworker(c.slug)}
-                  className={cn('flex items-center gap-3 rounded-[12px] border p-3 text-left transition-colors', c.slug === coworker ? 'border-ink bg-white shadow-[0_0_0_1px_var(--ink)]' : 'border-border bg-white/60 hover:bg-white')}
-                >
-                  <img src={c.avatar} alt="" className="size-9 rounded-[8px]" />
-                  <span className="min-w-0">
-                    <span className="block text-[13.5px] font-semibold">{c.name}</span>
-                    <span className="block truncate text-[11.5px] text-ink-3">{c.does}</span>
-                  </span>
+          <section className="surface flex min-h-[560px] flex-col rounded-[14px]" aria-label="Chat">
+            <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6" aria-live="polite">
+              {!messages.length ? (
+                <div className="grid min-h-[340px] place-items-center text-center">
+                  <div>
+                    <Sparkles className="mx-auto size-6 text-ink-3" />
+                    <p className="mt-3 text-[15px] font-medium">What can the Coworkers do for you?</p>
+                    <p className="mx-auto mt-1.5 max-w-[46ch] text-[13px] text-ink-3">Describe a deal, name a disputed contract, or ask about a company. A follow-up keeps the same Coworker unless you ask for another one.</p>
+                    <div className="mt-5 flex flex-wrap justify-center gap-2">
+                      {COWORKERS.map((c) => (
+                        <button key={c.slug} type="button" onClick={() => setText(example(c.slug))} className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 text-[12.5px] text-ink-2 hover:text-ink">
+                          <img src={c.avatar} alt="" className="size-4 rounded-[4px]" />{c.does}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : messages.map((m) => <Bubble key={m.id} message={m} />)}
+              <div ref={end} />
+            </div>
+
+            <div className="border-t border-border p-4 sm:p-5">
+              <div className="mb-3 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Who answers">
+                <span className="mr-1 text-[12px] text-ink-3">Answered by</span>
+                {([{slug: 'auto', name: 'Auto'}, ...COWORKERS] as Array<{slug: Target; name: string}>).map((c) => (
+                  <button
+                    key={c.slug}
+                    type="button"
+                    role="radio"
+                    aria-checked={target === c.slug}
+                    onClick={() => setTarget(c.slug)}
+                    className={cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium transition-colors',
+                      target === c.slug ? 'border-ink bg-ink text-white' : 'border-border bg-white text-ink-2 hover:text-ink')}
+                  >
+                    {c.slug === 'auto' ? <Wand2 className="size-3.5" /> : null}{c.name}
+                  </button>
+                ))}
+              </div>
+              <form onSubmit={(e) => { e.preventDefault(); void send() }} className="flex items-end gap-2">
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
+                  }}
+                  maxLength={4000}
+                  rows={2}
+                  placeholder={target === 'auto' ? 'Describe your deal, dispute, or the company you want to check…' : example(target)}
+                  className="max-h-48 min-h-[52px] flex-1 resize-none bg-white text-[14px]"
+                  aria-label="Message"
+                />
+                <button type="submit" disabled={busy || !text.trim()} aria-label="Send" className="grid size-[52px] shrink-0 place-items-center rounded-[10px] bg-ink text-white transition-colors hover:bg-ink-2 disabled:opacity-40">
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                 </button>
-              ))}
+              </form>
+              <p className="mt-2 flex justify-between gap-3 text-[11.5px] text-ink-3">
+                <span>Enter sends. Shift + Enter adds a line.</span>
+                <span className="mono">{text.length}/4000</span>
+              </p>
             </div>
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              maxLength={4000}
-              placeholder={example(coworker)}
-              className="mt-5 min-h-40 bg-white text-[14px]"
-              aria-label="Your request"
-            />
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button type="button" onClick={submit} disabled={busy || !text.trim()} className="inline-flex h-10 items-center gap-2 rounded-[9px] bg-ink px-4 text-[13.5px] font-semibold text-white transition-colors hover:bg-ink-2 disabled:opacity-40">
-                {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}Ask {chosen.name}
-              </button>
-              <button type="button" onClick={() => setText(example(coworker))} className="h-10 rounded-[9px] px-3 text-[13px] font-medium text-ink-3 hover:bg-black/[0.04] hover:text-ink">Use an example</button>
-              <span className="mono ml-auto text-[11px] text-ink-3">{text.length}/4000</span>
-            </div>
-            {error ? <div className="mt-4"><ErrorNote>{error}</ErrorNote></div> : null}
-          </Section>
+          </section>
         </Reveal>
 
         <Reveal delay={0.08}>
-          <section className="surface min-h-[320px] rounded-[14px]" aria-live="polite" aria-label="Answer">
-            {!job ? (
-              <div className="grid h-full min-h-[320px] place-items-center p-8 text-center">
-                <div>
-                  <Sparkles className="mx-auto size-6 text-ink-3" />
-                  <p className="mt-3 text-[14.5px] font-medium">Your answer appears here</p>
-                  <p className="mt-1.5 max-w-[42ch] text-[13px] text-ink-3">Pick a Coworker, write your request and press Ask. A fill-in request takes a second; plain English can take a minute.</p>
-                </div>
-              </div>
-            ) : job.status === 'queued' || job.status === 'running' ? (
-              <div className="grid min-h-[320px] place-items-center p-8">
-                <p className="flex items-center gap-2 text-[14px] text-ink-2" role="status"><Loader2 className="size-4 animate-spin" />{COWORKERS.find((c) => c.slug === job.coworker)?.name} is working{job.position ? ` (${job.position} ahead of you)` : ''}…</p>
-              </div>
-            ) : job.status === 'failed' ? (
-              <div className="p-6"><ErrorNote>{job.error ?? 'The Coworker could not answer.'}</ErrorNote></div>
-            ) : (
-              <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} className="p-6">
-                <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-4">
-                  <span className="flex items-center gap-2.5">
-                    <img src={COWORKERS.find((c) => c.slug === job.coworker)?.avatar} alt="" className="size-7 rounded-[6px]" />
-                    <span className="font-[family-name:var(--font-display)] text-[14px]">{COWORKERS.find((c) => c.slug === job.coworker)?.name}</span>
+          <aside className="space-y-3" aria-label="The Coworkers">
+            {COWORKERS.map((c) => (
+              <div key={c.slug} className="surface rounded-[14px] p-4">
+                <div className="flex items-center gap-3">
+                  <img src={c.avatar} alt="" className="size-9 rounded-[8px]" />
+                  <span className="min-w-0">
+                    <span className="block text-[13.5px] font-semibold">{c.name}</span>
+                    <span className="block text-[12px] text-ink-3">{c.does}</span>
                   </span>
-                  {job.mode ? <Tag tone={MODE[job.mode].tone}>{MODE[job.mode].label}</Tag> : null}
                 </div>
-                <Answer text={job.answer ?? ''} />
-              </motion.div>
-            )}
-          </section>
+                <button type="button" onClick={() => { setTarget('auto'); setText(example(c.slug)) }} className="mt-3 w-full rounded-[9px] bg-black/[0.035] px-3 py-2 text-left text-[12.5px] text-ink-2 hover:bg-black/[0.06] hover:text-ink">
+                  <span className="line-clamp-2 whitespace-pre-line">{example(c.slug)}</span>
+                </button>
+              </div>
+            ))}
+            <p className="px-1 text-[12px] leading-relaxed text-ink-3">Plain English uses an AI model with a small daily allowance. When it runs out, the Coworker shows a fill-in format that always works.</p>
+          </aside>
         </Reveal>
       </div>
     </div>
