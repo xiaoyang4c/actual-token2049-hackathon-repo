@@ -14,6 +14,7 @@
     "contracts:worker": "bun run services/reliability/contract-worker.ts",
     "contracts:smoke": "bun run services/reliability/contract-preprod-smoke.ts",
     "contracts:showcase": "bun run services/reliability/contract-showcase.ts",
+    "coworkers:worker": "bun run services/reliability/coworker-worker.ts",
     "test": "bun test packages services ui && cd cre/agent-loop && bun test",
     "typecheck:workflow": "cd cre/agent-loop && bun run typecheck",
     "typecheck:control": "tsc --noEmit -p tsconfig.control.json",

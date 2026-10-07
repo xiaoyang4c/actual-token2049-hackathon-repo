@@ -27,7 +27,7 @@ export interface ContractConfig {
 }
 
 /** Test USDM on Cardano preprod (policy id + asset name), from the Masumi TOKEN2049 guide. */
-const TEST_USDM_UNIT = '16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d';
+export const TEST_USDM_UNIT = '16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d';
 /** USDM has 6 decimals: 1 USDM = 1000000 atomic units (Masumi TOKEN2049 guide). */
 const TEST_USDM_DECIMALS = 6;
 /** Core plus holdback. A third escrow per milestone has no remedy that uses it. */

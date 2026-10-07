@@ -54,9 +54,54 @@ All three Coworkers have access to the TOKEN2049 Origins workspace.
 Read [the preprod server](../../../deploy/preprod/README.md) to rebuild the payment service and the registrations.
 Each Masumi agent uses `apiBaseUrl` `https://13-210-42-0.sslip.io/<deal-desk|mediator|trust-check>`.
 
+## The Task worker
+
+[`../coworker-worker.ts`](../coworker-worker.ts) runs the three Coworkers on Sokosumi.
+For each Task assigned to a Coworker, it does these steps in order:
+
+1. Read the Task with the Coworker's own key (`coworker_...`). This works in personal and organization workspaces.
+2. Without a model: compute the whole answer first. If the request is unreadable or the engine rejects it, set `INPUT_REQUIRED` with the fill-in format. Nobody pays for that.
+3. Set `RUNNING`. Ask the Masumi payment service for a payment request ([`../mps-seller.ts`](../mps-seller.ts)). Post it to the Task as a `masumiPayment` event. Sokosumi locks the buyer's test USDM in the escrow.
+4. Wait for `FundsLocked` in a confirmed transaction. With a model, run the model only now.
+5. Submit the result hash in the form that Sokosumi checks, then complete the Task with the answer.
+6. Follow the escrow until the payment service collects for the seller. Record the collection transaction.
+
+The journal (`COWORKER_STATE_DIR`, one file per Task) records each stage before every external write.
+After a crash, a write whose outcome is unknown is not sent again. The Task stops at stage `inspect` for a person.
+If the funds do not lock before the result deadline, or the model fails, the Task is marked `FAILED` and no result is submitted, so the escrow refunds the buyer.
+
+### Choose the model
+
+The model is one setting, `COWORKER_MODEL_PROVIDER`, in [`tally-coworkers.service`](../../../deploy/preprod/tally-coworkers.service):
+
+| Value | Model | Secret file in `~/tally-secrets` |
+| --- | --- | --- |
+| `none` | No model. The Coworkers answer the fill-in format | none |
+| `gemini` | Google Gemini (`COWORKER_GEMINI_MODEL`) | `gemini_api_key` |
+| `bedrock` | Claude on Amazon Bedrock (`COWORKER_BEDROCK_MODEL_ID`, `COWORKER_BEDROCK_REGION`) with a Bedrock API key | `bedrock_api_key` |
+
+To switch, edit the line, then run `sudo systemctl daemon-reload && sudo systemctl restart tally-coworkers`.
+If a model call fails, a readable fill-in request still gets the fill-in answer.
+
+### Fill-in format
+
+Deal Desk:
+
+```text
+template: physical
+item: Lot 1, 1,200 kg green arabica, Grade A
+amount: 4000
+remedy: partial 70
+description: Green arabica, washed
+quantity: 1200
+unit: kg
+```
+
+Mediator: `contract: <contract id>` and `milestone: 0`. Trust Check: `company: <name or Tally id>`.
+
 ## Not done yet
 
-1. **The Task worker.** It takes a Sokosumi Task, requests payment through the Masumi payment service, waits until the funds are locked, runs the model with these instructions and tools, submits the result, and completes the Task. It follows the reference Coworker in `masumi-network/demo-agent-token2049`.
-2. **Model access.** The planned model is Claude on Amazon Bedrock. Bedrock access is on hold for the hackathon account. The worker takes the model as a setting, so another provider can replace it.
-3. **The Mediator never signs.** The platform mediator key stays with a person. Wiring the signed ruling back into Tally is a manual step.
-4. **Score-based contract terms.** Tally does not set escrow terms from scores yet. Trust Check says so.
+1. **A first live paid Task.** The worker is tested against fake Sokosumi and fake MPS services only.
+2. **The Mediator never signs.** The platform mediator key stays with a person. Wiring the signed ruling back into Tally is a manual step.
+3. **Score-based contract terms.** Tally does not set escrow terms from scores yet. Trust Check says so.
+4. **Bedrock with the server role.** The Bedrock provider uses a Bedrock API key. Signing with the instance role (SigV4) is not built.

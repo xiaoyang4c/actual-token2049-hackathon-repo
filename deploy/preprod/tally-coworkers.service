@@ -1,0 +1,24 @@
+[Unit]
+Description=Tally Coworker worker (Sokosumi Tasks, Masumi payments)
+After=network-online.target docker.service tally-services.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tally-app/current
+Environment=CONTROL_DB_PATH=/home/ubuntu/tally-app/data/agent.sqlite
+Environment=COWORKER_STATE_DIR=/home/ubuntu/tally-app/data/coworker-worker
+Environment=TALLY_SECRETS_DIR=/home/ubuntu/tally-secrets
+# none (fill-in answers), gemini, or bedrock. Change it here, then: sudo systemctl restart tally-coworkers
+Environment=COWORKER_MODEL_PROVIDER=none
+Environment=COWORKER_GEMINI_MODEL=gemini-2.5-flash
+Environment=COWORKER_BEDROCK_REGION=ap-southeast-2
+Environment=COWORKER_BEDROCK_MODEL_ID=au.anthropic.claude-sonnet-4-5-20250929-v1:0
+ExecStart=/home/ubuntu/.bun/bin/bun run services/reliability/coworker-worker.ts
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

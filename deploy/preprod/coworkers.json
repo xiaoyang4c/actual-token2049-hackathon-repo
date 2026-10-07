@@ -1,0 +1,15 @@
+{
+  "priceAtomic": "1000000",
+  "source": {
+    "policyId": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b",
+    "smartContractAddress": "addr_test1wzs4e6wc95hkwezlccjw9mdvq0r0rsgx6zk34avptga3ftgn37w4g",
+    "sellerVkey": "96740dce7a58e99e5ac969d2672d48fcfd350f09aff58c3b0983396a",
+    "sellerAddress": "addr_test1qzt8grww0fvwn8j6e95ayeedfr706dg0pxhltrpmpxpnj6n6vv2u6sgysk32l3f0zj4cuj2crvh8773m8t4upsw0thfs36sckq",
+    "supportedPaymentSourceIndex": 0
+  },
+  "coworkers": [
+    {"slug": "deal-desk", "coworkerId": "01a11354-0a28-745c-8424-c0f06b1331cb", "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b10ba6689da04ab4bdb3ef595a1312b3b6f5e4afb4c9260d44b2532efdd000000"},
+    {"slug": "mediator", "coworkerId": "01a11354-2a34-71af-917c-8114f24fc1cb", "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b11ba6689da04ab4bdb3ef595a1312b3b6f5e4afb4c9260d44b2532efdd000000"},
+    {"slug": "trust-check", "coworkerId": "01a11354-467b-7049-826a-0e7087f78a59", "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b12ba6689da04ab4bdb3ef595a1312b3b6f5e4afb4c9260d44b2532efdd000000"}
+  ]
+}

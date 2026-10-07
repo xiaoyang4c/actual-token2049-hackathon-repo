@@ -103,6 +103,22 @@ sudo systemctl start tally-services
 
 The seed refuses a store that already has the showcase parties. All showcase contracts are SIMULATED.
 
+## Coworker worker
+
+[`tally-coworkers.service`](tally-coworkers.service) runs the Task worker. Read [the Coworker README](../../services/reliability/coworkers/README.md#the-task-worker).
+Its configuration is [`coworkers.json`](coworkers.json): the Coworker ids, the agent identifiers, the selling wallet, and the price per Task. All of it is public.
+
+It needs these secrets in `~/tally-secrets`:
+
+| File | What | How to create it |
+| --- | --- | --- |
+| `mps_worker_token` | A payment service API key with read and pay permission, Preprod only. Not the admin key | `POST /api/v1/api-key` with the admin key |
+| `coworker_deal_desk_key`, `coworker_mediator_key`, `coworker_trust_check_key` | Each Coworker's runtime key (`coworker_...`) | `sokosumi --preprod coworkers api-key <id> --json`, piped into the file. Never print it |
+| `gemini_api_key` or `bedrock_api_key` | Only for `COWORKER_MODEL_PROVIDER=gemini` or `bedrock` | `tally-set-secret gemini_api_key` |
+
+Install and start: copy the unit to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, then `sudo systemctl enable --now tally-coworkers`.
+Read its log with `journalctl -u tally-coworkers -f`. The journal of each Task is in `~/tally-app/data/coworker-worker`.
+
 ## Register the Coworkers
 
 ### Masumi registry (on-chain)
