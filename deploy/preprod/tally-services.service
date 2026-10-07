@@ -1,0 +1,17 @@
+[Unit]
+Description=Tally control API and demo services (paper mode)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tally-app/current
+Environment=CONTROL_DB_PATH=/home/ubuntu/tally-app/data/agent.sqlite
+ExecStart=/home/ubuntu/.bun/bin/bun run services/dev.ts
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

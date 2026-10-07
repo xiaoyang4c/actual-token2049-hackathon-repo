@@ -8,6 +8,10 @@
 // to the control API (CONTROL_API_URL, default http://127.0.0.1:8787)
 // so the browser stays on one origin. Port 8791 leaves the market feed on 8790.
 // Writes (policy, orders, shock, reset) are not forwarded.
+//
+// One exception: "Ask a Coworker". POST /coworkers/ask and GET /coworkers/ask?id=
+// go to the Coworker worker (COWORKER_ASK_URL, default http://127.0.0.1:8792).
+// It answers a free preview: its tools only read, and nothing is paid or stored.
 
 const FILES: Record<string, string> = {
   "/": "index.html",
@@ -20,6 +24,10 @@ const FILES: Record<string, string> = {
   "/fixture.js": "fixture.js",
   "/data.js": "data.js",
   "/audit.js": "audit.js",
+  "/tally.js": "tally.js",
+  "/tally-views.js": "tally-views.js",
+  "/markdown.js": "markdown.js",
+  "/favicon.svg": "favicon.svg",
 }
 
 const PROXY_PATHS = new Set([
@@ -27,9 +35,49 @@ const PROXY_PATHS = new Set([
   "/reliability/entities", "/reliability/scores", "/reliability/listings",
   "/reliability/transactions", "/reliability/receipts", "/reliability/lifecycle",
   "/reliability/kyc", "/reliability/kyc/fixtures",
+  // Tally contract views. All GET, all read-only.
+  "/reliability/contracts", "/reliability/contracts/list", "/reliability/contracts/templates",
+  "/reliability/contracts/case", "/reliability/contracts/ruling-options", "/reliability/contracts/ruling-payload",
+  "/reliability/profile", "/reliability/profile/search",
+  "/reliability/anchors/contract", "/reliability/anchors/company",
+  // Deal Desk: templates and a sandboxed draft. Both GET, neither writes.
+  "/reliability/contracts/draft-templates", "/reliability/contracts/draft",
 ])
 
+const ASK_PATH = "/coworkers/ask"
+/** A request is at most 4,000 characters; the JSON around it is small. */
+const ASK_BODY_LIMIT = 16_384
+
 const fileUrl = (name: string) => new URL(name, import.meta.url)
+
+/** The visitor's address. Caddy sets X-Forwarded-For; its last entry is the address Caddy saw. */
+const visitorOf = (req: Request, direct: string | undefined) =>
+  req.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || direct || "unknown"
+
+const proxyAsk = async (askUrl: string, req: Request, visitor: string, search: string) => {
+  let body: string | undefined
+  if (req.method === "POST") {
+    body = await req.text()
+    if (new TextEncoder().encode(body).length > ASK_BODY_LIMIT) {
+      return Response.json({ error: "The request is too long." }, { status: 413 })
+    }
+  }
+  try {
+    const upstream = await fetch(`${askUrl}/ask${req.method === "GET" ? search : ""}`, {
+      method: req.method,
+      headers: { "content-type": "application/json", "x-tally-visitor": visitor },
+      body,
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    })
+    return new Response(await upstream.text(), {
+      status: upstream.status,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    })
+  } catch {
+    return Response.json({ error: "The Coworkers are offline right now. Try again later." }, { status: 502 })
+  }
+}
 
 const proxyGet = async (controlApiUrl: string, path: string) => {
   try {
@@ -50,17 +98,20 @@ const proxyGet = async (controlApiUrl: string, path: string) => {
   }
 }
 
-export const startUi = (options?: { port?: number; controlApiUrl?: string }) => {
+export const startUi = (options?: { port?: number; controlApiUrl?: string; askUrl?: string }) => {
   const port = options?.port ?? Number(process.env.UI_PORT ?? 8791)
   const controlApiUrl = (options?.controlApiUrl ?? process.env.CONTROL_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "")
+  const askUrl = (options?.askUrl ?? process.env.COWORKER_ASK_URL ?? "http://127.0.0.1:8792").replace(/\/$/, "")
 
   return Bun.serve({
     hostname: "127.0.0.1",
     port,
-    async fetch(req) {
+    async fetch(req, server) {
       const url = new URL(req.url)
       let res: Response
-      if ((req.method === "GET" || req.method === "HEAD") && PROXY_PATHS.has(url.pathname)) {
+      if (url.pathname === ASK_PATH && (req.method === "POST" || req.method === "GET")) {
+        res = await proxyAsk(askUrl, req, visitorOf(req, server.requestIP(req)?.address), url.search)
+      } else if ((req.method === "GET" || req.method === "HEAD") && PROXY_PATHS.has(url.pathname)) {
         res = await proxyGet(controlApiUrl, url.pathname + url.search)
         // HEAD gets the GET status and headers with no body.
         if (req.method === "HEAD") res = new Response(null, { status: res.status, headers: res.headers })
@@ -84,4 +135,5 @@ if (import.meta.main) {
   console.log(`operator ui   http://localhost:${server.port}`)
   console.log(`control api   ${control}`)
   console.log("read only — marketplace display; writes stay on the control API")
+  console.log(`coworker ask  ${process.env.COWORKER_ASK_URL ?? "http://127.0.0.1:8792"} (free preview, reads only)`)
 }

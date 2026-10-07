@@ -169,6 +169,15 @@ amounts paid to each side, the tier reached, the winner, the ruling compliance o
 | `POST` | `/reliability/contracts/ruling` | Tier 3 ruling signed by the mediator |
 | `POST` | `/reliability/contracts/tick` | Run one scheduler pass |
 | `GET` | `/reliability/contracts/audit?id=` | Read the audit log and the hash chain status |
+| `GET` | `/reliability/contracts/list?partyId=&disputes=1` | List contracts with the next action on each milestone |
+| `GET` | `/reliability/contracts/case?id=&milestone=` | Read the case file of one milestone (evidence, signers, audit trail) |
+| `GET` | `/reliability/contracts/ruling-options?id=&milestone=` | Simulate a buyer win and a seller win on a copy of the contract |
+| `GET` | `/reliability/contracts/ruling-payload?id=&milestone=&winner=&reason=` | Return the exact bytes that the mediator signs |
+| `GET` | `/reliability/profile?entityId=` | Read a company record: scores, terms decisions, and deal history |
+| `GET` | `/reliability/profile/search?q=` | Find companies by name or id |
+
+The read views use the Coworker tools (`services/reliability/coworker-tools.ts`), so the UI and the Coworkers show the same engine numbers.
+Run `bun run contracts:showcase` with `CONTROL_DB_PATH` to seed six paper contracts in different stages for a demo.
 
 Each party action carries an `actionId` and an Ed25519 signature over `partyActionBytes`.
 A repeated `actionId` returns the earlier result.
@@ -210,9 +219,9 @@ A late ruling compliance instruction remains permitted and receives the existing
 5. **Key registration checks KYC, not the caller.** A key binds only to a KYC-verified entity, and a template can raise the tier with `minimumKycTier`. The route does not authenticate who sends the request.
 6. **Scores and fees use default parameters** (`policies.ts`). Contract creation checks both parties' exposure limits and records a fee charge for each milestone. Read [Marketplace rules and writes](marketplace.md).
 7. **Platform fees are not in the escrow amount.** The fee charge is a paper ledger record. Lane B owns fees.
-8. **The mediator is a key, not a Coworker.** Plan: a Sokosumi Coworker returns the ruling; a platform signer checks the paid Task and signs.
+8. **A person holds the mediator key.** The Tally Mediator Coworker drafts the ruling and returns the exact bytes to sign. The Task worker is not built yet. Read [Tally Coworkers](../services/reliability/coworkers/README.md).
 9. **Evidence lives in SQLite.** Production needs object storage.
-10. **The operator UI does not show contracts yet.** The routes exist for lane C.
+10. **The UI shows contracts read-only.** Parties and the mediator sign their actions outside the UI. Before real data, add sign-in and show each party only its own deals.
 11. **Two lifecycles exist.** Keep v1 for the paper sales demo. Use contracts for live escrow. The v1 live path now stops with a clear error before it reaches Masumi.
 
 ### Improvements to consider

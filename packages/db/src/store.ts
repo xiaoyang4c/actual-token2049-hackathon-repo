@@ -19,6 +19,8 @@ import * as lifecycleRecords from './lifecycle-records';
 import * as lifecycleCommands from './lifecycle-commands';
 import type {LifecycleCommandRecord} from '../../reliability/src/lifecycle/commands';
 import * as contractRecords from './contract-records';
+import * as anchorRecords from './anchor-records';
+import type {AnchorBatchRow, AnchoredEntryView, AnchorEntryRow, FinalPublication} from './anchor-records';
 import type {
   ContractAuditRow, ContractCommit, EscrowOperation, ProcessedAction, ReliabilityPublication,
 } from '../../reliability/src/contract-lifecycle/ports';
@@ -691,6 +693,64 @@ export class AgentStore {
 
   markContractPublicationPublished(id: string, publishedAt: number): void {
     contractRecords.markPublicationPublished(this.db, id, publishedAt);
+  }
+
+  // ---- Settlement anchors ----
+
+  listUnanchoredFinalPublications(): FinalPublication[] {
+    return anchorRecords.listUnanchoredFinalPublications(this.db);
+  }
+
+  getContractPublicationJson(id: string): string|null {
+    return anchorRecords.getPublicationJson(this.db, id);
+  }
+
+  lastAnchorEntry(entityId: string): AnchorEntryRow|null {
+    return anchorRecords.lastAnchorEntry(this.db, entityId);
+  }
+
+  insertAnchorEntries(entries: AnchorEntryRow[]): void {
+    anchorRecords.insertAnchorEntries(this.db, entries);
+  }
+
+  listUnbatchedAnchorEntries(limit: number): AnchorEntryRow[] {
+    return anchorRecords.listUnbatchedAnchorEntries(this.db, limit);
+  }
+
+  getOpenAnchorBatch(): AnchorBatchRow|null {
+    return anchorRecords.getOpenAnchorBatch(this.db);
+  }
+
+  getAnchorBatch(id: string): AnchorBatchRow|null {
+    return anchorRecords.getAnchorBatch(this.db, id);
+  }
+
+  createAnchorBatch(batch: Parameters<typeof anchorRecords.createAnchorBatch>[1]): void {
+    anchorRecords.createAnchorBatch(this.db, batch);
+  }
+
+  markAnchorBatchSubmitted(id: string, at: number, note: string|null): void {
+    anchorRecords.markAnchorBatchSubmitted(this.db, id, at, note);
+  }
+
+  markAnchorBatchConfirmed(id: string, evidence: {at: number; blockHeight: number; blockTime: number}): void {
+    anchorRecords.markAnchorBatchConfirmed(this.db, id, evidence);
+  }
+
+  markAnchorBatchExpired(id: string, at: number, note: string): void {
+    anchorRecords.markAnchorBatchExpired(this.db, id, at, note);
+  }
+
+  listAnchorEntriesForContract(contractId: string): AnchoredEntryView[] {
+    return anchorRecords.listAnchorEntriesForContract(this.db, contractId);
+  }
+
+  listAnchorEntriesForEntity(entityId: string): AnchoredEntryView[] {
+    return anchorRecords.listAnchorEntriesForEntity(this.db, entityId);
+  }
+
+  anchorCounts(): ReturnType<typeof anchorRecords.anchorCounts> {
+    return anchorRecords.anchorCounts(this.db);
   }
 
   getPaperEscrow(ref: string): string|undefined {

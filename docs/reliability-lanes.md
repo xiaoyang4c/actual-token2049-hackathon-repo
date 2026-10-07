@@ -18,7 +18,7 @@ See [Open decisions](#open-decisions).
 
 | Item | Status | Owner |
 | --- | --- | --- |
-| Good UI | local display implemented; transactions, receipts, scores, mock KYC, and listings | Lane C |
+| Good UI | Tally UI implemented: My deals, Mediation desk, Companies, and Operator; hosted as a read-only public demo | Lane C |
 | KYC verification | mock verification; enforced before sales, invoices, contracts, and key registration | Lane A |
 | Score change scaled by transaction value | done with default value scales | Math lane |
 | Separate buyer score and seller score | done on main | Math lane |
@@ -27,7 +27,7 @@ See [Open decisions](#open-decisions).
 | Listings and offers | listing writes and the offer flow | Lane D |
 | Invoice and delivery evidence | invoice terms hash and payment check; delivery terms check | Lane D |
 
-Lane C builds the local operator UI against `GET /reliability/*`. It shows transactions, receipts, separate buyer and seller scores, mock KYC, and listings. Read [UI instructions](../ui/README.md). The operator UI sends no orders. The operator UI edits no policy.
+Lane C builds the Tally UI against `GET /reliability/*`. It shows contracts and their next actions, disputes with their case files, company records, transactions, receipts, separate buyer and seller scores, mock KYC, and listings. Read [UI instructions](../ui/README.md). The UI sends no orders, edits no policy, and signs nothing.
 
 Pull request #8 adds mock KYC on main. Lane A owns mock KYC. Read [mock KYC](kyc.md). `KYC_TIER_RULES` contains the default tier rules. The product owner has not decided the final KYC bar.
 
@@ -76,7 +76,7 @@ Migration `014` stores lifecycle commands, event revisions, score baselines, and
 Migration `007` stores event weights and pair positions.
 Migration `009` stores invoice payment observations.
 Migration `016` stores offers and accepted fee charges.
-Number `015` is reserved for the settlement anchor branch.
+Migration `015` stores settlement anchors.
 The next free migration number is `017`.
 
 Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tiers, and demo routes.
@@ -147,8 +147,7 @@ Take the next free migration number.
 
 Paper omnibus funding uses `013`.
 Lifecycle command and projection storage uses `014`.
-The math lane uses `007`. Lane D uses `009`. Offers and fee charges use `016`.
-Number `015` is reserved for the settlement anchor branch.
+The math lane uses `007`. Lane D uses `009`. Settlement anchors use `015`. Offers and fee charges use `016`.
 The next free number is `017`.
 
 ## Shared files

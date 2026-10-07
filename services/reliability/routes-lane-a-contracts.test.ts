@@ -9,8 +9,11 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {partyActionBytes, type PartyAction} from '../../packages/reliability/src/contract-lifecycle/engine';
 import {generateEd25519, signBytes} from '../../packages/reliability/src/contract-lifecycle/signatures';
+import {AgentStore} from '../../packages/db/src/index';
 import {start} from '../control-api';
+import {AnchorWorker} from './anchors';
 import {envOf} from './contract-kit';
+import {seedShowcase} from './contract-showcase';
 
 const sha = (text: string) => createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex');
 const FILE = 'id,price\n1,100\n';
@@ -144,5 +147,76 @@ describe('contract routes', () => {
       expect((await call(origin, '/reliability/contracts/parties', {entityId: 'p', publicKeyHex: 'zz', cardanoAddress: 'addr_test1_x'})).status).toBe(400);
       expect((await call(origin, '/reliability/contracts/tick', {at: iso(Date.now() - 3_600_000)})).status).toBe(400);
     });
+  });
+});
+
+describe('contract read views', () => {
+  test('list, case, ruling options, signing payload, and profile over HTTP', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'contract-views-'));
+    const databasePath = join(directory, 'agent.sqlite');
+    const previous = {...process.env};
+    Object.assign(process.env, envOf([['CARDANO_MODE', 'simulated'], ['CARDANO_ALLOW_NETWORK', 'false']]));
+    await seedShowcase(databasePath);
+    const server = start(0, {auditFile: join(directory, 'audit.jsonl'), databasePath});
+    const origin = `http://127.0.0.1:${server.port}`;
+    try {
+      const list = await fetch(`${origin}/reliability/contracts/list`);
+      const contracts = await list.json() as Array<{id: string; milestones: Array<{state: string; next: {actor: string}}>}>;
+      expect(contracts).toHaveLength(6);
+      const disputes = await (await fetch(`${origin}/reliability/contracts/list?disputes=1`)).json() as typeof contracts;
+      const tier3 = disputes.find((contract) => contract.milestones[0]?.state === 'tier_3_mediation')!;
+      expect(tier3.milestones[0]?.next.actor).toBe('mediator');
+
+      const caseFile = await call(origin, `/reliability/contracts/case?id=${tier3.id}&milestone=0`);
+      expect([caseFile.status, caseFile.body.canRuleNow]).toEqual([200, true]);
+      const options = await call(origin, `/reliability/contracts/ruling-options?id=${tier3.id}&milestone=0`);
+      expect((options.body.options as unknown[]).length).toBe(2);
+      const payload = await call(origin, `/reliability/contracts/ruling-payload?id=${tier3.id}&milestone=0&winner=buyer&reason=${encodeURIComponent('The lot is below grade.')}`);
+      expect(String(payload.body.bytes)).toContain('contract-mediator-ruling.v1');
+      expect((await call(origin, `/reliability/contracts/ruling-payload?id=${tier3.id}&milestone=0&winner=nobody&reason=x`)).status).toBe(400);
+
+      const settled = contracts.find((contract) => contract.milestones[0]?.state === 'settled')!;
+      expect((await call(origin, `/reliability/contracts/ruling-options?id=${settled.id}&milestone=0`)).status).toBe(409);
+      expect((await call(origin, '/reliability/contracts/case?id=missing&milestone=0')).status).toBe(404);
+
+      const search = await (await fetch(`${origin}/reliability/profile/search?q=kopi`)).json() as Array<{id: string}>;
+      expect(search.map((item) => item.id)).toEqual(['kopi-origin']);
+      const profile = await call(origin, '/reliability/profile?entityId=kopi-origin');
+      expect((profile.body.entity as {displayName: string}).displayName).toBe('Kopi Origin Roasters');
+
+      // Settlement anchors: the worker fingerprints the final records; the routes read them.
+      const store = AgentStore.open(databasePath);
+      new AnchorWorker({store, chain: null, submit: false, now: () => Date.now(), log: () => {}}).collect();
+      store.close();
+      const chain = await call(origin, '/reliability/anchors/company?entityId=kopi-origin');
+      expect(chain.status).toBe(200);
+      expect((chain.body.chain as {intact: boolean; length: number}).intact).toBe(true);
+      expect((chain.body.chain as {length: number}).length).toBeGreaterThan(0);
+      const anchored = await call(origin, `/reliability/anchors/contract?id=${settled.id}`);
+      const records = anchored.body.records as Array<{recordUnchanged: boolean; anchor: {status: string}}>;
+      expect(records.length).toBeGreaterThan(0);
+      expect(records.every((record) => record.recordUnchanged && record.anchor.status === 'waiting')).toBe(true);
+      expect((await call(origin, '/reliability/anchors/company')).status).toBe(400);
+
+      const templates = await (await fetch(`${origin}/reliability/contracts/draft-templates`)).json() as Array<{id: string; deliverableFields: {required: string[]}}>;
+      expect(templates.find((item) => item.id === 'physical-objective-spec')?.deliverableFields.required).toContain('quantity');
+      const input = {
+        templateId: 'physical-objective-spec',
+        milestones: [{title: 'Lot 9', amount: '4000', deliverable: {description: 'Green arabica', quantity: 1200, unit: 'kg'}}],
+        remedy: {type: 'partial_release', sellerSharePercent: '70'},
+        inspectors: ['lab'], judgeInspector: 'lab',
+      };
+      const draft = await call(origin, `/reliability/contracts/draft?input=${encodeURIComponent(JSON.stringify(input))}`);
+      expect(draft.status).toBe(200);
+      expect((draft.body.milestones as Array<{escrows: Array<{amount: {display: string}}>}>)[0]?.escrows.map((e) => e.amount.display)).toEqual(['2,800 test USDM', '1,200 test USDM']);
+      // The draft is a sandbox: the contract list is unchanged.
+      expect(await (await fetch(`${origin}/reliability/contracts/list`)).json()).toHaveLength(6);
+      expect((await call(origin, `/reliability/contracts/draft?input=${encodeURIComponent('{not json')}`)).status).toBe(400);
+      expect((await call(origin, `/reliability/contracts/draft?input=${encodeURIComponent(JSON.stringify({...input, templateId: 'nope'}))}`)).status).toBeGreaterThanOrEqual(400);
+    } finally {
+      await server.stop(true);
+      process.env = previous;
+      rmSync(directory, {recursive: true, force: true});
+    }
   });
 });

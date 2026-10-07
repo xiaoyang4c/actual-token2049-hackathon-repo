@@ -1,0 +1,32 @@
+# Masumi payment service (MPS) and its database for Tally on Cardano preprod.
+# Secrets live in the env files next to this file. Never commit them.
+name: tally
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    env_file: [pg.env]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mps -d masumi_payment"]
+      interval: 5s
+      retries: 30
+  mps:
+    image: tally/masumi-payment-service:d569a33
+    restart: unless-stopped
+    env_file: [mps.env]
+    depends_on:
+      postgres: {condition: service_healthy}
+    # Admin API and dashboard: reachable only from the server. Use an SSH tunnel.
+    ports: ["127.0.0.1:3001:3001"]
+  # One-time setup: migrations and the seed. The seed needs the build-stage
+  # image, because the runtime image leaves out the workspace packages.
+  mps-setup:
+    image: tally/mps-builder:d569a33
+    profiles: [setup]
+    working_dir: /usr/src/app
+    env_file: [mps.env, seed.env]
+    depends_on:
+      postgres: {condition: service_healthy}
+volumes:
+  pgdata:

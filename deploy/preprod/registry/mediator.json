@@ -1,0 +1,35 @@
+{
+  "network": "Preprod",
+  "sellingWalletVkey": "96740dce7a58e99e5ac969d2672d48fcfd350f09aff58c3b0983396a",
+  "supportedPaymentSources": [
+    {
+      "chain": "Cardano",
+      "network": "Preprod",
+      "paymentSourceType": "Web3CardanoV2",
+      "address": "addr_test1wzs4e6wc95hkwezlccjw9mdvq0r0rsgx6zk34avptga3ftgn37w4g",
+      "pricing": {
+        "pricingType": "Dynamic"
+      }
+    }
+  ],
+  "ExampleOutputs": [],
+  "Tags": [
+    "escrow",
+    "disputes",
+    "mediation",
+    "b2b",
+    "cardano",
+    "token2049"
+  ],
+  "name": "Tally Mediator",
+  "apiBaseUrl": "https://13-210-42-0.sslip.io/mediator",
+  "description": "Reviews a disputed Tally escrow: the signed terms, the agreed evidence and both sides' statements. Drafts a reasoned Tier 3 ruling under the contract's fixed remedies, for a human mediator to sign. Preprod demo, test USDM only.",
+  "Capability": {
+    "name": "tally-mediator",
+    "version": "0.1.0"
+  },
+  "Author": {
+    "name": "Tally",
+    "organization": "Tally"
+  }
+}

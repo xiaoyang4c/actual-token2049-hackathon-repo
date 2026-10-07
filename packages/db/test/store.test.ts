@@ -89,6 +89,8 @@ describe('AgentStore', () => {
         'payment_settlements',
         'policy',
         'position_events',
+        'reliability_anchor_batches',
+        'reliability_anchor_entries',
         'reliability_entities',
         'reliability_event_revisions',
         'reliability_event_weights',
@@ -125,8 +127,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-014 and 016. 015 is reserved for the settlement anchor branch.
-      expect(versions.versions).toBe(15);
+      // 001-016.
+      expect(versions.versions).toBe(16);
     } finally {
       db.close();
     }

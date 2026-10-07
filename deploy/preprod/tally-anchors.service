@@ -1,0 +1,22 @@
+[Unit]
+Description=Tally settlement anchors (fingerprints of settled records on Cardano preprod)
+After=network-online.target tally-services.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tally-app/current
+Environment=CONTROL_DB_PATH=/home/ubuntu/tally-app/data/agent.sqlite
+Environment=TALLY_SECRETS_DIR=/home/ubuntu/tally-secrets
+# off: record fingerprints only. on: also post them to Cardano preprod.
+# Turn on only after the team approves the first write, then:
+#   sudo systemctl daemon-reload && sudo systemctl restart tally-anchors
+Environment=ANCHOR_SUBMIT=off
+ExecStart=/home/ubuntu/.bun/bin/bun run services/reliability/anchor-worker.ts worker
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -13,7 +13,9 @@ import {ContractError} from '../../packages/reliability/src/contract-lifecycle/e
 import {sha256Hex} from '../../packages/reliability/src/contract-lifecycle/hashing';
 import type {EvidenceInput, NegotiatedOutcome, Remedy} from '../../packages/reliability/src/contract-lifecycle/types';
 import {json} from '../lib/http';
+import {companyAnchors, contractAnchors} from './anchors';
 import {contractServiceFor, type ContractService} from './contract-service';
+import {CoworkerTools, type DraftInput, type ToolResult} from './coworker-tools';
 import {MarketplaceRuleError} from './marketplace-gate';
 import type {ReliabilityRoute} from './route';
 
@@ -28,6 +30,7 @@ const STATUS_BY_CODE: {[code: string]: number} = {
   party_exists: 409,
   kyc_required: 403,
   evidence_too_large: 413,
+  not_in_tier_3: 409,
 };
 
 const PARTY_ACTIONS: readonly PartyActionType[] = [
@@ -144,6 +147,60 @@ function get(path: string, handle: (service: ContractService, url: URL) => unkno
   };
 }
 
+/**
+ * A read route served by the Coworker tools, so the operator UI shows the
+ * same engine numbers as the Coworkers. A tool error becomes an HTTP error.
+ */
+function toolGet(path: string, handle: (tools: CoworkerTools, url: URL) => ToolResult<unknown>): ReliabilityRoute {
+  return {
+    method: 'GET',
+    path,
+    handler: (request, url, store) => {
+      try {
+        const service = serviceFor(store);
+        const tools = new CoworkerTools(store ?? null, {config: service.config, templates: service.templates, now: () => service.now()});
+        const result = handle(tools, url);
+        if (!result.ok) return json({error: result.error.message, code: result.error.code}, STATUS_BY_CODE[result.error.code] ?? 400);
+        return json(result.result);
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  };
+}
+
+/** A read route over the stored settlement anchors. It never reaches the chain. */
+function anchorGet(path: string, handle: (store: AgentStore, url: URL) => unknown): ReliabilityRoute {
+  return {
+    method: 'GET',
+    path,
+    handler: (request, url, store) => {
+      try {
+        return json(handle(store, url));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  };
+}
+
+/** The Deal Desk draft input, sent as JSON in the `input` query. */
+function draftInput(raw: string): DraftInput {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new ContractError('invalid_input', 'input must be JSON');
+  }
+  return record(parsed, 'input') as unknown as DraftInput;
+}
+
+/** A milestone by number (0, 1, ...) or by id. */
+function milestoneRef(url: URL): number|string {
+  const value = requiredQuery(url, 'milestone');
+  return /^\d+$/.test(value) ? Number(value) : value;
+}
+
 function requiredQuery(url: URL, key: string): string {
   const value = url.searchParams.get(key);
   if (!value) throw new ContractError('invalid_input', `${key} is required`);
@@ -245,6 +302,29 @@ export const laneAContractRoutes: ReliabilityRoute[] = [
     await afterAction(service);
     return service.view(id);
   }),
+  // Read views for the operator UI. They use the Coworker tools.
+  toolGet('/reliability/contracts/list', (tools, url) => tools.contractSummaries({
+    partyId: url.searchParams.get('partyId') ?? undefined,
+    disputesOnly: url.searchParams.get('disputes') === '1',
+  })),
+  toolGet('/reliability/contracts/case', (tools, url) => tools.disputeCase(requiredQuery(url, 'id'), milestoneRef(url))),
+  toolGet('/reliability/contracts/ruling-options', (tools, url) => tools.rulingOptions(requiredQuery(url, 'id'), milestoneRef(url))),
+  toolGet('/reliability/contracts/ruling-payload', (tools, url) => {
+    const winner = requiredQuery(url, 'winner');
+    if (winner !== 'buyer' && winner !== 'seller') throw new ContractError('invalid_ruling', 'winner must be buyer or seller');
+    return tools.rulingSigningPayload(requiredQuery(url, 'id'), milestoneRef(url), winner, requiredQuery(url, 'reason'));
+  }),
+  toolGet('/reliability/profile', (tools, url) => tools.reliabilityProfile(requiredQuery(url, 'entityId'), {
+    counterpartyId: url.searchParams.get('counterpartyId') ?? undefined,
+  })),
+  toolGet('/reliability/profile/search', (tools, url) => tools.findEntities(requiredQuery(url, 'q'))),
+  // Settlement anchors: fingerprints of final records, each company's chain, and the Cardano transactions.
+  anchorGet('/reliability/anchors/contract', (store, url) => contractAnchors(store, requiredQuery(url, 'id'))),
+  anchorGet('/reliability/anchors/company', (store, url) => companyAnchors(store, requiredQuery(url, 'entityId'))),
+  // Deal Desk views. Templates with their deliverable fields, and a draft that
+  // runs createContract in an in-memory sandbox. Both only read, so both are GET.
+  toolGet('/reliability/contracts/draft-templates', (tools) => ({ok: true, result: tools.listTemplates()})),
+  toolGet('/reliability/contracts/draft', (tools, url) => tools.draftContract(draftInput(requiredQuery(url, 'input')))),
   post('/reliability/contracts/tick', async (service) => {
     const result = await service.tick();
     return {mode: service.mode, now: new Date(service.now()).toISOString(), ...result};

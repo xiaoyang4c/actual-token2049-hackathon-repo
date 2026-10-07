@@ -30,6 +30,9 @@ export const DEFAULT_RELIABILITY_POLICIES: ReliabilityPolicies = {
   fees: new CurveFeeTermsPolicy(),
 };
 
+/** False until the product owner selects the policy parameters. */
+export const POLICY_PARAMETERS_SELECTED = false;
+
 /** Unit-weight placeholders. Tests of cumulative mechanics use them. */
 export const STUB_RELIABILITY_POLICIES: ReliabilityPolicies = {
   scoring: new StubScoringPolicy(),

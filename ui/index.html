@@ -3,23 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Transactions · Reliability</title>
+    <title>Tally</title>
+    <meta name="description" content="Tally: escrowed B2B deals on Cardano with evidence rules, tiered disputes, and a reliability record." />
     <script>
       // Apply the theme before styles load to avoid a flash of the wrong theme.
       let savedTheme
-      try { savedTheme = localStorage.getItem("reliability-theme") } catch {}
+      try { savedTheme = localStorage.getItem("tally-theme") ?? localStorage.getItem("reliability-theme") } catch {}
       document.documentElement.dataset.theme = savedTheme === "light" || savedTheme === "dark"
         ? savedTheme : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
     </script>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='3' fill='white' stroke='%2317654c' stroke-width='2'/%3E%3Ctext x='8' y='24' font-size='23' font-family='sans-serif' fill='%231d3029'%3ER%3C/text%3E%3C/svg%3E" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <a class="skip-link" href="#main">Skip to marketplace</a>
+    <a class="skip-link" href="#main">Skip to content</a>
     <div id="app">
-      <p class="loading" role="status">Loading the marketplace…</p>
+      <p class="loading" role="status">Loading Tally…</p>
     </div>
-    <noscript>This read-only marketplace display requires JavaScript.</noscript>
+    <noscript>This read-only Tally display requires JavaScript.</noscript>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

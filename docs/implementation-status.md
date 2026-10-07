@@ -5,7 +5,7 @@ The review date is 2026-10-07.
 The change builds on main at commit `f353625`.
 Update this page when a change removes a listed limit.
 
-The product is the B2B and B2C marketplace with its reliability checker.
+The product is Tally: a B2B and B2C marketplace with escrowed contracts and a reliability checker.
 [PLAN.md](../PLAN.md) defines the product plan.
 [Lane ownership](reliability-lanes.md) defines module owners and target rules.
 The prediction-market runtime and capital-allocation plans are retired.
@@ -36,8 +36,11 @@ Read [Contract lifecycle](contract-lifecycle.md).
 | Invoice evidence | Canonical terms hash at issue; payment checked for hash, currency, amount, and due date plus grace; overdue review | Live settlement source with the USDM receipt check |
 | Delivery evidence | Goods delivery and service acceptance checked against `terms.delivery` and `terms.service` | Carrier and inspector identity checks |
 | Listings | Listing writes, buyer offers, seller acceptance or decline, buyer withdrawal, and expiry | Caller authentication |
-| Contract lifecycle | Signed terms, milestones, dispute tiers, remedies, durable escrow recovery, audit history, KYC-gated key registration, and fee charges per milestone | Actual preprod testing, token receipt checks, contract UI, and score-based escrow terms |
-| Operator display | Read-only stored transactions, receipts, scores, KYC, and listings | Pagination and clear source labels |
+| Contract lifecycle | Signed terms, milestones, dispute tiers, remedies, durable escrow recovery, audit history, KYC-gated key registration, and fee charges per milestone | Actual preprod testing, token receipt checks, and score-based escrow terms |
+| Tally UI | Read-only areas: My deals, Mediation desk, Companies, and Operator (transactions, attention, participants, listings, and contracts). Ask a Coworker gives a free preview. A public demo with paper data | Sign-in, per-party visibility, pagination, clear source labels, and views for offers, invoices, and fee charges |
+| Coworkers | Three Sokosumi Coworkers on the Masumi registry, with engine-backed tools and instructions. The Task worker takes paid Tasks through Masumi escrow, with Gemini or the fill-in format. The first paid Task was collected on preprod | Bedrock with the instance role, and the Mediator signing flow back into Tally |
+| Settlement anchors | Fingerprints of settled records, chained per company, posted to Cardano preprod as CIP-20 messages, with confirm-or-expire batch rules. The website shows anchor status | The first live batch (waits for the go-ahead), and a signed chain head for lenders |
+| Hosted demo | A preprod server with the payment service, the control API, the UI, and six showcase contracts | A live escrow run and a running contract worker |
 | Pooled funding | Paper deposits and deal allocations | Escrow integration, return credits, and reconciliation |
 
 Read [Reliability math](reliability-math.md) for the equations.
@@ -104,7 +107,8 @@ Invoice payments are paper. They record `settlementVerified: false`.
 
 ## Validation
 
-All 613 local tests pass under `packages`, `services`, and `ui`.
+All 693 local tests pass under `packages`, `services`, and `ui`.
+One intermittent failure appeared once in 13 full runs on 2026-10-07. It did not reproduce, and its test is not identified yet.
 The control and payment TypeScript checks pass.
 Lint passes.
 Regression tests cover all seven gaps, restart behavior, and two database writers.
@@ -112,4 +116,5 @@ Score tests reproduce the worked example in the math page.
 Escrow checks use injected ports and offline adapter tests.
 They make no live chain calls.
 Existing PR CI also runs the workflow tests and workflow TypeScript check.
-Browser rendering and actual preprod settlement were not tested for this change.
+Browser rendering and actual preprod settlement were not tested for the lifecycle fixes.
+The Tally UI views were checked in a browser, in light and dark mode.

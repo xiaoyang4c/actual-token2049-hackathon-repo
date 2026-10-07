@@ -62,6 +62,7 @@ The scoring, pair-decay, fee, and KYC interfaces stay in their lane files.
 | `contract-paper-escrow.ts` | Paper model of the Masumi V2 escrow. |
 | `contract-masumi-escrow.ts` | Live Masumi V2 escrow on the shared payment client. |
 | `routes-lane-a-contracts.ts` | Map signed contract requests and errors to HTTP responses. |
+| `coworker-tools.ts` | Deterministic tools for the Tally Coworkers. Read [Tally Coworkers](../services/reliability/coworkers/README.md). |
 | `score-ledger.ts` | Record event weights and pair positions. Rebuild and explain scores. |
 | `marketplace-gate.ts` | Check KYC, exposure limits, invoice due dates, and listing minimums. Record and settle fee charges. |
 | `marketplace-service.ts` | Listings and offers. Acceptance opens the sale. |

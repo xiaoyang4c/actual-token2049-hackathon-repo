@@ -1,5 +1,4 @@
--- Marketplace writes and accepted fee charges. Number 015 is reserved for
--- the settlement anchor branch (lane-a/coworker-worker).
+-- Marketplace writes and accepted fee charges. Settlement anchors use 015.
 --
 -- An offer row holds one buyer offer on a listing. Its status moves from
 -- open to accepted, declined, withdrawn, or expired once. A fee charge row
