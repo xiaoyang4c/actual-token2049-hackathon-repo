@@ -8,7 +8,8 @@
 import {readFileSync} from 'node:fs';
 import type {RemedyType} from '../../packages/reliability/src/contract-lifecycle/types';
 import {ModelError, runWithTools, type ModelProvider, type ParamSchema, type RunnableTool} from './coworker-models';
-import type {CoworkerTools, DraftInput, DraftResult, Money, RulingOption, ToolResult} from './coworker-tools';
+import {formatBlock, needsInput, plainWordsForPrompt, renderCase, renderDraft, renderProfile, type CaseView, type ProfileView, type RulingView} from './coworker-answers';
+import type {CoworkerTools, DraftInput, DraftResult, ToolResult} from './coworker-tools';
 
 export const COWORKER_SLUGS = ['deal-desk', 'mediator', 'trust-check'] as const;
 export type CoworkerSlug = typeof COWORKER_SLUGS[number];
@@ -176,84 +177,7 @@ export function fillInProblems(slug: CoworkerSlug, text: string): string[] {
 }
 
 export function needsInputMessage(slug: CoworkerSlug, problems: string[]): string {
-  return [
-    `${COWORKER_NAMES[slug]} could not read this request. Missing or unclear: ${problems.join('; ')}.`,
-    '',
-    'Reply in this format (one field per line):',
-    '',
-    FILL_IN_FORMATS[slug],
-  ].join('\n');
-}
-
-// ---------------------------------------------------------------------------
-// Template answers (no model)
-// ---------------------------------------------------------------------------
-
-const money = (value: Money|undefined) => value?.display ?? '—';
-const NO_MODEL_NOTE = '_Answered without a language model. Every value comes from Tally\'s contract engine._';
-
-function closing(set: string[], choice: string[], next: string): string {
-  return ['', '**Set by Tally\'s code:**', ...set.map((item) => `- ${item}`), '',
-    '**Still your choice:**', ...choice.map((item) => `- ${item}`), '', `**Next step:** ${next}`].join('\n');
-}
-
-export function renderDraft(draft: DraftResult): string {
-  const timeline = draft.firstMilestoneTimeline;
-  const lines = [
-    `# Tally contract draft (${draft.mode === 'live' ? 'live on Cardano preprod' : 'paper, SIMULATED'})`,
-    NO_MODEL_NOTE,
-    '',
-    `**Template:** ${draft.template.id} (judge: ${draft.template.judge})`,
-    `**Remedy:** ${draft.remedy.type}${draft.remedy.sellerSharePercent ? ` (seller keeps ${draft.remedy.sellerSharePercent}% if the buyer wins)` : ''}`,
-    '',
-    '## Milestones and escrows',
-    '| Milestone | Amount | Escrows | If the seller wins | If the buyer wins |',
-    '| --- | --- | --- | --- | --- |',
-    ...draft.milestones.map((item) => `| ${item.index + 1}. ${item.title} | ${money(item.amount)} | ${item.escrows.map((escrow) => `${escrow.role} ${money(escrow.amount)}`).join(', ')} | seller ${money(item.sellerWins.toSeller)}, buyer ${money(item.sellerWins.toBuyer)} | seller ${money(item.buyerWins.toSeller)}, buyer ${money(item.buyerWins.toBuyer)}${item.buyerWinsFollowUp === 'none' ? '' : ` (${item.buyerWinsFollowUp.replaceAll('_', ' ')})`} |`),
-    '',
-    '## What proves delivery',
-    ...draft.evidence.delivery.map((rule) => `- ${rule}`),
-    `- Judge: ${draft.judge.type}${draft.judge.inspector ? `, inspector ${draft.judge.inspector}` : ''}`,
-    '',
-    '## Timeline if funding starts now',
-    '| Step | Singapore time |',
-    '| --- | --- |',
-    `| Pay by | ${timeline.payBy.singapore} |`,
-    `| Deliver by | ${timeline.deliverBy.singapore} |`,
-    `| Last moment to dispute (if delivered last) | ${timeline.inspectionEndsIfDeliveredLast.singapore} |`,
-    `| Release at unlock | ${timeline.unlockAt.singapore} |`,
-    `| Expected payout if no dispute | ${timeline.expectedPayoutIfNoDispute.singapore} |`,
-    `| Dispute window ends | ${timeline.disputeWindowEndsAt.singapore} |`,
-    '',
-    `Longest lock per milestone: ${draft.maxLock.perMilestone.display}. Whole contract, worst case: ${draft.maxLock.wholeContractWorstCase.display} (${draft.maxLock.fundingSchedule} funding).`,
-    '',
-    '## If something goes wrong',
-    `Dispute tiers: ${draft.disputes.tiers.join(', ')}. Without a Tier 3 ruling, the ${draft.disputes.tier3TimeoutWinner} wins.`,
-    ...draft.milestones.flatMap((item) => item.tier1Options.length ?
-      [`Tier 1 options for milestone ${item.index + 1}: ${item.tier1Options.map((option) => `${option.outcome} (seller ${money(option.payout.toSeller)}, buyer ${money(option.payout.toBuyer)})`).join('; ')}.`] : []),
-    `Fees: Tier 1 ${money(draft.fees.perTier.tier1)}, Tier 2 ${money(draft.fees.perTier.tier2)}, Tier 3 ${money(draft.fees.perTier.tier3)}, rule ${draft.fees.rule}. ${draft.fees.note}`,
-  ];
-  if (draft.defaultsApplied.length || draft.placeholders.length || draft.normalized.length || draft.demoWindowsActive) {
-    lines.push('', '## Defaults and placeholders',
-      ...draft.defaultsApplied.map((item) => `- Default: ${item}`),
-      ...draft.normalized.map((item) => `- Normalized: ${item}`),
-      ...draft.placeholders.map((item) => `- Fill before signing: ${item.field}${item.milestoneIndex === null ? '' : ` (milestone ${item.milestoneIndex + 1})`}`),
-      ...(draft.demoWindowsActive ? ['- This server uses shortened demo windows. A production contract uses the template windows.'] : []));
-  }
-  if (!draft.liveDeadlineCheck.ok) lines.push('', '## Live check', ...draft.liveDeadlineCheck.problems.map((item) => `- ${item}`));
-  lines.push('', '## Create request', 'Replace every `<...>` value. The parties sign the frozen terms in Tally.', '```json', JSON.stringify(draft.createRequest, null, 2), '```');
-  lines.push(closing(['Escrow amounts, payouts, deadlines, fees, and the lock times above'],
-    ['The remedy, the seller share, the inspectors, and the milestone split'], 'Fill every placeholder, then create the contract in Tally with the create request.'));
-  return lines.join('\n');
-}
-
-function renderRulingOption(option: RulingOption): string {
-  const payout = option.payout ? `seller ${money(option.payout.toSeller)}, buyer ${money(option.payout.toBuyer)}` : 'after the follow-up';
-  const fee = option.fee ? `${money(option.fee.amount)} paid by the ${option.fee.paidBy}` : 'none';
-  const obligations = option.obligations.map((item) => `${item.party} must ${item.action.replaceAll('_', ' ')} by ${item.dueAt.singapore}`).join('; ') || 'none';
-  const follow = option.followUp ? ` Follow-up: ${option.followUp.kind} by ${option.followUp.deadline.singapore}.` : '';
-  const record = option.reliabilityIfSettled ? ` Reliability record: ${option.reliabilityIfSettled.state}${option.reliabilityIfSettled.fault ? `, ${option.reliabilityIfSettled.fault} at fault` : ''}.` : '';
-  return `- **${option.winner} wins:** next state ${option.stateAfterRuling}; payout ${payout}; fee ${fee}; obligations: ${obligations}.${follow}${record}`;
+  return needsInput(COWORKER_NAMES[slug], problems, FILL_IN_FORMATS[slug]);
 }
 
 // ---------------------------------------------------------------------------
@@ -343,34 +267,12 @@ const INSTRUCTIONS = new URL('./coworkers/', import.meta.url);
 export function systemPrompt(slug: CoworkerSlug): string {
   const shared = readFileSync(new URL('shared-rules.md', INSTRUCTIONS), 'utf8');
   const own = readFileSync(new URL(`${slug}.md`, INSTRUCTIONS), 'utf8');
-  return `${shared}\n\n---\n\n${own}\n\n---\n\nYou are ${COWORKER_NAMES[slug]}. Call the tools by the names given to you. Answer in Markdown.`;
+  return `${shared}\n\n---\n\n${own}\n\n---\n\n${plainWordsForPrompt()}\n\n---\n\nYou are ${COWORKER_NAMES[slug]}. Call the tools by the names given to you. Answer in Markdown: Sokosumi shows it formatted.`;
 }
 
 // ---------------------------------------------------------------------------
 // One Task
 // ---------------------------------------------------------------------------
-
-/** The case file fields the template answer reads (from CoworkerTools.disputeCase). */
-interface CaseView {
-  label: string;
-  canRuleNow: boolean;
-  nextStep: string;
-  contract: {id: string; template: {id: string}; judge: string; remedy: string};
-  milestone: {index: number; title: string; amount: Money; state: string};
-  deliveryEvidenceCheck: Array<{met: boolean; rule: string; found: number}>;
-  evidence: Array<{type: string; submittedByRole: string; signer: {namedJudge: boolean; whitelisted: boolean}|null; submittedAt: {singapore: string}}>;
-}
-
-type SummaryCounts = {[key: string]: number};
-
-/** The profile fields the template answer reads (from CoworkerTools.reliabilityProfile). */
-interface ProfileView {
-  entity: {id: string; displayName: string; kycStatus: string; kycTier: string; createdAt: string};
-  scoringPolicy: {version: string; provisional: boolean};
-  scores: Array<{category: string; role: string; score: number; lowerBound: number; events: {success: number; failure: number}}>;
-  contractSummary: {live: SummaryCounts; simulated: SummaryCounts};
-  deals: Array<{label: string; role: string; counterpartyId: string; amount: Money; state: string; disputed: boolean; disputeWinner: string|null; ignoredRuling: boolean|null}>;
-}
 
 function unwrap<T>(result: ToolResult<T>): {value?: T; error?: string} {
   return result.ok ? {value: result.result} : {error: `${result.error.code}: ${result.error.message}`};
@@ -380,90 +282,36 @@ function unwrap<T>(result: ToolResult<T>): {value?: T; error?: string} {
 export function answerFillIn(slug: CoworkerSlug, text: string, tools: CoworkerTools): CoworkerAnswer {
   const problems = fillInProblems(slug, text);
   if (problems.length) return {kind: 'needs_input', message: needsInputMessage(slug, problems)};
+  const name = COWORKER_NAMES[slug];
+  const format = formatBlock(FILL_IN_FORMATS[slug]);
   if (slug === 'deal-desk') {
     const {input} = readDealDesk(text);
     const draft = unwrap(tools.draftContract(input as DraftInput));
-    if (draft.error) return {kind: 'needs_input', message: `${COWORKER_NAMES[slug]}: Tally's engine rejected the proposal (${draft.error}). Fix that field and reply.\n\n${FILL_IN_FORMATS[slug]}`};
+    if (draft.error) return {kind: 'needs_input', message: `**${name}:** Tally's engine rejected the proposal (${draft.error}). Fix that field and reply:\n\n${format}`};
     return {kind: 'answer', mode: 'fill-in', toolCalls: 1, text: renderDraft(draft.value as DraftResult)};
   }
   if (slug === 'mediator') {
     const {contractId, milestone} = readMediator(text);
     const ref = /^\d+$/.test(milestone) ? Number(milestone) : milestone;
     const file = unwrap(tools.disputeCase(contractId as string, ref));
-    if (file.error) return {kind: 'needs_input', message: `${COWORKER_NAMES[slug]}: ${file.error}. Check the contract id and the milestone.\n\n${FILL_IN_FORMATS[slug]}`};
+    if (file.error) return {kind: 'needs_input', message: `**${name}:** ${file.error}. Check the contract id and the milestone, then reply:\n\n${format}`};
     const caseFile = file.value as unknown as CaseView;
-    const lines = [
-      `# Mediation case (${caseFile.label})`,
-      NO_MODEL_NOTE,
-      '',
-      '**DRAFT for the human mediator. This is not a ruling, and it has no recommendation: the mediator decides.**',
-      '',
-      `Contract ${caseFile.contract.id}, milestone ${caseFile.milestone.index + 1}: ${caseFile.milestone.title} (${caseFile.milestone.amount.display}).`,
-      `Template ${caseFile.contract.template.id}; judge: ${caseFile.contract.judge}; remedy: ${caseFile.contract.remedy}.`,
-      `State: ${caseFile.milestone.state}. ${caseFile.nextStep}`,
-      '',
-      '## Required delivery evidence',
-      ...caseFile.deliveryEvidenceCheck.map((check) => `- ${check.met ? 'Met' : 'Missing'}: ${check.rule} (found ${check.found})`),
-      '',
-      '## Evidence',
-      '| Type | From | Signer | Submitted |',
-      '| --- | --- | --- | --- |',
-      ...caseFile.evidence.map((item) =>
-        `| ${item.type} | ${item.submittedByRole} | ${item.signer ? (item.signer.namedJudge ? 'named judge' : item.signer.whitelisted ? 'whitelisted inspector' : 'unlisted signer') : 'unsigned'} | ${item.submittedAt.singapore} |`),
-    ];
-    if (caseFile.canRuleNow) {
-      const options = unwrap(tools.rulingOptions(contractId as string, ref));
-      if (options.value) {
-        lines.push('', '## What each ruling does', ...options.value.options.map(renderRulingOption),
-          `If nobody rules by ${options.value.defaultIfNoRuling.appliesAt?.singapore ?? 'the deadline'}, the ${options.value.defaultIfNoRuling.winner} wins by template default.`);
-      }
-    }
-    lines.push(closing(['Payouts, fees, obligations, and deadlines above'], ['The winner and the reason: only the human mediator decides'],
-      caseFile.canRuleNow ? 'The mediator reviews the evidence, decides, and signs the ruling bytes from the Mediation desk.' : 'Wait for the step in the state line above.'));
-    return {kind: 'answer', mode: 'fill-in', toolCalls: caseFile.canRuleNow ? 2 : 1, text: lines.join('\n')};
+    const ruling = caseFile.canRuleNow ? unwrap(tools.rulingOptions(contractId as string, ref)).value as unknown as RulingView|undefined : undefined;
+    return {kind: 'answer', mode: 'fill-in', toolCalls: caseFile.canRuleNow ? 2 : 1, text: renderCase(caseFile, ruling ?? null)};
   }
   const {company, counterparty} = readTrustCheck(text);
   const matches = unwrap(tools.findEntities(company as string));
   const exact = matches.value?.find((item) => item.id === company) ??
     (matches.value?.length === 1 ? matches.value[0] : undefined);
   if (!exact) {
-    const list = (matches.value ?? []).map((item) => `- ${item.displayName} (${item.id})`).join('\n');
+    const list = (matches.value ?? []).map((item) => `- ${item.displayName} (\`${item.id}\`)`).join('\n');
     return {kind: 'needs_input', message: matches.value?.length ?
-      `${COWORKER_NAMES[slug]}: "${company}" matches more than one company. Reply with one id:\n${list}` :
-      `${COWORKER_NAMES[slug]}: Tally has no record matching "${company}". Reply with the exact Tally id.\n\n${FILL_IN_FORMATS[slug]}`};
+      `**${name}:** "${company}" matches more than one company. Reply with one id:\n\n${list}` :
+      `**${name}:** Tally has no record matching "${company}". Reply with the exact Tally id:\n\n${format}`};
   }
   const profile = unwrap(tools.reliabilityProfile(exact.id, counterparty ? {counterpartyId: counterparty} : {}));
-  if (profile.error) return {kind: 'needs_input', message: `${COWORKER_NAMES[slug]}: ${profile.error}`};
-  const data = profile.value as unknown as ProfileView;
-  const summaryRow = (title: string, key: string) => `| ${title} | ${data.contractSummary.live[key]} | ${data.contractSummary.simulated[key]} |`;
-  const lines = [
-    `# ${data.entity.displayName} (${data.entity.id})`,
-    NO_MODEL_NOTE,
-    '',
-    `KYC: ${data.entity.kycStatus}, ${data.entity.kycTier} tier. On Tally since ${String(data.entity.createdAt).slice(0, 10)}.`,
-    '',
-    '## Record at a glance',
-    '| | Live | Simulated |',
-    '| --- | --- | --- |',
-    summaryRow('Milestones', 'milestones'), summaryRow('Open', 'open'), summaryRow('Disputed', 'disputed'),
-    summaryRow('Disputes lost', 'disputesLost'), summaryRow('Rulings ignored', 'rulingsIgnored'),
-    summaryRow('Late deliveries', 'lateDeliveries'), summaryRow('At fault', 'atFault'),
-    '',
-    '## Scores',
-    ...(data.scores.length ? ['| Category | Role | Score | Lower bound | Events |', '| --- | --- | --- | --- | --- |',
-      ...data.scores.map((score) =>
-        `| ${score.category} | ${score.role} | ${score.score} | ${score.lowerBound} | ${score.events.success} ok, ${score.events.failure} failed |`)] : ['No scored events yet.']),
-    ...(data.scoringPolicy.provisional ? ['', `Policy ${data.scoringPolicy.version} is a provisional placeholder. Read the scores as counts of successes and failures, not as a calibrated rating.`] : []),
-    '',
-    '## Deals',
-    ...(data.deals.length ? ['| Label | Role | Counterparty | Amount | State | Dispute |', '| --- | --- | --- | --- | --- | --- |',
-      ...data.deals.map((deal) =>
-        `| ${deal.label} | ${deal.role} | ${deal.counterpartyId} | ${money(deal.amount)} | ${deal.state} | ${deal.disputed ? `won by the ${deal.disputeWinner ?? 'pending'}${deal.ignoredRuling ? '; ignored the ruling' : ''}` : 'none'} |`)] : ['No Tally deals yet.']),
-    '',
-    'This is information from Tally records, not a verdict or a credit rating. Tally does not set contract terms from scores yet.',
-  ];
-  lines.push(closing(['The counts, scores, and deal results above'], ['Whether and how to deal with this company'], 'Ask Tally Deal Desk to draft a contract with the protections you want.'));
-  return {kind: 'answer', mode: 'fill-in', toolCalls: 2, text: lines.join('\n')};
+  if (profile.error) return {kind: 'needs_input', message: `**${name}:** ${profile.error}`};
+  return {kind: 'answer', mode: 'fill-in', toolCalls: 2, text: renderProfile(profile.value as unknown as ProfileView)};
 }
 
 /**
@@ -480,7 +328,7 @@ export async function runCoworker(
     } catch (error) {
       if (!(error instanceof ModelError)) throw error;
       const fallback = answerFillIn(slug, text, tools);
-      if (fallback.kind === 'answer') return {...fallback, text: `${fallback.text}\n\n_The language model was unavailable (${error.message}); this answer used the fill-in path._`};
+      if (fallback.kind === 'answer') return {...fallback, text: `${fallback.text}\n\n_The AI model was unavailable (${error.message}), so this answer comes from the fill-in format._`};
       throw error;
     }
   }

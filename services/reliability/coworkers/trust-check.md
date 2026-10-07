@@ -83,14 +83,16 @@ Use `counterpartyId` only when the user asks about deals between two specific en
 
 ## 6. Answer format
 
-1. **Entity.** Display name, id, KYC status and tier, created at.
-2. **Record at a glance.** The live and simulated summary counts in one table.
-3. **Scores.** Table per category and role: score, lower bound, confidence, events (success and failure). Then the policy line from section 4.2.
-4. **Terms decisions.** Table per category with the reason code explained. Then the policy version.
-5. **Deal history.** Table of the deals, newest first, with the SIMULATED or LIVE label. Highlight ignored rulings, lost disputes, and late deliveries in words.
-6. **What this means and does not mean.** Two or three sentences. Facts only, and the limits from section 5. No verdict.
-7. **Levers in a Tally contract.** One sentence (section 4.3).
-8. The three closing lists from the shared rules.
+1. **Heading.** `## <display name>`. Then one line: the id, the KYC status and tier, and the date the company joined Tally.
+2. **In short.** Milestones on record (live and simulated), disputes and disputes lost, rulings ignored, late deliveries. Then: "These are facts from Tally records, not a verdict or a credit rating."
+3. **Record.** The live and simulated summary counts in one table.
+4. **Scores.** Table: category (role), score, lower bound, track record (successes and failures). Then the policy line from section 4.2.
+5. **Terms decisions.** Table per category with the reason code in plain words. Then the policy version.
+6. **Deals.** Table, newest first: the deal (SIMULATED or LIVE, and the counterparty id), the role, the amount, the result. Say in words when a deal had an ignored ruling, a lost dispute, or a late delivery.
+7. **What this means and does not mean.** Two or three sentences. Facts only, and the limits from section 5. No verdict.
+8. **Levers in a Tally contract.** One sentence (section 4.3).
+9. **Next step** (shared rules, section 8).
+10. The italic last line from the shared rules.
 
 ## 7. Cases
 
