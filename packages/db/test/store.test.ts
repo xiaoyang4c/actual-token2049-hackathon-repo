@@ -91,6 +91,7 @@ describe('AgentStore', () => {
         'position_events',
         'reliability_anchor_batches',
         'reliability_anchor_entries',
+        'reliability_deposit_submissions',
         'reliability_entities',
         'reliability_event_revisions',
         'reliability_event_weights',
@@ -103,6 +104,7 @@ describe('AgentStore', () => {
         'reliability_lifecycle_commands',
         'reliability_lifecycle_transitions',
         'reliability_listings',
+        'reliability_live_deposits',
         'reliability_offers',
         'reliability_omnibus_deal_funding',
         'reliability_omnibus_deposits',
@@ -110,10 +112,13 @@ describe('AgentStore', () => {
         'reliability_outcomes',
         'reliability_pair_transactions',
         'reliability_score_baselines',
+        'reliability_sessions',
         'reliability_state',
         'reliability_terms_decisions',
         'reliability_terms_versions',
         'reliability_transactions',
+        'reliability_wallet_challenges',
+        'reliability_wallet_proofs',
         'reliability_wallets',
         'runs',
         'schema_migrations',
@@ -127,8 +132,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-016.
-      expect(versions.versions).toBe(16);
+      // 001-017.
+      expect(versions.versions).toBe(17);
     } finally {
       db.close();
     }

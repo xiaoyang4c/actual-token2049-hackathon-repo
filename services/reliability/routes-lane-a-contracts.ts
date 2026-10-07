@@ -29,6 +29,7 @@ const STATUS_BY_CODE: {[code: string]: number} = {
   action_id_reused: 409,
   party_exists: 409,
   kyc_required: 403,
+  wallet_required: 403,
   evidence_too_large: 413,
   not_in_tier_3: 409,
 };

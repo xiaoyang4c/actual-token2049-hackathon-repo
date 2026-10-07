@@ -145,6 +145,10 @@ export class ContractService {
     if (this.enforce) {
       const kyc = this.gate.kyc(input.entityId, at);
       if (!kyc.passed) throw new ContractError('kyc_required', kyc.message);
+      // The payout address must be a wallet that the entity proved it controls.
+      if (this.gate.requireWallet && !this.gate.ownsAddress(input.entityId, input.cardanoAddress)) {
+        throw new ContractError('wallet_required', `${input.entityId} has not proven control of ${input.cardanoAddress}; sign in with that wallet first`);
+      }
     }
     this.store.transaction(() => {
       const entity = this.store.getEntity(input.entityId);
@@ -185,6 +189,8 @@ export class ContractService {
         value: majorUnits(total.toString(), this.config.settings.assetDecimals),
         currency: CONTRACT_CURRENCY,
         requiredKycTier: template.minimumKycTier,
+        // A live contract is funded from the buyer's confirmed deposits.
+        ...(this.mode === 'live' ? {liveDeposit: {unit: this.config.settings.assetUnit, quantity: total}} : {}),
         now: new Date(this.now()).toISOString(),
       });
     }

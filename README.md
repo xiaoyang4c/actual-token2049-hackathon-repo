@@ -22,6 +22,7 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Reliability record | Separate buyer and seller scores per category, terms decisions, and mock KYC. Ignored rulings count against a party. | [Reliability math](docs/reliability-math.md) |
 | Coworkers on Sokosumi | Tally Deal Desk drafts contracts. Tally Mediator drafts rulings for a human mediator. Tally Trust Check explains a company's record. Every number comes from Tally's code. | [Tally Coworkers](services/reliability/coworkers/README.md) |
 | Tally UI | My deals, Mediation desk, Companies, and Operator views. Read-only. | [UI instructions](ui/README.md) |
+| Wallet accounts | Sign in with a Cardano wallet (connected or created in the browser), pass KYC, and deposit test funds for live deals. Tally never holds wallet keys. | [Wallet accounts](docs/wallets.md) |
 
 ## Status
 
@@ -32,11 +33,12 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Masumi payment service | Running on the preprod server with funded wallets |
 | Coworkers | Registered on the Masumi registry and approved in the TOKEN2049 workspace. The Task worker runs on the server. Paid Tasks complete with Masumi escrow on preprod, and the first collection is confirmed |
 | Settlement anchors | Built. Fingerprints of settled records, chained per company, for Cardano preprod. Posting waits for the team's go-ahead. Read [Settlement anchors](docs/settlement-anchors.md) |
-| Tally UI | Hosted publicly with six showcase contracts and Ask a Coworker (a free preview) |
+| Tally UI | Hosted publicly with six showcase contracts and a free chat with the three Coworkers |
 | Scoring, pair decay, fees | Built with default parameters: weighted Beta scores, repeat-pair decay, and buyer and seller fee charges. Read [Reliability math](docs/reliability-math.md) |
 | Listings, offers, invoices | Built for paper orders. Read [Marketplace rules and writes](docs/marketplace.md) |
-| KYC | Mock provider. Enforced before sales, invoices, contracts, and key registration |
-| Sign-in | Not built. Role views in the UI are lenses, not access control |
+| KYC | Mock provider. Enforced before sales, invoices, contracts, and key registration. Self-service through the Account page |
+| Sign-in | Wallet sign-in for accounts, with 24-hour sessions. Role views in the UI are still lenses, not access control |
+| Deposits | Live preprod deposits from proven wallets, credited after 3 confirmations. Needs the deposit address and the deposit worker. Read [Wallet accounts](docs/wallets.md) |
 
 Read [Implementation status](docs/implementation-status.md) for every feature and known gap.
 Read [PLAN.md](PLAN.md) for the product scope and work order.

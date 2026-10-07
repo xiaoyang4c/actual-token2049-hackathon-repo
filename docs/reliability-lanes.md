@@ -77,7 +77,8 @@ Migration `007` stores event weights and pair positions.
 Migration `009` stores invoice payment observations.
 Migration `016` stores offers and accepted fee charges.
 Migration `015` stores settlement anchors.
-The next free migration number is `017`.
+Migration `017` stores wallet accounts, sessions, and live deposits. Read [Wallet accounts](wallets.md).
+The next free migration number is `018`.
 
 Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tiers, and demo routes.
 

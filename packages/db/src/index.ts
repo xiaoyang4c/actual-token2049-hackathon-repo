@@ -8,6 +8,7 @@ export {applyMigrations} from './migrate';
 export {AgentStore} from './store';
 export {FINAL_OUTCOME_STATES} from './anchor-records';
 export type {AnchorBatchRow, AnchorBatchStatus, AnchoredEntryView, AnchorEntryRow, FinalPublication} from './anchor-records';
+export type {DepositSubmissionRow, LiveDepositRow, LiveDepositStatus, SessionRow, WalletChallengeRow, WalletProofRow} from './wallet-records';
 export type {
   AgentStateRecord,
   DailySummaryRecord,

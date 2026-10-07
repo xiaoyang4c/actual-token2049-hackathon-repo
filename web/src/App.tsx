@@ -7,6 +7,7 @@ import {LensProvider} from '@/components/kit'
 import {Shell} from '@/components/Shell'
 import {Toaster} from '@/components/ui/sonner'
 import {TooltipProvider} from '@/components/ui/tooltip'
+import {AccountPage} from '@/pages/Account'
 import {AskPage} from '@/pages/Ask'
 import {CompaniesPage} from '@/pages/Companies'
 import {ContractPage} from '@/pages/Contract'
@@ -34,6 +35,7 @@ function AnimatedRoutes() {
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/deal-desk" element={<DealDeskPage />} />
           <Route path="/ask" element={<AskPage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="/coworkers" element={<CoworkersPage />} />
           <Route path="/operator" element={<OperatorPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

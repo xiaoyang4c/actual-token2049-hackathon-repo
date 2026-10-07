@@ -131,6 +131,43 @@ describe("operator ui server", () => {
     }
   })
 
+  test("forwards the account routes with the session token, the visitor, and the allowed origin only", async () => {
+    const seen: Array<{ method: string; path: string; auth: string | null; visitor: string | null; cookie: string | null }> = []
+    const control = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url)
+        seen.push({ method: req.method, path: url.pathname, auth: req.headers.get("authorization"), visitor: req.headers.get("x-tally-visitor"), cookie: req.headers.get("cookie") })
+        return Response.json({ ok: true })
+      },
+    })
+    const app = "https://tally-origins.vercel.app"
+    const ui = startUi({ port: 0, controlApiUrl: `http://127.0.0.1:${control.port}`, askUrl: "http://127.0.0.1:9", askOrigins: [app] })
+    try {
+      const base = `http://127.0.0.1:${ui.port}`
+      const token = "Bearer " + "a".repeat(43)
+      const read = await fetch(`${base}/reliability/account`, { headers: { authorization: token, origin: app, cookie: "x=1", "x-forwarded-for": "198.51.100.7" } })
+      expect(read.status).toBe(200)
+      expect(read.headers.get("access-control-allow-origin")).toBe(app)
+      expect(seen[0]).toEqual({ method: "GET", path: "/reliability/account", auth: token, visitor: "198.51.100.7", cookie: null })
+      // A malformed token is dropped, not forwarded.
+      await fetch(`${base}/reliability/wallets/challenge`, { method: "POST", headers: { authorization: "Bearer x y" }, body: "{}" })
+      expect(seen[1]).toMatchObject({ path: "/reliability/wallets/challenge", auth: null })
+      const preflight = await fetch(`${base}/reliability/account/kyc`, { method: "OPTIONS", headers: { origin: app } })
+      expect(preflight.status).toBe(204)
+      expect(preflight.headers.get("access-control-allow-headers")).toBe("content-type, authorization")
+      expect((await fetch(`${base}/reliability/account/kyc`, { method: "OPTIONS", headers: { origin: "https://evil.example" } })).status).toBe(403)
+      // Only the listed methods: no GET on a POST route, no other account path.
+      expect((await fetch(`${base}/reliability/account/kyc`)).status).toBe(404)
+      expect((await fetch(`${base}/reliability/account/delete`, { method: "POST", body: "{}" })).status).toBe(405)
+      expect((await fetch(`${base}/reliability/account/deposits/build`, { method: "POST", body: "x".repeat(300_000) })).status).toBe(413)
+      expect(seen).toHaveLength(2)
+    } finally {
+      ui.stop(true)
+      control.stop(true)
+    }
+  })
+
   test("lets only the listed web app origins call the chat from the browser", async () => {
     const ask = Bun.serve({ port: 0, fetch: () => Response.json({ job: { id: "j1" } }, { status: 202 }) })
     const app = "https://tally-origins.vercel.app"

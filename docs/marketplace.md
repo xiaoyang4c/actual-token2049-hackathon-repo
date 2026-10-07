@@ -28,6 +28,8 @@ Nothing is written when a check fails.
 | --- | --- | --- |
 | KYC | The entity counts as verified under `KYC_TIER_RULES`, inside the verification TTL. | `kyc_unknown_entity`, `kyc_not_verified`, `kyc_pending`, `kyc_rejected`, `kyc_expired` |
 | KYC tier | A contract template can raise the tier with `minimumKycTier`. | `kyc_tier_too_low` |
+| Wallet | With `MARKETPLACE_REQUIRE_WALLET=on`, the entity has a proven wallet. Read [Wallet accounts](wallets.md). | `wallet_required` |
+| Live deposit | A live contract: the buyer's confirmed deposits, less its open live contracts, cover the contract. | `deposit_required` |
 | Re-registration | An entity that re-registers a rejected identity cannot trade. | `kyc_reregistration_of_rejected` |
 | Value | The sale has a non-negative value in `USD` or `USDM`. USDM counts one to one with USD. | `value_required`, `currency_not_supported` |
 | Exposure | The value is at most each party's limit, $\min(E_{\max} L^\gamma, E_{\mathrm{KYC}})$. | `exposure_limit` |
@@ -41,6 +43,7 @@ Tier `none` has a zero cap, so an entity without KYC has no limit.
 
 Contract key registration (`POST /reliability/contracts/parties`) needs a KYC-verified entity.
 It returns HTTP 403 with code `kyc_required` otherwise.
+With `MARKETPLACE_REQUIRE_WALLET=on`, the payout address must be a proven wallet of the entity. Otherwise it returns HTTP 403 with code `wallet_required`.
 
 ## Accepted fees
 

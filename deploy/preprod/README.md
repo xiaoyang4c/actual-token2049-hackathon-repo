@@ -77,6 +77,9 @@ The hackathon AWS account allows EC2 only in `ap-southeast-2`.
 
 The public address <https://13-210-42-0.sslip.io> shows the team's operator UI ([`ui/`](../../ui)).
 It is read-only. The UI server forwards only GET requests on a fixed list of `/reliability` read routes. It refuses every other method with 405.
+There are two exceptions: the Coworker chat (`/coworkers/ask`, read [the Coworker README](../../services/reliability/coworkers/README.md#on-the-tally-website)) and the wallet account routes (read [Wallet accounts](../../docs/wallets.md)).
+The Vercel web app calls the chat and the account routes from the browser. `TALLY_WEB_ORIGINS` in [`tally-ui.service`](tally-ui.service) lists the origins that may do this. No other route allows another origin.
+After you change the unit, copy it to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, and restart `tally-ui`.
 The control API, the demo services, and the payment service are not reachable from the internet.
 
 The services run in paper mode: `CARDANO_MODE` is not set, so escrow is simulated.
@@ -116,7 +119,7 @@ It needs these secrets in `~/tally-secrets`:
 | `coworker_deal_desk_key`, `coworker_mediator_key`, `coworker_trust_check_key` | Each Coworker's runtime key (`coworker_...`) | `sokosumi --preprod coworkers api-key <id> --json`, piped into the file. Never print it |
 | `gemini_api_key` or `bedrock_api_key` | Only for `COWORKER_MODEL_PROVIDER=gemini` or `bedrock` | `tally-set-secret gemini_api_key` |
 
-`COWORKER_ASK_PORT=8792` in the unit also starts the Ask a Coworker server for the website, on `127.0.0.1` only. The `tally-ui` server forwards `/coworkers/ask` to it.
+`COWORKER_ASK_PORT=8792` in the unit also starts the Coworker chat server for the website, on `127.0.0.1` only. The `tally-ui` server forwards `/coworkers/ask` to it.
 
 Install and start: copy the unit to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, then `sudo systemctl enable --now tally-coworkers`.
 Read its log with `journalctl -u tally-coworkers -f`. The journal of each Task is in `~/tally-app/data/coworker-worker`.
@@ -131,6 +134,19 @@ Read its log with `journalctl -u tally-coworkers -f`. The journal of each Task i
 | `blockfrost_preprod` | Already present for the payment service | |
 
 Fund the address with test ADA, check `bun run anchors:status`, then install the unit like the others. It starts with submission off.
+
+## Wallet accounts and deposits
+
+Read [Wallet accounts](../../docs/wallets.md). Sign-in and KYC need no setup. Live deposits need three steps:
+
+1. Read the purchasing wallet address of the payment service (`GET /api/v1/wallet/list`). Deposits go there, so they can fund Masumi escrow.
+2. Set `TALLY_DEPOSIT_ADDRESS` to that address in [`tally-services.service`](tally-services.service) and [`tally-deposits.service`](tally-deposits.service). Both read `blockfrost_preprod` from `~/tally-secrets`.
+3. Copy both units to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, restart `tally-services`, and run `sudo systemctl enable --now tally-deposits`.
+
+Check with `bun run deposits:status`. Read the log with `journalctl -u tally-deposits -f`.
+
+[`tally-services.service`](tally-services.service) sets `MARKETPLACE_REQUIRE_WALLET=on`: every sale and contract needs a proven wallet.
+[`tally-ui.service`](tally-ui.service) lists the web app in `TALLY_WEB_ORIGINS`, so the browser can call the account routes.
 
 ## Register the Coworkers
 
