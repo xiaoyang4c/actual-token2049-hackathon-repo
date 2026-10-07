@@ -175,6 +175,22 @@ describe('contract read views', () => {
       expect(records.length).toBeGreaterThan(0);
       expect(records.every((record) => record.recordUnchanged && record.anchor.status === 'waiting')).toBe(true);
       expect((await call(origin, '/reliability/anchors/company')).status).toBe(400);
+
+      const templates = await (await fetch(`${origin}/reliability/contracts/draft-templates`)).json() as Array<{id: string; deliverableFields: {required: string[]}}>;
+      expect(templates.find((item) => item.id === 'physical-objective-spec')?.deliverableFields.required).toContain('quantity');
+      const input = {
+        templateId: 'physical-objective-spec',
+        milestones: [{title: 'Lot 9', amount: '4000', deliverable: {description: 'Green arabica', quantity: 1200, unit: 'kg'}}],
+        remedy: {type: 'partial_release', sellerSharePercent: '70'},
+        inspectors: ['lab'], judgeInspector: 'lab',
+      };
+      const draft = await call(origin, `/reliability/contracts/draft?input=${encodeURIComponent(JSON.stringify(input))}`);
+      expect(draft.status).toBe(200);
+      expect((draft.body.milestones as Array<{escrows: Array<{amount: {display: string}}>}>)[0]?.escrows.map((e) => e.amount.display)).toEqual(['2,800 test USDM', '1,200 test USDM']);
+      // The draft is a sandbox: the contract list is unchanged.
+      expect(await (await fetch(`${origin}/reliability/contracts/list`)).json()).toHaveLength(6);
+      expect((await call(origin, `/reliability/contracts/draft?input=${encodeURIComponent('{not json')}`)).status).toBe(400);
+      expect((await call(origin, `/reliability/contracts/draft?input=${encodeURIComponent(JSON.stringify({...input, templateId: 'nope'}))}`)).status).toBeGreaterThanOrEqual(400);
     } finally {
       await server.stop(true);
       process.env = previous;

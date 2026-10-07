@@ -66,6 +66,7 @@ KYC currently uses a mock provider.
 | `services/reliability/coworkers` | Instructions for the three Coworkers |
 | `services/cardano-agents-ts` | Shared Cardano and Masumi adapters, payment evidence, and settlement observer |
 | `ui` | The Tally UI |
+| `web` | The Tally web app: the same areas plus the Deal Desk, built with React. Read [web/README.md](web/README.md) |
 | `deploy/preprod` | The preprod server: payment service, Caddy, systemd units, and the deploy script |
 | `docs/brand` | The Tally mark, logo, and Coworker avatars |
 

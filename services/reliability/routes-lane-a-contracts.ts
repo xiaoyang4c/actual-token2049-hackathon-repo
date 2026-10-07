@@ -15,7 +15,7 @@ import type {EvidenceInput, NegotiatedOutcome, Remedy} from '../../packages/reli
 import {json} from '../lib/http';
 import {companyAnchors, contractAnchors} from './anchors';
 import {contractServiceFor, type ContractService} from './contract-service';
-import {CoworkerTools, type ToolResult} from './coworker-tools';
+import {CoworkerTools, type DraftInput, type ToolResult} from './coworker-tools';
 import type {ReliabilityRoute} from './route';
 
 const STATUS_BY_CODE: {[code: string]: number} = {
@@ -179,6 +179,17 @@ function anchorGet(path: string, handle: (store: AgentStore, url: URL) => unknow
   };
 }
 
+/** The Deal Desk draft input, sent as JSON in the `input` query. */
+function draftInput(raw: string): DraftInput {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new ContractError('invalid_input', 'input must be JSON');
+  }
+  return record(parsed, 'input') as unknown as DraftInput;
+}
+
 /** A milestone by number (0, 1, ...) or by id. */
 function milestoneRef(url: URL): number|string {
   const value = requiredQuery(url, 'milestone');
@@ -305,6 +316,10 @@ export const laneAContractRoutes: ReliabilityRoute[] = [
   // Settlement anchors: fingerprints of final records, each company's chain, and the Cardano transactions.
   anchorGet('/reliability/anchors/contract', (store, url) => contractAnchors(store, requiredQuery(url, 'id'))),
   anchorGet('/reliability/anchors/company', (store, url) => companyAnchors(store, requiredQuery(url, 'entityId'))),
+  // Deal Desk views. Templates with their deliverable fields, and a draft that
+  // runs createContract in an in-memory sandbox. Both only read, so both are GET.
+  toolGet('/reliability/contracts/draft-templates', (tools) => ({ok: true, result: tools.listTemplates()})),
+  toolGet('/reliability/contracts/draft', (tools, url) => tools.draftContract(draftInput(requiredQuery(url, 'input')))),
   post('/reliability/contracts/tick', async (service) => {
     const result = await service.tick();
     return {mode: service.mode, now: new Date(service.now()).toISOString(), ...result};

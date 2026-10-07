@@ -40,6 +40,8 @@ const PROXY_PATHS = new Set([
   "/reliability/contracts/case", "/reliability/contracts/ruling-options", "/reliability/contracts/ruling-payload",
   "/reliability/profile", "/reliability/profile/search",
   "/reliability/anchors/contract", "/reliability/anchors/company",
+  // Deal Desk: templates and a sandboxed draft. Both GET, neither writes.
+  "/reliability/contracts/draft-templates", "/reliability/contracts/draft",
 ])
 
 const ASK_PATH = "/coworkers/ask"
