@@ -236,6 +236,11 @@ export class ContractService {
     return published;
   }
 
+  /** True when the contract audit hash chain has no edited or missing row. */
+  auditChainIntact(): boolean {
+    return this.store.verifyContractAuditChain() === null;
+  }
+
   /** Read model for routes and the operator UI. */
   view(contractId: string): {[key: string]: unknown} {
     const contract = this.lifecycle.getContract(contractId);
@@ -268,7 +273,7 @@ export class ContractService {
         feeCharge: this.fees.get(milestoneTransactionId(contract, milestone)) ?? null,
       })),
       operations: this.lifecycle.operations(contractId),
-      auditChainIntact: this.store.verifyContractAuditChain() === null,
+      auditChainIntact: this.auditChainIntact(),
     };
   }
 }

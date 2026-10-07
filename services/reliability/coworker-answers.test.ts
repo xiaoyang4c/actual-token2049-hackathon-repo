@@ -70,6 +70,11 @@ describe('Coworker answers', () => {
       expect(repeated.kind === 'needs_input' && repeated.message).toContain('milestone "Lot 1 | 4000" repeats the item');
       expect(readDealDesk(`${REQUEST}\nmilestone: lot 1, 1,200 KG green arabica, grade a | 4000`).problems).toHaveLength(1);
       expect(readDealDesk(`${REQUEST}\nmilestone: Lot 10 | 4000`).problems).toEqual([]);
+      // A milestone that extends the item name is another lot, not a repeat.
+      const coffee = REQUEST.replace(/^item: .*$/m, 'item: Coffee');
+      expect(readDealDesk(`${coffee}\nmilestone: Coffee batch 2 | 2500`).problems).toEqual([]);
+      expect(readDealDesk(`${REQUEST.replace(/^item: .*$/m, 'item: Lot')}\nmilestone: Lot 2 | 2500`).problems).toEqual([]);
+      expect(readDealDesk(`${coffee}\nmilestone: Coffee | 2500`).problems).toHaveLength(1);
       const two = answerText(answerFillIn('deal-desk', `${REQUEST}\nmilestone: Lot 2 | 2500`, tools));
       expect(two).toContain('- Total: **6,500 test USDM** in **2 milestones**.');
       expect(two).toContain('| 2. Lot 2 | 2,500 test USDM |');

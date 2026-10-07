@@ -13,6 +13,7 @@ import {createHash, randomBytes} from 'node:crypto';
 import type {AgentStore, WalletProofRow} from '../../packages/db/src/index';
 import {checkKyc, type KycGateResult} from '../../packages/reliability/src/kyc-gate';
 import {KycFlowError, MockKycProvider, type KycCheckInput, type KycView} from '../../packages/reliability/src/index';
+import {addressKeyHashes} from './deposit-chain';
 import {addressCredential, verifyWalletSignature, WalletProofError} from './wallet-proof';
 
 export const CHALLENGE_TTL_MS = 10 * 60_000;
@@ -24,7 +25,8 @@ const MAX_OPEN_CHALLENGES = 5_000;
 
 export type AccountErrorCode =
   'bad_input'|'invalid_address'|'invalid_signature'|'wrong_message'|'wrong_key'|'challenge_unknown'|
-  'challenge_expired'|'challenge_used'|'wallet_in_use'|'unauthorized'|'busy'|'kyc_failed'|'rate_limited';
+  'challenge_expired'|'challenge_used'|'wallet_in_use'|'unauthorized'|'busy'|'kyc_failed'|'rate_limited'|
+  'deposit_rejected';
 
 export class AccountError extends Error {
   constructor(readonly code: AccountErrorCode, message: string, readonly status = 400) {
@@ -115,9 +117,11 @@ export class WalletAccounts {
   }
 
   /**
-   * Checks the signed challenge. A known wallet signs in to its entity. A new
-   * wallet with a session joins that session's entity. Otherwise a new entity
-   * is created. Returns a session token. Only its hash is stored.
+   * Checks the signed challenge. A known wallet signs in to its entity. A
+   * new payment key can join an account with a proven stake key only with
+   * that account's session. A new wallet with a session joins its entity.
+   * Otherwise a new entity is created. Returns a session token. Only its hash
+   * is stored.
    */
   verify(input: VerifyInput, sessionEntityId?: string): {token: string; expiresAt: string; entityId: string; created: boolean} {
     const now = this.now();
@@ -136,6 +140,11 @@ export class WalletAccounts {
     return this.store.transaction(() => {
       if (!this.store.useWalletChallenge(challenge.id, now)) throw new AccountError('challenge_used', 'This sign-in message was already used. Ask for a new one.');
       const known = this.store.getWalletProofByCredential(proof.credentialHash);
+      // A base address can contain any public stake hash. Its payment-key
+      // signature does not prove control of that stake key.
+      const stakeHash = !known && proof.credentialKind === 'payment' ? addressKeyHashes(input.address).stake : undefined;
+      const stakeProof = stakeHash ? this.store.getWalletProofByCredential(stakeHash) : undefined;
+      const coveredBy = stakeProof?.credentialKind === 'stake' ? stakeProof : undefined;
       let entityId: string;
       let created = false;
       if (known) {
@@ -143,6 +152,21 @@ export class WalletAccounts {
           throw new AccountError('wallet_in_use', 'This wallet belongs to another Tally account.', 409);
         }
         entityId = known.entityId;
+      } else if (coveredBy) {
+        if (!sessionEntityId) {
+          throw new AccountError('unauthorized', 'Sign in with the stake key before you add this payment key.', 401);
+        }
+        const owner = this.store.getWalletEntityId(input.address);
+        if ((sessionEntityId && sessionEntityId !== coveredBy.entityId) || (owner && owner !== coveredBy.entityId)) {
+          throw new AccountError('wallet_in_use', 'This wallet belongs to another Tally account.', 409);
+        }
+        entityId = coveredBy.entityId;
+        if (!owner) this.store.addWallet(entityId, input.address, at);
+        this.store.insertWalletProof({
+          address: input.address, entityId, credentialKind: proof.credentialKind, credentialHash: proof.credentialHash,
+          publicKeyHex: proof.publicKeyHex, source: input.source, walletName: cleanName(input.walletName) ?? null,
+          challengeId: challenge.id, verifiedAt: at,
+        });
       } else {
         const owner = this.store.getWalletEntityId(input.address);
         if (owner && owner !== sessionEntityId) {

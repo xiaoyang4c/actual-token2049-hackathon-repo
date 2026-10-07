@@ -115,7 +115,7 @@ export const appRoutes: ReliabilityRoute[] = [
     const termsBytes = service.lifecycle.termsBytes(id);
     return {termsSha256: sha256Hex(termsBytes), termsBytes};
   }),
-  contractRead('/audit', ({service}, id) => ({rows: service.lifecycle.audit(id), chainIntact: service.view(id).auditChainIntact})),
+  contractRead('/audit', ({service}, id) => ({rows: service.lifecycle.audit(id), chainIntact: service.auditChainIntact()})),
   contractRead('/case', ({tools, url}, id) => {
     const milestone = query(url, 'milestone');
     return toolValue(tools.disputeCase(id, /^\d+$/.test(milestone) ? Number(milestone) : milestone));

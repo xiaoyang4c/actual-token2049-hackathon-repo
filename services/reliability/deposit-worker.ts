@@ -6,13 +6,13 @@
  *   bun run deposits:worker     read the deposit address and credit deposits
  *   bun run deposits:worker --once
  *
- * Settings: CONTROL_DB_PATH, TALLY_DEPOSIT_ADDRESS, TALLY_DEPOSIT_CONFIRMATIONS,
+ * Settings: CONTROL_DB_PATH (default: the control API database), TALLY_DEPOSIT_ADDRESS, TALLY_DEPOSIT_CONFIRMATIONS,
  * and the Blockfrost preprod key (BLOCKFROST_PROJECT_ID, or blockfrost_preprod
  * in TALLY_SECRETS_DIR). The worker reads the chain only. It signs nothing.
  */
 
 import {setTimeout as delay} from 'node:timers/promises';
-import {AgentStore} from '../../packages/db/src/index';
+import {openControlStore} from '../control-store';
 import {depositSettingsFromEnv} from './deposit-chain';
 import {DepositWatcher} from './deposit-watcher';
 
@@ -20,10 +20,8 @@ async function main(): Promise<void> {
   const env = process.env;
   const command = process.argv[2] ?? 'worker';
   const log = (line: {[key: string]: unknown}) => console.log(JSON.stringify({at: new Date().toISOString(), ...line}));
-  const databasePath = env.CONTROL_DB_PATH;
-  if (!databasePath) throw new Error('set CONTROL_DB_PATH to the control API database');
   const settings = depositSettingsFromEnv(env);
-  const store = AgentStore.open(databasePath);
+  const store = openControlStore();
   try {
     if (command === 'status') {
       const rows = store.listLiveDeposits({limit: 1000});

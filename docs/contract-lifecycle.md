@@ -219,7 +219,7 @@ A late ruling compliance instruction remains permitted and receives the existing
 5. **Key registration checks KYC, not the caller.** A key binds only to a KYC-verified entity, and a template can raise the tier with `minimumKycTier`. The route does not authenticate who sends the request.
 6. **Scores and fees use default parameters** (`policies.ts`). Contract creation checks both parties' exposure limits and records a fee charge for each milestone. Read [Marketplace rules and writes](marketplace.md).
 7. **Platform fees are not in the escrow amount.** The fee charge is a paper ledger record. Lane B owns fees.
-8. **A person holds the mediator key.** The Tally Mediator Coworker drafts the ruling and returns the exact bytes to sign. The Task worker is not built yet. Read [Tally Coworkers](../services/reliability/coworkers/README.md).
+8. **A person holds the mediator key.** The Tally Mediator Coworker drafts the ruling and returns the exact bytes to sign. Signing the ruling and sending it back into Tally stays a manual step. Read [Tally Coworkers](../services/reliability/coworkers/README.md).
 9. **Evidence lives in SQLite.** Production needs object storage.
 10. **The UI shows contracts read-only.** Parties and the mediator sign their actions outside the UI. Before real data, add sign-in and show each party only its own deals.
 11. **Two lifecycles exist.** Keep v1 for the paper sales demo. Use contracts for live escrow. The v1 live path now stops with a clear error before it reaches Masumi.

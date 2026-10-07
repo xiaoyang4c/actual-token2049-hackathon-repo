@@ -13,7 +13,8 @@ import {randomBytes} from 'node:crypto';
 import type {AgentStore, DepositSubmissionRow, LiveDepositRow} from '../../packages/db/src/index';
 import {TEST_USDM_UNIT} from './contract-config';
 import {
-  addressKeyHashes, attachWitnesses, buildDepositTx, toBech32Address, utxosFromCip30, type Amount, type ChainUtxo, type DepositSettings,
+  attachWitnesses, BlockfrostError, buildDepositTx, proofsCoverAddress, toBech32Address, utxosFromCip30,
+  type Amount, type ChainUtxo, type DepositSettings,
 } from './deposit-chain';
 import {AccountError} from './wallet-accounts';
 
@@ -89,9 +90,7 @@ export class WalletDeposits {
 
   /** True when the address carries a key that this entity proved. */
   private owns(entityId: string, address: string): boolean {
-    const keys = addressKeyHashes(address);
-    return this.store.listWalletProofs(entityId).some((proof) =>
-      proof.credentialHash === (proof.credentialKind === 'stake' ? keys.stake : keys.payment));
+    return proofsCoverAddress(this.store.listWalletProofs(entityId), address);
   }
 
   /** Builds an unsigned deposit transaction from the user's wallet. */
@@ -150,7 +149,18 @@ export class WalletDeposits {
     } catch (error) {
       throw new AccountError('invalid_signature', (error as Error).message);
     }
-    const txHash = await chain.submit(signed.cborHex);
+    let txHash: string;
+    try {
+      txHash = await chain.submit(signed.cborHex);
+    } catch (error) {
+      // Blockfrost uses 400 for invalid transactions. A full mempool (425)
+      // or a rate limit (429) can clear, so other errors keep the build.
+      if (error instanceof BlockfrostError && error.status === 400) {
+        this.builds.delete(buildId as string);
+        throw new AccountError('deposit_rejected', `The chain rejected this deposit (${error.message}). Start it again.`, 400);
+      }
+      throw error;
+    }
     this.builds.delete(buildId as string);
     this.store.insertDepositSubmission({txHash, entityId, fromAddress: build.fromAddress, amounts: build.amounts, submittedAt: this.now()});
     return {txHash};

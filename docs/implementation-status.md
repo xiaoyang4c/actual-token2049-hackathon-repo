@@ -114,6 +114,7 @@ Invoice payments are paper. They record `settlementVerified: false`.
 
 The required checks cover `packages`, `services`, `ui`, and both web editions.
 App HTTP tests cover session expiry, party isolation, spoofed actions, rejected clocks, and a signed paper deal through settlement.
+Wallet tests cover spending by closed live contracts, a rolled-back deposit that returns, the watcher's two-call pass, chain rejections, and base-address sign-in.
 Client tests compare canonical signing bytes with the engine and verify signatures with the server verifier.
 One intermittent failure appeared once in 13 full runs on 2026-10-07. It did not reproduce, and its test is not identified yet.
 The control and payment TypeScript checks pass.

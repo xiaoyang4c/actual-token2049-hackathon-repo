@@ -10,9 +10,11 @@ export const json = (body: unknown, status = 200, headers: Record<string, string
 export const readJson = async <T>(req: Request): Promise<T> => (await req.json()) as T
 
 // Routes are keyed "METHOD /path". Logs one line per request.
-export const serve = (name: string, port: number, routes: Routes) =>
+// `hostname` limits the listening address. Bun listens on every address without it.
+export const serve = (name: string, port: number, routes: Routes, options: { hostname?: string } = {}) =>
   Bun.serve({
     port,
+    ...(options.hostname ? { hostname: options.hostname } : {}),
     async fetch(req) {
       const url = new URL(req.url)
       const handler = routes[`${req.method} ${url.pathname}`]

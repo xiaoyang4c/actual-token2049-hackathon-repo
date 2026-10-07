@@ -56,12 +56,13 @@ Do not edit `cre/agent-loop` unless the task names that path.
 
 Do not edit `services/market-feed.ts` unless the task names that path.
 
-The operator UI is display-only, with two exceptions.
+The operator UI is display-only, with three exceptions.
 
 1. Ask a Coworker (`POST /coworkers/ask` and `GET /coworkers/ask?id=`). The UI server forwards it to the Coworker worker, which answers a free preview with read-only tools. It pays nothing and stores nothing.
 2. Wallet accounts (`ACCOUNT_ROUTES` in `ui/server.ts`). A person signs in with a wallet signature, submits mock KYC, and sends live preprod deposits from their own wallet. Tally never holds a wallet key. Read `docs/wallets.md`.
+3. The app edition (`APP_ROUTES` in `ui/server.ts`, only with `TALLY_EDITION=app`). A signed-in party creates deals, signs terms, and submits signed contract actions. Every app route needs the party's session. Read `ui/README.md`.
 
-A hosted copy at `https://13-210-42-0.sslip.io` is a public, read-only demo with paper data. The team agreed to this for judging.
+The public demo runs on AWS Amplify at `https://main.d23gra1a9ugqjs.amplifyapp.com` with paper data. The team agreed to this for judging. Read `docs/amplify.md`.
 Its Ask a Coworker area takes requests from anyone, within limits: 5 requests per visitor every 10 minutes, at most 10 AI answers a day for the website, and one answer at a time.
 Its role views are lenses, not access control. Wallet sign-in covers accounts only. Before real data or a launch, put the role views behind sign-in, and keep the Mediation desk private.
 

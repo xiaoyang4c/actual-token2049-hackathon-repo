@@ -56,6 +56,14 @@ export interface DepositChain {
 type Json = {[key: string]: unknown};
 type BlockfrostAmount = Array<{unit: string; quantity: string}>;
 
+/** A Blockfrost reply with an error status. A 4xx on submit means the chain rejected the transaction. */
+export class BlockfrostError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'BlockfrostError';
+  }
+}
+
 export class BlockfrostDepositChain implements DepositChain {
   private readonly baseUrl: string;
   private readonly fetcher: typeof fetch;
@@ -79,7 +87,7 @@ export class BlockfrostDepositChain implements DepositChain {
     if (!response.ok) {
       const body = await response.json().catch(() => null) as Json|null;
       const reason = typeof body?.message === 'string' ? `: ${body.message.slice(0, 200)}` : '';
-      throw new Error(`Blockfrost ${path.split('?')[0]} returned ${response.status}${reason}`);
+      throw new BlockfrostError(`Blockfrost ${path.split('?')[0]} returned ${response.status}${reason}`, response.status);
     }
     return response.json();
   }
@@ -161,6 +169,14 @@ export function depositSettingsFromEnv(env: {[key: string]: string|undefined}): 
   const confirmations = Number(env.TALLY_DEPOSIT_CONFIRMATIONS ?? 3);
   if (!Number.isInteger(confirmations) || confirmations < 1) throw new Error('TALLY_DEPOSIT_CONFIRMATIONS must be a whole number of at least 1');
   return {chain: key ? new BlockfrostDepositChain(key) : null, depositAddress: address, confirmations};
+}
+
+/** True when one of the wallet proofs covers the address: a stake proof by its stake key, a payment proof by its payment key. */
+export function proofsCoverAddress(
+  proofs: ReadonlyArray<{credentialKind: 'stake'|'payment'; credentialHash: string}>, address: string,
+): boolean {
+  const keys = addressKeyHashes(address);
+  return proofs.some((proof) => proof.credentialHash === (proof.credentialKind === 'stake' ? keys.stake : keys.payment));
 }
 
 /** A bech32 address from bech32 or CIP-30 hex. Throws for anything else. */
