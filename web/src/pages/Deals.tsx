@@ -76,7 +76,7 @@ export function DealsPage() {
       <div className="space-y-5">
         <Reveal>
           <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-            <TabsList className="h-auto flex-wrap gap-0.5 rounded-[11px] border border-white/70 bg-white/45 p-1 backdrop-blur-md">
+            <TabsList className="h-auto flex-wrap gap-0.5 group-data-horizontal/tabs:h-auto rounded-[11px] border border-white/70 bg-white/45 p-1 backdrop-blur-md">
               {([['all', 'All', rows.length], ['action', lens === 'all' ? 'Waiting' : 'Your move', waiting.length], ['disputes', 'Disputes', disputes.length], ['closed', 'Closed', closed.length]] as const).map(([value, label, n]) => (
                 <TabsTrigger key={value} value={value} className="h-9 shrink-0 rounded-[8px] px-2.5 text-[13px] data-active:bg-ink data-active:text-white sm:px-3.5">
                   {label}<span className="mono ml-1.5 text-[11px] opacity-60">{n}</span>
