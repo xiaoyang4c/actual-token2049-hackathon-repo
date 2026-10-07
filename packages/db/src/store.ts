@@ -20,6 +20,7 @@ import * as lifecycleCommands from './lifecycle-commands';
 import type {LifecycleCommandRecord} from '../../reliability/src/lifecycle/commands';
 import * as contractRecords from './contract-records';
 import * as anchorRecords from './anchor-records';
+import * as walletRecords from './wallet-records';
 import type {AnchorBatchRow, AnchoredEntryView, AnchorEntryRow, FinalPublication} from './anchor-records';
 import type {
   ContractAuditRow, ContractCommit, EscrowOperation, ProcessedAction, ReliabilityPublication,
@@ -29,6 +30,11 @@ import type {
 } from '../../reliability/src/contract-lifecycle/types';
 import * as reliabilityRecords from './reliability';
 import * as omnibusFunding from './omnibus-funding';
+import * as scoreWeights from './score-weights';
+import * as marketplaceRecords from './marketplace-records';
+import type {FeeCharge} from '../../reliability/src/fee-charges';
+import type {Offer} from '../../reliability/src/offers';
+import type {EventWeightRecord} from '../../reliability/src/event-weights';
 import type {
   DealFundingRequest, OmnibusBalance, PaperDealFundingRecord,
   PaperOmnibusPool, PaperPoolDeposit,
@@ -442,6 +448,82 @@ export class AgentStore {
     ).all().map((row) => JSON.parse(row.listingJson) as Listing);
   }
 
+  /** Inserts or replaces the recorded weight of one event (migration 007). */
+  saveEventWeight(record: EventWeightRecord): void {
+    scoreWeights.saveEventWeight(this.db, record);
+  }
+
+  getEventWeight(eventId: string): EventWeightRecord|undefined {
+    return scoreWeights.getEventWeight(this.db, eventId);
+  }
+
+  listEventWeightsForTransaction(transactionId: string): EventWeightRecord[] {
+    return scoreWeights.listEventWeightsForTransaction(this.db, transactionId);
+  }
+
+  getPairPosition(pairKey: string, transactionId: string): number|undefined {
+    return scoreWeights.getPairPosition(this.db, pairKey, transactionId);
+  }
+
+  /** Adds an eligible transaction to a pair. Repeated calls return the first position. */
+  addPairTransaction(pairKey: string, transactionId: string, at: string): number {
+    return scoreWeights.addPairTransaction(this.db, pairKey, transactionId, at);
+  }
+
+  /** Removes a transaction from its pairs. Returns transactions that moved down. */
+  removePairTransaction(transactionId: string): string[] {
+    return scoreWeights.removePairTransaction(this.db, transactionId);
+  }
+
+  /** Deletes every weight and pair row before a full score rebuild. */
+  clearScoreWeights(): void {
+    scoreWeights.clearScoreWeights(this.db);
+  }
+
+  insertOffer(offer: Offer): void {
+    marketplaceRecords.insertOffer(this.db, offer);
+  }
+
+  /** Replaces an offer while it is still open. False when another writer decided it. */
+  updateOpenOffer(offer: Offer, at: string): boolean {
+    return marketplaceRecords.updateOpenOffer(this.db, offer, at);
+  }
+
+  getOffer(id: string): Offer|undefined {
+    return marketplaceRecords.getOffer(this.db, id);
+  }
+
+  listOffers(filter: {listingId?: string; buyerId?: string; sellerId?: string} = {}): Offer[] {
+    return marketplaceRecords.listOffers(this.db, filter);
+  }
+
+  /** Inserts the accepted buyer and seller fees for one sale (migration 016). */
+  insertFeeCharge(charge: FeeCharge): void {
+    marketplaceRecords.insertFeeCharge(this.db, charge);
+  }
+
+  /** Moves a charge from `fromStatus`. False when another writer moved it first. */
+  settleFeeCharge(charge: FeeCharge, fromStatus: FeeCharge['status']): boolean {
+    return marketplaceRecords.settleFeeChargeRow(this.db, charge, fromStatus);
+  }
+
+  getFeeCharge(transactionId: string): FeeCharge|undefined {
+    return marketplaceRecords.getFeeCharge(this.db, transactionId);
+  }
+
+  /** Payment observation for one invoice (migration 009). */
+  saveInvoiceSettlement(record: marketplaceRecords.InvoiceSettlementRecord): void {
+    marketplaceRecords.saveInvoiceSettlement(this.db, record);
+  }
+
+  getInvoiceSettlement(transactionId: string): marketplaceRecords.InvoiceSettlementRecord|undefined {
+    return marketplaceRecords.getInvoiceSettlement(this.db, transactionId);
+  }
+
+  invoiceForSettlementReference(reference: string): string|undefined {
+    return marketplaceRecords.invoiceForSettlementReference(this.db, reference);
+  }
+
   /** Archives and replaces the active events after an outcome correction. */
   replaceReliabilityEvents(transactionId: string, events: ReliabilityEvent[], at: string): void {
     const previous = this.listReliabilityEventsForTransaction(transactionId);
@@ -670,6 +752,78 @@ export class AgentStore {
 
   anchorCounts(): ReturnType<typeof anchorRecords.anchorCounts> {
     return anchorRecords.anchorCounts(this.db);
+  }
+
+  // ---- Wallet accounts (migration 017) ----
+
+  insertWalletChallenge(row: Parameters<typeof walletRecords.insertWalletChallenge>[1]): void {
+    walletRecords.insertWalletChallenge(this.db, row);
+  }
+
+  getWalletChallenge(id: string): walletRecords.WalletChallengeRow|undefined {
+    return walletRecords.getWalletChallenge(this.db, id);
+  }
+
+  /** Marks a challenge used. Returns false when it was already used. */
+  useWalletChallenge(id: string, at: number): boolean {
+    return walletRecords.useWalletChallenge(this.db, id, at);
+  }
+
+  /** Deletes expired challenges and returns the count of open ones. */
+  pruneWalletChallenges(now: number): number {
+    return walletRecords.pruneWalletChallenges(this.db, now);
+  }
+
+  insertWalletProof(row: walletRecords.WalletProofRow): void {
+    walletRecords.insertWalletProof(this.db, row);
+  }
+
+  getWalletProofByCredential(credentialHash: string): walletRecords.WalletProofRow|undefined {
+    return walletRecords.getWalletProofByCredential(this.db, credentialHash);
+  }
+
+  listWalletProofs(entityId: string): walletRecords.WalletProofRow[] {
+    return walletRecords.listWalletProofs(this.db, entityId);
+  }
+
+  listAllWalletProofs(): walletRecords.WalletProofRow[] {
+    return walletRecords.listAllWalletProofs(this.db);
+  }
+
+  insertSession(row: Parameters<typeof walletRecords.insertSession>[1]): void {
+    walletRecords.insertSession(this.db, row);
+  }
+
+  getSession(tokenHash: string): walletRecords.SessionRow|undefined {
+    return walletRecords.getSession(this.db, tokenHash);
+  }
+
+  revokeSession(tokenHash: string, at: number): void {
+    walletRecords.revokeSession(this.db, tokenHash, at);
+  }
+
+  upsertLiveDeposit(row: walletRecords.LiveDepositRow): void {
+    walletRecords.upsertLiveDeposit(this.db, row);
+  }
+
+  listLiveDepositsForTx(txHash: string): walletRecords.LiveDepositRow[] {
+    return walletRecords.listLiveDepositsForTx(this.db, txHash);
+  }
+
+  listLiveDeposits(filter: Parameters<typeof walletRecords.listLiveDeposits>[1] = {}): walletRecords.LiveDepositRow[] {
+    return walletRecords.listLiveDeposits(this.db, filter);
+  }
+
+  confirmedDepositTotals(entityId: string): Array<{unit: string; quantity: string}> {
+    return walletRecords.confirmedDepositTotals(this.db, entityId);
+  }
+
+  insertDepositSubmission(row: walletRecords.DepositSubmissionRow): void {
+    walletRecords.insertDepositSubmission(this.db, row);
+  }
+
+  listDepositSubmissions(entityId: string, limit?: number): walletRecords.DepositSubmissionRow[] {
+    return walletRecords.listDepositSubmissions(this.db, entityId, limit);
   }
 
   getPaperEscrow(ref: string): string|undefined {

@@ -36,6 +36,7 @@ async function read<T>(path: string): Promise<T> {
   return await response.json() as T
 }
 
+// The engine-backed paper fixtures can take more than five seconds on CI.
 beforeAll(async () => {
   const database = join(directory, 'agent.sqlite')
   await seedShowcase(database)
@@ -51,7 +52,7 @@ beforeAll(async () => {
     responses.set(`audit-${id}`, await read(`/reliability/contracts/audit?id=${id}`))
     responses.set(`anchors-${id}`, await read(`/reliability/anchors/contract?id=${id}`))
   }
-})
+}, 30_000)
 
 afterAll(() => {
   store?.close()

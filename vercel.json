@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "bunVersion": "1.x",
   "installCommand": "bun install && cd web && bun install",
-  "buildCommand": "bun run api/_seed.ts && cd web && VITE_COWORKER_ASK_URL=https://13-210-42-0.sslip.io bun run build",
+  "buildCommand": "bun run api/_seed.ts && cd web && VITE_COWORKER_ASK_URL=https://13-210-42-0.sslip.io VITE_TALLY_SERVER_URL=https://13-210-42-0.sslip.io bun run build",
   "outputDirectory": "web/dist",
   "functions": {
     "api/demo.ts": {
@@ -14,5 +14,32 @@
     {"source": "/reliability/:path*", "destination": "/api/demo?__path=/reliability/:path*"},
     {"source": "/coworkers/ask", "destination": "/api/demo?__path=/coworkers/ask"},
     {"source": "/((?!api/|assets/|brand/).*)", "destination": "/index.html"}
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' chrome-extension: moz-extension:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://13-210-42-0.sslip.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=()"
+        }
+      ]
+    }
   ]
 }

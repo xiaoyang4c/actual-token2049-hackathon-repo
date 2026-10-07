@@ -9,8 +9,30 @@ import {join} from 'node:path';
 import {AgentStore} from '../../packages/db/src/index';
 import {start} from '../control-api';
 
+const ONBOARD = '2026-10-05T00:00:00.000Z';
 const OPEN = '2026-10-06T00:00:00.000Z';
 const WINDOW = '2026-10-13T00:00:00.000Z';
+
+async function postJson(origin: string, path: string, body: unknown): Promise<Response> {
+  return fetch(`${origin}${path}`, {
+    method: 'POST',
+    headers: {'content-type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+}
+
+/** Registers and verifies one party through the mock KYC routes. */
+async function onboard(origin: string, id: string): Promise<void> {
+  const documentId = `DOC-${id}`;
+  expect((await postJson(origin, '/reliability/kyc/entities', {
+    id, displayName: id, roles: ['both'], wallets: [`wallet-${id}`], kind: 'person', documentId, at: ONBOARD,
+  })).status).toBe(200);
+  expect((await postJson(origin, '/reliability/kyc/checks', {
+    entityId: id, kind: 'person', documentId, at: '2026-10-05T01:00:00.000Z',
+  })).status).toBe(200);
+  expect((await postJson(origin, '/reliability/kyc/resolve', {entityId: id, at: '2026-10-05T02:00:00.000Z'})).status)
+    .toBe(200);
+}
 
 async function withServer(
   run: (origin: string, databasePath: string) => Promise<void>,
@@ -32,6 +54,18 @@ async function withServer(
 describe('lifecycle demo routes', () => {
   test('drives a paper sale from offer to settlement', async () => {
     await withServer(async (origin, databasePath) => {
+      const refused = await postJson(origin, '/reliability/lifecycle/open', {
+        id: 'tx-demo', type: 'goods', buyerId: 'buyer-demo', sellerId: 'seller-demo',
+        terms: {goods: 'cable', quantity: 1}, value: 50, at: OPEN,
+      });
+      expect(refused.status).toBe(403);
+      const refusal = await refused.json() as {violations: {code: string; party: string}[]};
+      expect(refusal.violations.map((item) => `${item.party}:${item.code}`)).toEqual([
+        'buyer:kyc_unknown_entity', 'seller:kyc_unknown_entity',
+      ]);
+      await onboard(origin, 'buyer-demo');
+      await onboard(origin, 'seller-demo');
+
       const opened = await fetch(`${origin}/reliability/lifecycle/open`, {
         method: 'POST',
         headers: {'content-type': 'application/json'},
@@ -50,13 +84,18 @@ describe('lifecycle demo routes', () => {
         mode: string;
         stage: string;
         outcome: {state: string};
+        feeCharge: {status: string; principalMinor: string; buyerTotalMinor: string};
+        transaction: {terms: {platformFees?: {buyerFeeBps: number}}};
       };
       expect(openBody.mode).toBe('paper');
+      expect(openBody.feeCharge).toMatchObject({status: 'accepted', principalMinor: '5000'});
+      expect(BigInt(openBody.feeCharge.buyerTotalMinor)).toBeGreaterThan(5000n);
+      expect(openBody.transaction.terms.platformFees?.buyerFeeBps).toBeGreaterThan(0);
       expect(openBody.stage).toBe('offer_accepted');
       expect(openBody.outcome.state).toBe('pending');
       const shared = AgentStore.open(databasePath);
       try {
-        expect(shared.getEntity('buyer-demo')?.kycStatus).toBe('unverified');
+        expect(shared.getEntity('buyer-demo')?.kycStatus).toBe('verified');
         expect(shared.getTransaction('tx-demo')?.id).toBe('tx-demo');
       } finally {
         shared.close();
@@ -116,6 +155,7 @@ describe('lifecycle demo routes', () => {
         outcome: {state: string; verificationConfidence?: number; verificationMethod: string};
         events: {outcome: string; verificationConfidence?: number}[];
         termsDecisions: {policyVersion: string; buyerFeeBps: number; sellerFeeBps: number}[];
+        feeCharge: {status: string};
       };
       expect(settledBody.stage).toBe('payment_settled');
       expect(settledBody.outcome.state).toBe('successful');
@@ -124,9 +164,10 @@ describe('lifecycle demo routes', () => {
       expect(settledBody.events).toHaveLength(2);
       expect(settledBody.events.every((event) => event.outcome === 'success')).toBe(true);
       expect(settledBody.termsDecisions).toHaveLength(2);
-      expect(settledBody.termsDecisions[0]?.policyVersion).toBe('fee-terms-stub-v0');
+      expect(settledBody.termsDecisions[0]?.policyVersion).toBe('fee-terms-curve-v1');
       expect(settledBody.termsDecisions[0]?.buyerFeeBps).toBeGreaterThan(0);
       expect(settledBody.termsDecisions[0]?.sellerFeeBps).toBeGreaterThan(0);
+      expect(settledBody.feeCharge.status).toBe('collected');
 
       const receipt = await fetch(
         `${origin}/reliability/lifecycle?transactionId=tx-demo`,

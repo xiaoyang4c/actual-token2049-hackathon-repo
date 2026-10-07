@@ -92,8 +92,8 @@ A simulated escrow receipt says that no chain settlement proof is present.
 Missing escrow mode stays unknown.
 The timeline shows recorded evidence only.
 
-Scoring and fees use stubs.
-Value weighting and repeat-pair decay are not implemented.
+Scores use the weighted Beta model with default parameters.
+Fee decisions use the fee curve with default parameters.
 The UI does not calculate these rules.
 It shows the scores and fee offers returned by the API.
 A fee decision names its entity, category, reason, and policy version.

@@ -5,10 +5,13 @@
  * without changing existing behavior.
  */
 
+import {accountRoutes} from './routes-account';
 import {laneAKycRoutes} from './routes-lane-a-kyc';
 import {laneARoutes} from './routes-lane-a';
 import {laneAContractRoutes} from './routes-lane-a-contracts';
+import {marketplaceRoutes} from './routes-marketplace';
 import {plumbingRoutes, type ReliabilityRoute} from './routes-plumbing';
+import {scoringRoutes} from './routes-scoring';
 
 export type {ReliabilityRoute};
 
@@ -21,4 +24,7 @@ export const reliabilityRoutes: ReliabilityRoute[] = [
   ...laneARoutes,
   ...laneAKycRoutes,
   ...laneAContractRoutes,
+  ...scoringRoutes,
+  ...marketplaceRoutes,
+  ...accountRoutes,
 ];

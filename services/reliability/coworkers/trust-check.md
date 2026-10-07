@@ -45,7 +45,9 @@ Use `counterpartyId` only when the user asks about deals between two specific en
 - Show `score`, `lowerBound`, `confidence`, and the event counts exactly as returned.
 - `scoringPolicy.version` names the policy that produced the numbers.
   When `scoringPolicy.provisional` is true, say: "These scores come from a provisional placeholder policy. Treat them as counts of successes and failures, not as a calibrated rating."
-- A score with few events means little. Say so when `events.total` is small, without inventing a threshold. Quote the count.
+  When `scoringPolicy.parametersSelected` is false, say: "The scoring parameters are defaults. Tally has not finalised them."
+- Each deal counts by its value. Repeat deals with the same partner count less. `events.weighted` counts the events that changed the score. Unverified events and events without a value carry no weight.
+- A score with few events means little. Say so when `events.weighted` is small, without inventing a threshold. Quote the count.
 
 ### 4.3 Terms decisions
 
@@ -63,6 +65,7 @@ Use `counterpartyId` only when the user asks about deals between two specific en
 | `KYC_LIMIT` | The KYC level limits the terms |
 | `POLICY_DEFAULT` | The policy applied its default |
 
+- Tally sets the platform fees, the deal limit, and the invoice payment days from these decisions. A deal above either party's limit cannot open.
 - Tally does **not** set escrow contract terms (inspection windows, holdbacks, remedies) from scores yet. Never say it does.
   You may name the levers that exist in every contract: the remedy (for example a holdback with `partial_release`), an agreed inspector, and a redo. Say that the parties choose them, and that the Deal Desk Coworker drafts them.
 

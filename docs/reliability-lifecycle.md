@@ -105,6 +105,11 @@ Do not treat `self_report` as a strong outcome.
 
 Give `self_report` weight 0 in scoring.
 
+The lifecycle also checks delivery evidence against `terms.delivery` (goods) and `terms.service` (services).
+A late delivery needs the buyer's confirmation.
+Carrier proof never accepts a service.
+Read [delivery and acceptance terms](marketplace.md#delivery-and-acceptance-terms).
+
 ## Disputes
 
 Name `resolver` and `resolveBy` when you open a dispute.
@@ -160,7 +165,13 @@ A backdated request cannot bypass that timeout.
 
 ## Terms
 
+`open` checks KYC, exposure limits, and invoice due dates first.
+Both parties must exist and pass KYC. `open` no longer creates unknown parties.
+Read [checks before a sale opens](marketplace.md#checks-before-a-sale-opens).
+
 `open` stores terms version 1.
+It adds the accepted fees as `platformFees` and both parties' score-based terms as `reliabilityTerms`.
+An amendment keeps both values.
 
 The reason is `initial terms`.
 
@@ -316,6 +327,7 @@ Send `at` as a UTC timestamp such as `2026-10-06T00:00:00.000Z`.
 `terminate` needs `buyerConsentAt` and `sellerConsentAt`.
 
 `open` accepts `contractEnds`.
+`open` needs `value`. A rule failure returns HTTP 403 with `violations`.
 
 Without `now`, a GET uses the current server time.
 An explicit `now` supports paper test scenarios.
@@ -328,6 +340,7 @@ For a timeout, it is the dispute deadline.
 Later reads keep the decision and event timestamps.
 
 The GET runs the outcome through `outcomeToEvents` and the current terms policy.
+It also settles the accepted fee charge and returns it as `feeCharge`.
 
 The service loads the stored buyer and seller states for the transaction category.
 

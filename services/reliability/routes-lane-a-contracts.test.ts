@@ -47,11 +47,30 @@ async function call(origin: string, path: string, body?: unknown): Promise<{stat
   return {status: response.status, body: await response.json() as {[key: string]: unknown}};
 }
 
+/** Registers and verifies one party through the mock KYC routes. */
+async function onboard(origin: string, id: string): Promise<void> {
+  const documentId = `DOC-${id}`;
+  const at = (offset: number) => iso(Date.now() - 3_600_000 + offset);
+  expect((await call(origin, '/reliability/kyc/entities', {
+    id, displayName: id, roles: ['both'], wallets: [`wallet-${id}`], kind: 'person', documentId, at: at(0),
+  })).status).toBe(200);
+  expect((await call(origin, '/reliability/kyc/checks', {entityId: id, kind: 'person', documentId, at: at(1_000)})).status)
+    .toBe(200);
+  expect((await call(origin, '/reliability/kyc/resolve', {entityId: id, at: at(2_000)})).status).toBe(200);
+}
+
 describe('contract routes', () => {
   test('a signed digital deal from registration to settlement over HTTP', async () => {
     await withServer(async (origin) => {
       const buyer = generateEd25519();
       const seller = generateEd25519();
+      const unverified = await call(origin, '/reliability/contracts/parties', {
+        entityId: 'buyer-http', publicKeyHex: buyer.publicKeyHex, cardanoAddress: 'addr_test1_synthetic_buyer_http',
+      });
+      expect(unverified.status).toBe(403);
+      expect(unverified.body.code).toBe('kyc_required');
+      await onboard(origin, 'buyer-http');
+      await onboard(origin, 'seller-http');
       expect((await call(origin, '/reliability/contracts/parties', {entityId: 'buyer-http', publicKeyHex: buyer.publicKeyHex, cardanoAddress: 'addr_test1_synthetic_buyer_http'})).status).toBe(200);
       expect((await call(origin, '/reliability/contracts/parties', {entityId: 'seller-http', publicKeyHex: seller.publicKeyHex, cardanoAddress: 'addr_test1_synthetic_seller_http'})).status).toBe(200);
 
@@ -68,6 +87,8 @@ describe('contract routes', () => {
       const milestoneId = contract.milestones[0]!.id;
       expect(created.body.mode).toBe('paper');
       expect(created.body.custodyModel).toBe('platform_custodial_test_only');
+      const accepted = (created.body.milestones as Array<{feeCharge: {status: string; currency: string; principalMinor: string}}>)[0]!;
+      expect(accepted.feeCharge).toMatchObject({status: 'accepted', currency: 'USDM', principalMinor: '3000000'});
 
       const signed = (partyId: string, key: typeof buyer, action: Omit<PartyAction, 'actionId'|'contractId'|'partyId'>) => {
         const request: PartyAction = {actionId: randomUUID(), contractId, partyId, ...action};
@@ -111,6 +132,7 @@ describe('contract routes', () => {
       const settled = await advanceUntil('settled');
       const reliability = (settled.body.milestones as Array<{reliability: {state: string}}>)[0]!.reliability;
       expect(reliability.state).toBe('successful');
+      expect((settled.body.milestones as Array<{feeCharge: {status: string}}>)[0]!.feeCharge.status).toBe('collected');
       expect(settled.body.auditChainIntact).toBe(true);
 
       const audit = await call(origin, `/reliability/contracts/audit?id=${contractId}`);

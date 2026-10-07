@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "services": "bun run services/dev.ts",
+    "services:legacy": "bun run services/legacy-dev.ts",
     "paper:demo": "bun run services/paper-position-demo.ts",
     "funding:demo": "bun run services/reliability/omnibus-funding-demo.ts",
     "funding:test": "bun test services/reliability/omnibus-funding.test.ts packages/db/test/store.test.ts",
@@ -18,6 +19,9 @@
     "anchors:wallet": "bun run services/reliability/anchor-worker.ts wallet",
     "anchors:status": "bun run services/reliability/anchor-worker.ts status",
     "anchors:worker": "bun run services/reliability/anchor-worker.ts worker",
+    "deposits:status": "bun run services/reliability/deposit-worker.ts status",
+    "deposits:worker": "bun run services/reliability/deposit-worker.ts worker",
+    "scores:rebuild": "bun run services/reliability/scores-rebuild.ts",
     "test": "bun test packages services ui && cd cre/agent-loop && bun test",
     "typecheck:workflow": "cd cre/agent-loop && bun run typecheck",
     "typecheck:control": "tsc --noEmit -p tsconfig.control.json",

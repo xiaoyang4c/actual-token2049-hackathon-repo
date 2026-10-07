@@ -1,15 +1,17 @@
 # Reliability checker: math specification
 
 This specification covers the B2B and B2C marketplace.
-It describes the target model and proposed commercial rules.
-It does not implement them.
-The current scoring stub adds one for each success or failure.
-It ignores transaction value and verification weight.
+It describes the score model and the commercial rules.
+The code implements them with the default parameters in [Default parameters](#default-parameters).
+The product owner has not selected those parameters.
 Read [Implementation status](implementation-status.md) for the current code.
 
-The Beta model and value weight follow the [scoring contract](../packages/reliability/src/scoring.ts).
-The decay curve, evidence-strength display, and commercial curves below are proposals.
-The product owner must select and version their parameters before implementation.
+| Rule | Implementation |
+| --- | --- |
+| Beta model, value weight, and lower bound | [scoring](../packages/reliability/src/scoring.ts) |
+| Pair decay | [pair decay](../packages/reliability/src/pair-decay.ts) |
+| Recorded weights, pair counts, rebuilds, and explanations | [score ledger](../services/reliability/score-ledger.ts) |
+| Fees, terms, and exposure | [fee policy](../packages/reliability/src/fees-policy.ts) and [fee charges](../packages/reliability/src/fee-charges.ts) |
 
 ## Score scope and notation
 
@@ -80,11 +82,10 @@ W_j=a_j\cdot w_j\cdot D_\lambda(n_j).
 $$
 
 The first eligible transaction has $n_j=0$ and no pair reduction.
-With $\lambda=1$, the curve matches the [decay stub](../packages/reliability/src/pair-decay.ts).
-The current event flow discards the returned weight.
-Changing the curve alone will not change current scores.
+Each applied event uses this weight.
 
-A proposed pair key contains buyer ID, seller ID, and category.
+The pair key contains buyer ID, seller ID, and category.
+The default key is directed.
 Read the count before the transaction's score update.
 Use the same count for both role events from that transaction.
 Increment the count once for an eligible transaction with positive weight.
@@ -155,15 +156,7 @@ A new entity still needs restrictive onboarding terms and KYC checks.
 
 Keep verification confidence, model uncertainty, and display confidence separate.
 The 95% bound above does not change with a display confidence value.
-The current stub uses event count $N$:
-
-$$
-C_{\mathrm{stub}}=\frac{N}{N+10},
-\qquad L_{\mathrm{stub}}=rC_{\mathrm{stub}}.
-$$
-
-$L_{\mathrm{stub}}$ is not a Beta quantile.
-A proposed display measure uses effective evidence mass:
+The display confidence uses effective evidence mass:
 
 $$
 M=\sum_{j\in\mathcal H}W_j=\alpha+\beta-2,
@@ -195,8 +188,8 @@ $$
 Require $0\le f_{x,\min}\le f_{x,\max}\le10{,}000$ basis points.
 Higher bounds give lower fees when the floor and ceiling differ.
 With $\eta_x=1$, the curve is linear.
-The current stub uses a linear offer curve for one entity.
-Its buyer and seller fields do not establish both participants' charged fees.
+The default uses $\eta_x=1$ on both sides.
+Each sale records one accepted charge with both participants' fees.
 
 For agreed principal $P$:
 
@@ -271,24 +264,25 @@ If eligibility or pair membership changes, rebuild later affected pair weights t
 Store the evidence reference, normalized value, pair count, weight, and policy version.
 Keep observation time separate from outcome decision time.
 A read must not alter a weight, pair count, or decision timestamp.
-The lifecycle now implements stable decision times and active-event corrections.
+The lifecycle implements stable decision times and active-event corrections.
 It archives replaced events and preserves imported score baselines.
-The current stub rebuilds each affected state as:
+It records each event weight with its inputs and policy versions.
+It rebuilds each affected state as:
 
 $$
-\alpha=\alpha_{\mathrm{base}}+\sum_{e\in H_{\mathrm{active}}}\mathbf{1}[e=\mathrm{success}],
+\alpha=\alpha_{\mathrm{base}}+\sum_{e\in H_{\mathrm{active}}}W_e\cdot\mathbf{1}[e=\mathrm{success}],
 \qquad
-\beta=\beta_{\mathrm{base}}+\sum_{e\in H_{\mathrm{active}}}\mathbf{1}[e=\mathrm{failure}].
+\beta=\beta_{\mathrm{base}}+\sum_{e\in H_{\mathrm{active}}}W_e\cdot\mathbf{1}[e=\mathrm{failure}].
 $$
 
 $H_{\mathrm{active}}$ contains only active events for that entity, category, and role.
-The sums use unit weights. They do not implement the proposed value or pair weights.
-For an earlier success followed by seller fault, the seller changes from $(2,1)$ to $(1,2)$.
-The buyer returns from $(2,1)$ to its prior $(1,1)$.
-These examples assume one transaction and the unit prior.
+$W_e$ is the recorded weight of event $e$.
+For one transaction with $v=v_0$, an earlier success followed by seller fault changes the seller from $(1+\ln 2,1)$ to $(1,1+\ln 2)$.
+The buyer returns from $(1+\ln 2,1)$ to its prior $(1,1)$.
 A repeated read changes neither state.
-Weighted revisions and policy migrations still need complete policy input history.
-Read [implementation status](implementation-status.md).
+A transaction that loses its eligibility leaves its pair.
+Later transactions of that pair move down one position, and their states rebuild.
+Run `bun run scores:rebuild` after a parameter change. It recomputes every weight and state.
 
 ## Worked example
 
@@ -317,7 +311,26 @@ With the illustrative choice $\kappa=10$, $M\approx1.039721$ and $C\approx0.0941
 A repeated command changes none of these values.
 A new unverified event adds no weight.
 
-## Decisions before implementation
+## Default parameters
+
+The code uses these defaults. They are not product decisions.
+
+| Parameter | Default |
+| --- | --- |
+| Accounting currency | USD. USDM counts one to one. |
+| Value scale $v_0$ | 1,000 in every category |
+| Lower-bound quantile | 0.05 |
+| Display scale $\kappa$ | 10 |
+| Decay rate $\lambda$ and pair key | 1, directed |
+| Buyer fee $f_{b,\min}$ to $f_{b,\max}$, $\eta_b$ | 25 to 300 basis points, 1 |
+| Seller fee $f_{s,\min}$ to $f_{s,\max}$, $\eta_s$ | 20 to 250 basis points, 1 |
+| Deposit scale $d_{\max}$ and premium scale $k$ | 1,000 and 500 |
+| Verification $u_{\min}$ and $u_0$ | 0.05 and 1 |
+| Payment days $t_{\min}$ to $t_{\max}$ | 7 to 60 |
+| Exposure $E_{\max}$ and $\gamma$ | 100,000 and 1 |
+| KYC caps for none, basic, and enhanced | 0, 10,000, and 250,000 |
+
+## Decisions before production
 
 Select the value currency, conversion rules, and category-specific $v_0$.
 Select evidence acceptance rules and paper/live history separation.

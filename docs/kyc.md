@@ -101,6 +101,9 @@ Keep the reliability rows of the earlier entity. Leave the new entity with no re
 
 A wallet that is already registered is refused. That refusal is not a KYC pass.
 
+A wallet attached through these routes has no proof of control.
+A wallet signed in through the Account page has a proof. Read [Wallet accounts](wallets.md).
+
 ## Store
 
 The provider writes through `AgentStore` accessors.
@@ -110,6 +113,23 @@ The provider writes through `AgentStore` accessors.
 KYC tables are in `packages/db/migrations/008_lane_a_kyc.sql`.
 
 Lifecycle tables are in `packages/db/migrations/011_lane_a_lifecycle.sql`.
+
+## Enforcement
+
+The marketplace gate reads the entity row and the KYC profile before these actions:
+
+- opening a sale, accepting an offer, or issuing an invoice
+- creating a contract
+- registering a contract signing key
+- creating a listing
+
+A party passes when `countsAsVerified` is true for its row and its verification is inside `verificationTtlMs`.
+A contract template can raise the required tier with `minimumKycTier`.
+An entity that re-registers the identity of a rejected entity does not pass.
+An entity row created outside onboarding counts by its row status.
+Read [Marketplace rules and writes](marketplace.md) for the violation codes.
+
+KYC tier `none` has a zero exposure cap. The terms policy gives it no limit.
 
 ## Fees and terms lane
 
@@ -158,6 +178,8 @@ These POST routes exist so a demo can move an entity through the cases:
 - `POST /reliability/kyc/expire`
 
 Send `"force": true` on the expire route to show the expired badge before the config TTL.
+
+A signed-in account uses `POST /reliability/account/kyc` instead. It submits and resolves the mock check for its own entity only.
 
 The route file is `services/reliability/routes-lane-a-kyc.ts`.
 

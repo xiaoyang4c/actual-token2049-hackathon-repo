@@ -21,9 +21,10 @@ Read [lane ownership](docs/reliability-lanes.md) for module owners and reserved 
 9. Update the applicable buyer and seller scores.
 10. Show the outcome, evidence, and fees.
 
-This flow is the target.
-The implementation has stored collection reads, mock KYC, a stored lifecycle, and a local operator display.
-It does not implement the complete buyer and seller flow.
+The backend implements this flow for paper orders.
+It has listings, offers, KYC and limit checks, accepted fees, a stored lifecycle, invoices, and weighted scores.
+It does not authenticate callers, and no buyer or seller screen exists.
+Read [Marketplace rules and writes](docs/marketplace.md).
 
 ## Reliability rules
 
@@ -68,10 +69,10 @@ Live preprod testing needs assigned key owners.
 | 1 | Validate lifecycle payment completion | Chain checks and score corrections are implemented. Reconcile legacy records and test actual preprod settlement. |
 | 1 | Complete external-action recovery | Durable commands and time checks are implemented. Add an operator flow for lost external responses. |
 | 1 | Authenticate callers and authorize actions | Check participant ownership, resolver authority, and consent. |
-| 2 | Implement the reliability model | Apply value and pair weights. Calculate the Beta lower bound. Explain each score change. |
-| 2 | Apply fees, terms, and KYC restrictions | Store accepted charges. Enforce transaction limits and required verification. |
-| 2 | Add marketplace writes | Stored reads are implemented. Add listing creation and buyer/seller offer acceptance. |
-| 2 | Complete B2B and B2C evidence flows | Verify invoice payment, service acceptance, and goods delivery against agreed terms. |
+| 2 | Implement the reliability model | Implemented with default parameters. Select the parameters. |
+| 2 | Apply fees, terms, and KYC restrictions | Implemented with default parameters and mock KYC. Select fee bounds and caps. Add a verified KYC provider. Put fees inside the escrow amount. |
+| 2 | Add marketplace writes | Implemented for paper orders. Caller authentication is priority 1 work. |
+| 2 | Complete B2B and B2C evidence flows | Implemented for paper orders. Live invoice settlement needs the USDM receipt check. |
 | 3 | Improve the operator display | Add pagination, bounded polling, and clear evidence sources. |
 | 3 | Connect pooled funding to escrow | Reconcile allocations, payouts, refunds, cancellations, and available balances. |
 
@@ -95,6 +96,8 @@ It does not fund lifecycle escrow or return allocated credit after a refund.
 ## Source retirement
 
 The old trading plans and demo evidence are retired.
-Shared runtime code still supplies the control API store and payment types.
-Refactor these dependencies before deleting their source files or migrations.
-Separate marketplace startup from the legacy market feed during that refactor.
+The marketplace control API opens the shared store without the trading runtime.
+The marketplace launcher does not start the legacy market feed or score provider.
+Run `bun run services:legacy` for the retired paper trading demo.
+Payment code still uses shared core types.
+Refactor those types before deleting their source files or migrations.

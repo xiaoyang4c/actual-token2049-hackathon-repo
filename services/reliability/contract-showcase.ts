@@ -53,6 +53,14 @@ function kitFor(databasePath: string, keys: Keys, start: number, buyer: PartyKey
   const service = new ContractService(store, {config, clock});
   for (const key of [buyer, seller]) {
     const party = SHOWCASE_PARTIES[key];
+    // Key registration and contract creation need KYC-verified entities.
+    // The demo companies are recorded as verified, as mock KYC would record them.
+    if (!store.getEntity(party.id)) {
+      store.insertEntity({
+        id: party.id, displayName: party.displayName, wallets: [], roles: ['buyer', 'seller'],
+        kycStatus: 'verified', kycTier: 'basic', createdAt: new Date(start).toISOString(),
+      });
+    }
     service.registerParty({
       entityId: party.id, displayName: party.displayName,
       publicKeyHex: keys.parties[key].publicKeyHex, cardanoAddress: `addr_test1_synthetic_${party.id}`,
@@ -73,7 +81,8 @@ function whitelist(keys: Keys): Array<{id: string; publicKeyHex: string}> {
 }
 
 function coffeeLot(kit: Kit, keys: Keys, title: string, amountAtomic: string, quantity: number, remedy?: Remedy): {id: string; mId: string} {
-  const contract = kit.service.lifecycle.createContract({
+  // The service runs the marketplace checks and records the fee charges.
+  const contract = kit.service.createContract({
     templateId: 'physical-objective-spec',
     buyerId: kit.buyerId,
     sellerId: kit.sellerId,
@@ -86,7 +95,7 @@ function coffeeLot(kit: Kit, keys: Keys, title: string, amountAtomic: string, qu
 }
 
 function dataset(kit: Kit, title: string, amountAtomic: string): {id: string; mId: string} {
-  const contract = kit.service.lifecycle.createContract({
+  const contract = kit.service.createContract({
     templateId: 'digital-machine-checkable',
     buyerId: kit.buyerId,
     sellerId: kit.sellerId,

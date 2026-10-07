@@ -7,6 +7,7 @@ import {AgentStore} from '../../packages/db/src/index';
 import {EscrowTransactionLifecycle} from '../../packages/reliability/src/lifecycle';
 import type {EscrowPort} from '../../packages/reliability/src/escrow-port';
 import {LifecycleService} from './lifecycle-service';
+import {STUB_RELIABILITY_POLICIES} from './policies';
 import {createSimulatedMasumiEscrow} from './masumi-escrow';
 import {createLaneARoutes} from './routes-lane-a';
 import {createPlumbingRoutes} from './routes-plumbing';
@@ -18,7 +19,10 @@ const DEADLINE = '2026-10-09T00:00:00.000Z';
 const AFTER = '2026-10-10T00:00:00.000Z';
 
 function service(store: AgentStore, escrow?: EscrowPort): LifecycleService {
-  return new LifecycleService(store, {escrow: escrow ?? createSimulatedMasumiEscrow(store)});
+  // Unit weights keep the expected corrections in whole numbers.
+  return new LifecycleService(store, {
+    policies: STUB_RELIABILITY_POLICIES, escrow: escrow ?? createSimulatedMasumiEscrow(store),
+  });
 }
 
 function open(s: LifecycleService, id = 'sale'): void {
@@ -174,7 +178,7 @@ describe('marketplace correctness regressions', () => {
         open(s);
         await s.lifecycle.fund(funding());
         s.lifecycle.openDispute({transactionId: 'sale', resolver: 'reviewer', resolveBy: DEADLINE, at: AT});
-        const routes = createLaneARoutes({clock: () => AFTER});
+        const routes = createLaneARoutes({clock: () => AFTER, policies: STUB_RELIABILITY_POLICIES});
         if (readFirst) {
           const read = await request(routes, store, '/reliability/lifecycle?transactionId=sale');
           expect((await read.json() as {outcome: {state: string}}).outcome.state).toBe('unresolved');
@@ -324,7 +328,7 @@ describe('marketplace correctness regressions', () => {
     try {
       const l = live(store);
       open(service(store, l.port));
-      const routes = createLaneARoutes({clock: () => AT, escrowForStore: () => l.port});
+      const routes = createLaneARoutes({clock: () => AT, escrowForStore: () => l.port, policies: STUB_RELIABILITY_POLICIES});
       const body = {action: 'fund', ...funding(), commandId: 'purchase-1'};
       const pending = await request(routes, store, '/reliability/lifecycle/transition', body);
       expect(pending.status).toBe(202);
@@ -352,7 +356,7 @@ describe('marketplace correctness regressions', () => {
       await s.lifecycle.fund(funding());
       store.saveListing({id: 'stored-listing', sellerId: 'seller', transactionType: 'goods',
         title: 'Stored cable', price: 50, requiredTerms: {}, createdAt: AT});
-      const writes = createLaneARoutes({clock: () => AT});
+      const writes = createLaneARoutes({clock: () => AT, policies: STUB_RELIABILITY_POLICIES});
       expect((await request(writes, store, '/reliability/lifecycle/transition', {
         action: 'refund', transactionId: 'sale', at: AT, fault: 'seller',
       })).status).toBe(400);

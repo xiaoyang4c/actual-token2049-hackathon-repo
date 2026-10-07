@@ -1,0 +1,22 @@
+[Unit]
+Description=Tally live deposits (reads the deposit address on Cardano preprod and credits accounts)
+After=network-online.target tally-services.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tally-app/current
+Environment=CONTROL_DB_PATH=/home/ubuntu/tally-app/data/agent.sqlite
+Environment=TALLY_SECRETS_DIR=/home/ubuntu/tally-secrets
+# The public preprod address that receives deposits: the payment service purchasing wallet.
+# Read it from GET /api/v1/wallet/list on the payment service. The same value goes in tally-services.service.
+Environment=TALLY_DEPOSIT_ADDRESS=
+Environment=TALLY_DEPOSIT_CONFIRMATIONS=3
+ExecStart=/home/ubuntu/.bun/bin/bun run services/reliability/deposit-worker.ts worker
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

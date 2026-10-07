@@ -6,6 +6,11 @@
   "include": [
     "services/control-api.ts",
     "services/control-api.test.ts",
+    "services/control-store.ts",
+    "services/marketplace-startup.test.ts",
+    "services/dev.ts",
+    "services/legacy-dev.ts",
+    "services/legacy-control-routes.ts",
     "services/agent-runtime.ts",
     "services/agent-state.test.ts",
     "services/position-lifecycle.test.ts",

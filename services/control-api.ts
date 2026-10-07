@@ -1,12 +1,15 @@
-// Control API: durable policy and paper book, plus the JSONL audit log.
+// Marketplace control API and compatibility routes for the paper trading demo.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { AgentRequestError, createAgentRuntime, type AgentRuntimeOptions } from "./agent-runtime"
+import type { AgentStore } from "../packages/db/src"
+import type { AgentRuntimeOptions } from "./agent-runtime"
+import { openControlStore, type ControlStoreOptions } from "./control-store"
+import { createLegacyControlRoutes, createStoredAgentReadRoutes } from "./legacy-control-routes"
 import kalshiFixture from "./fixtures/kalshi-events.json"
 import polymarketFixture from "./fixtures/polymarket-markets.json"
-import { json, readJson, serve, type Handler } from "./lib/http"
+import { json, readJson, serve, type Handler, type Routes } from "./lib/http"
 import { reliabilityRoutes } from "./reliability/index"
 
 const AUDIT_FILE = new URL("./.data/audit.jsonl", import.meta.url)
@@ -80,42 +83,43 @@ function loadAudit(file: string | URL): AuditEntry[] {
   return entries
 }
 
-export interface ControlOptions extends AgentRuntimeOptions {
+export interface MarketplaceControlOptions extends ControlStoreOptions {
   auditFile?: string | URL
 }
 
+export interface ControlOptions extends MarketplaceControlOptions, AgentRuntimeOptions {}
+
+/** Starts the marketplace without initializing the retired trading book. */
+export function startMarketplace(port: number, options: MarketplaceControlOptions = {}) {
+  return startServer(port, options, createStoredAgentReadRoutes)
+}
+
+/** Starts the existing paper trading demo and the marketplace routes. */
 export function start(port: number, options: ControlOptions = {}) {
+  return startServer(port, options, (store) => createLegacyControlRoutes(store, options))
+}
+
+function startServer(
+  port: number,
+  options: MarketplaceControlOptions,
+  createAgentRoutes: (store: AgentStore) => Routes,
+) {
   const auditFile = options.auditFile ?? AUDIT_FILE
   mkdirSync(dirname(typeof auditFile === "string" ? auditFile : fileURLToPath(auditFile)), { recursive: true })
   const audit = loadAudit(auditFile)
-  const runtime = createAgentRuntime(options)
+  const store = openControlStore(options)
+  const ownsStore = !options.store
   const handle = (handler: Handler): Handler => async (request, url) => {
     try {
       return await handler(request, url)
     } catch (error) {
-      if (error instanceof AgentRequestError) return json({ error: error.message }, error.status)
       if (error instanceof SyntaxError) return json({ error: "invalid JSON" }, 400)
       throw error
     }
   }
   try {
     const server = serve("control-api", port, {
-      "GET /agent/state": handle(() => json(runtime.state())),
-
-      "POST /agent/marks": handle(async (req) => json({ portfolio: runtime.updateQuotes(await readJson<unknown>(req)) })),
-      "POST /positions/close": handle(async (req) => json(runtime.closePosition(await readJson<unknown>(req)))),
-      "POST /markets/resolve": handle(async (req) => json(runtime.resolveMarket(await readJson<unknown>(req)))),
-      "GET /positions/history": () => json(runtime.history()),
-      "GET /agent/days": handle(() => json(runtime.days())),
-
-      "POST /agent/policy": handle(async (req) => json({ policy: runtime.updatePolicy(await readJson<unknown>(req)) })),
-
-      "POST /agent/debug/shock": handle(async (req) => json({ portfolio: runtime.shock(await readJson<unknown>(req)) })),
-
-      "POST /agent/debug/reset": () => json({ portfolio: runtime.reset() }),
-
-      // The order result and book update commit together before the response.
-      "POST /orders": handle(async (req) => json(runtime.submitOrders(await readJson<unknown>(req)))),
+      ...createAgentRoutes(store),
 
       // Checks the body before it stores anything. One entry per cycle, so a
       // repeated POST from several CRE nodes is logged once.
@@ -143,23 +147,27 @@ export function start(port: number, options: ControlOptions = {}) {
       "GET /fixtures/polymarket/markets": () => json(polymarketFixture),
       "GET /fixtures/kalshi/events": () => json(kalshiFixture),
 
-      // Reliability marketplace reads (plumbing for the UI lane). Each
-      // lane registers its own routes through services/reliability. The
-      // trading routes above stay unchanged.
+      // Each reliability lane receives the same control store.
       ...Object.fromEntries(
-        reliabilityRoutes.map((route) => [`${route.method} ${route.path}`, (request: Request, url: URL) => route.handler(request, url, runtime.agentStore())]),
+        reliabilityRoutes.map((route) => [`${route.method} ${route.path}`, (request: Request, url: URL) => route.handler(request, url, store)]),
       ),
     })
+    let stopping: Promise<void> | undefined
     return {
       port: server.port!,
       stop(force = false) {
-        const stopped = server.stop(force)
-        if (stopped instanceof Promise) return stopped.finally(() => runtime.close())
-        runtime.close()
+        stopping ??= (async () => {
+          try {
+            await server.stop(force)
+          } finally {
+            if (ownsStore) store.close()
+          }
+        })()
+        return stopping
       },
     }
   } catch (error) {
-    runtime.close()
+    if (ownsStore) store.close()
     throw error
   }
 }
