@@ -14,7 +14,7 @@ export function Brand() {
   return (
     <span className="flex items-center gap-2.5">
       <TallyMark />
-      <span className="display text-[18px]">Tally</span>
+      <span className="wordmark text-[21px]">Tally</span>
     </span>
   )
 }
