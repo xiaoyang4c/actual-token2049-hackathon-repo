@@ -1,14 +1,12 @@
 // Local paper execution. SQLite is the source of policy, book, and order state.
-import {mkdirSync} from 'node:fs';
-import {dirname} from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {
   checkHalt, closeLots, markPositions, marketKey, settleLots,
   type Intent, type MarketQuote, type PaperAccounting, type PaperPortfolio,
   type Policy, type Portfolio, type ResolutionOutcome, type Settlement, type Side, type Venue,
 } from '../packages/core/src';
-import {AgentStore, type AgentStateRecord, type OrderRecord} from '../packages/db/src';
+import type {AgentStore, AgentStateRecord, OrderRecord} from '../packages/db/src';
+import {openControlStore, type ControlStoreOptions} from './control-store';
 import type {MarketQuoteSource} from './paper-market-source';
 
 const STARTING_CASH = 1000;
@@ -23,9 +21,7 @@ const DEFAULT_POLICY: Policy = {
 };
 const POLICY_FIELDS = Object.keys(DEFAULT_POLICY);
 
-export interface AgentRuntimeOptions {
-  databasePath?: string;
-  store?: AgentStore;
+export interface AgentRuntimeOptions extends ControlStoreOptions {
   now?: () => Date;
   quoteSource?: MarketQuoteSource;
   maxQuoteAgeMs?: number;
@@ -75,10 +71,7 @@ export class AgentRequestError extends Error {
 }
 
 export function createAgentRuntime(options: AgentRuntimeOptions = {}): AgentRuntime {
-  const databasePath = options.databasePath ?? process.env.CONTROL_DB_PATH ??
-    fileURLToPath(new URL('./.data/agent.sqlite', import.meta.url));
-  if (!options.store && databasePath !== ':memory:') mkdirSync(dirname(databasePath), {recursive: true});
-  const store = options.store ?? AgentStore.open(databasePath);
+  const store = openControlStore(options);
   try {
     return new AgentRuntime(store, !options.store, options);
   } catch (error) {

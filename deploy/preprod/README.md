@@ -11,7 +11,7 @@ Nothing here holds a secret. Secrets stay on the server in `~/tally-secrets` (mo
 | --- | --- | --- |
 | MPS at revision `d569a33` | Docker, `compose.yaml` service `mps` | `127.0.0.1:3001` only. Use an SSH tunnel |
 | PostgreSQL 16 | Docker, service `postgres` | Docker network only |
-| Control API and demo services | systemd, [`tally-services.service`](tally-services.service) | Ports 8787 to 8790 on all interfaces. **Only the AWS security group blocks them.** Never open these ports |
+| Marketplace control API and payment service | systemd, [`tally-services.service`](tally-services.service) | Ports 8787 and 8788 on all interfaces. **Only the AWS security group blocks them.** Never open these ports |
 | Operator UI | systemd, [`tally-ui.service`](tally-ui.service) | `127.0.0.1:8791`, public through Caddy |
 | Caddy | systemd, [`Caddyfile`](Caddyfile) | Ports 80 and 443. Serves `/brand/*` and the operator UI at `/` |
 

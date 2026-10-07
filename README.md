@@ -72,9 +72,10 @@ KYC currently uses a mock provider.
 | `docs/brand` | The Tally mark, logo, and Coworker avatars |
 
 Some source code still supports the retired trading runtime.
-The control API obtains its shared store through that runtime.
+The marketplace control API opens its shared store directly.
+The contract worker and paper trading demo use the same database setup.
 Cardano payment code also uses shared core types.
-Remove these dependencies through a separate refactor.
+Refactor those types before removing their source files.
 
 ## Run locally
 
@@ -91,10 +92,13 @@ bun run ui/server.ts
 Open <http://localhost:8791>.
 Open an area directly with `/?view=deals`, `/?view=mediation`, `/?view=companies`, or `/?view=operator`.
 
-The shared launcher starts the control API on port 8787.
-It also starts payment services on ports 8788 and 8789.
-It still starts the legacy market feed on port 8790.
-Separate marketplace startup from that feed in the runtime refactor.
+The marketplace launcher starts the control API on port 8787 and the shared payment service on port 8788.
+It does not create a trading book or start venue polling.
+`GET /agent/state` reads an existing paper book without changing it. It returns 404 when no book exists.
+`GET /audit` and the audit demo write remain available.
+Run `bun run services:legacy` for the retired paper trading demo, its score provider on port 8789, and its market feed on port 8790.
+Use one launcher at a time. Both launchers use the same control and payment ports.
+Read [Bun scripts](https://bun.sh/docs/runtime#run-a-packagejson-script) for script commands.
 
 Other demos:
 
@@ -134,7 +138,7 @@ Receipt reads require `transactionId`.
 Lifecycle reads require `transactionId` and accept an optional `now` query.
 Collections include stored records. A stored record takes precedence over a fixture with the same ID.
 Use the lifecycle read for stage history and current terms recommendations.
-Listing and offer write routes still need implementation.
+Listing and offer write routes are listed below.
 
 ### Contracts
 
