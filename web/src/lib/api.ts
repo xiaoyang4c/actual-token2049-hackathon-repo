@@ -1,4 +1,5 @@
 import {APP_EDITION} from './edition'
+import {serverUrl} from './server-url'
 
 /*
  * Read client for the control API (/reliability/*) and the Coworker ask
@@ -349,7 +350,7 @@ export interface CompanyAnchors {
 export class ApiError extends Error {}
 
 async function read<T>(path: string, init?: RequestInit): Promise<T> {
-  const base = APP_EDITION && path.startsWith('/reliability/') ? ((import.meta.env.VITE_TALLY_SERVER_URL as string | undefined) ?? '').replace(/\/$/, '') : ''
+  const base = APP_EDITION && path.startsWith('/reliability/') ? serverUrl(import.meta.env.VITE_TALLY_SERVER_URL) : ''
   const response = await fetch(`${base}${path}`, init)
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new ApiError((body as {error?: string}).error ?? `${response.status} ${response.statusText}`)
@@ -373,7 +374,7 @@ export type AskTicket = AskJob & {base: string}
  * The Coworker worker's public address (the preprod server). Empty means the same origin:
  * the Vite proxy in development, or ui/server.ts on the preprod server.
  */
-const ASK_BASE = (import.meta.env.VITE_COWORKER_ASK_URL ?? '').replace(/\/$/, '')
+const ASK_BASE = serverUrl(import.meta.env.VITE_COWORKER_ASK_URL)
 
 async function ask(coworker: CoworkerSlug | 'auto', text: string, history: ChatEntry[]): Promise<{job: AskTicket}> {
   const send = async (base: string) => {
@@ -409,7 +410,7 @@ export const api = {
 
   // The Coworker chat: free, answered by the Coworker worker.
   ask,
-  askStatus: (job: AskTicket) => read<{job: AskJob}>(`${job.base}/coworkers/ask?${q({id: job.id})}`, {cache: 'no-store'}),
+  askStatus: (job: AskTicket) => read<{job: AskJob}>(`${serverUrl(job.base)}/coworkers/ask?${q({id: job.id})}`, {cache: 'no-store'}),
 
   // Settlement anchors: fingerprints of final records on Cardano preprod.
   contractAnchors: (id: string) => read<ContractAnchors>(`/reliability/anchors/contract?${q({id})}`),

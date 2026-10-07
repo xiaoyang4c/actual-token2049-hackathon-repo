@@ -4,7 +4,7 @@ This display shows Tally: escrowed deals, disputes, company records, and the mar
 It does not edit policy, accept offers, send orders, sign, or change KYC.
 The Coworker area takes input: Ask a Coworker sends a request to Tally's Coworkers and shows the answer. It pays nothing and stores nothing.
 
-The hosted demo is <https://13-210-42-0.sslip.io>. It shows paper data only.
+The hosted demo is <https://main.d23gra1a9ugqjs.amplifyapp.com>. It shows paper data only.
 
 ## Areas
 

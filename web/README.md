@@ -110,25 +110,26 @@ for the white-to-gray theme. Type: Unbounded, Sora, JetBrains Mono.
 
 <https://tally-origins.vercel.app> is built from this repository. [`vercel.json`](../vercel.json) builds
 `web/` and routes `/reliability/*` and `/coworkers/ask` to [`api/demo.ts`](../api/demo.ts), a Vercel
-function on the Bun runtime. The function forwards allowlisted GET routes to the public EC2 demo.
-The website and its hosted Coworker therefore use the same contract IDs.
-`COWORKER_DEMO_URL` sets the read server. Its default matches the hosted chat address in `vercel.json`.
+function on the Bun runtime. It reads the EC2 showcase records at `https://13.210.42.0`.
+`COWORKER_DEMO_URL` overrides that HTTPS endpoint.
 The proxy uses [Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) with a five-second timeout.
+Retired server URLs are refused, including values left in hosting settings.
 
-The build runs [`api/_seed.ts`](../api/_seed.ts) to create a paper database for offline reads.
-It contains six showcase contracts and their settlement fingerprints. The build sends nothing to the chain.
-Each function instance uses the same fallback IDs.
-The build sets `VITE_COWORKER_ASK_URL=https://13-210-42-0.sslip.io`. The browser then sends the chat
-to the Coworker worker on the preprod server, which uses the Gemini model.
-That server must list this site in `TALLY_WEB_ORIGINS`. Read [the preprod server](../deploy/preprod/README.md#operator-ui).
-When the hosted Coworker is offline, the chat goes to this function. It answers without a model in the same request.
-The fallback accepts the fill-in format. Plain English gets the fill-in instructions.
+The build runs [`api/_seed.ts`](../api/_seed.ts) to create the paper database.
+It contains six showcase contracts and their settlement fingerprints.
+The build sends nothing to the chain. Each function instance uses the same fallback IDs.
 
-The build sets `VITE_TALLY_SERVER_URL` to the preprod server. The Account page calls the account routes there,
-with the wallet session token. The preprod UI server must list this site in `TALLY_WEB_ORIGINS`.
-`vercel.json` also sends security headers: a Content-Security-Policy that allows scripts from this site only
-and API calls to this site and the preprod server, `X-Frame-Options: DENY`, and `nosniff`.
-Add a new API host to `connect-src` before the web app calls it.
+Hosted chat and wallet accounts default to `https://13.210.42.0`.
+`VITE_COWORKER_ASK_URL` and `VITE_TALLY_SERVER_URL` override that endpoint in hosting settings.
+The preprod UI server must list this frontend in `TALLY_WEB_ORIGINS`.
+When the hosted Coworker is offline, the Vercel function answers without a model.
+Its fallback accepts the fill-in format. Plain English gets the fill-in instructions.
+
+The CSP in `vercel.json` permits this origin and `https://13.210.42.0`.
+Update `connect-src` when you configure another server.
+The config also sets `X-Frame-Options: DENY` and `nosniff`.
+Amplify uses its own API rewrites and security headers.
+Read [the two Amplify setups](../docs/amplify.md).
 
 Deploy production from `main`. Merge changes through a pull request.
 In the Vercel project, open **Settings > Environments > Production > Branch Tracking**.

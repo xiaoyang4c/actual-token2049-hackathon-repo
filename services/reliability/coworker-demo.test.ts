@@ -2,6 +2,14 @@ import {describe, expect, test} from 'bun:test';
 import {readHostedDemo} from './coworker-demo';
 
 describe('Vercel reads the Coworker demo records', () => {
+  test('does not contact a retired endpoint or an unset endpoint', async () => {
+    const fetcher = (async () => { throw new Error('must not fetch'); }) as unknown as typeof fetch;
+    const url = new URL('https://web.example/reliability/contracts/list');
+    for (const endpoint of [undefined, '', 'https://13-210-42-0.sslip.io', 'https://SSLIP.IO./']) {
+      expect(await readHostedDemo(url, endpoint, fetcher)).toBeNull();
+    }
+  });
+
   test('preserves hosted contract IDs and query parameters without writing', async () => {
     const contracts = [{id: 'hosted-contract', mode: 'paper'}];
     const fetcher = (async (input: URL, init: RequestInit) => {

@@ -7,10 +7,11 @@
 
 import {connect, signInAddress, utf8Hex, type Cip30Api} from './cip30'
 import {APP_EDITION} from './edition'
+import {serverUrl} from './server-url'
 import {walletFromPhrase, type BrowserWallet} from './cardano-keys'
 
 /** The Tally server. Empty means this origin (the Vite proxy or ui/server.ts). */
-const SERVER = ((import.meta.env.VITE_TALLY_SERVER_URL as string | undefined) ?? (import.meta.env.VITE_COWORKER_ASK_URL as string | undefined) ?? '').replace(/\/$/, '')
+const SERVER = serverUrl(import.meta.env.VITE_TALLY_SERVER_URL) || serverUrl(import.meta.env.VITE_COWORKER_ASK_URL)
 const SESSION_KEY = 'tally-session'
 
 export interface Session {

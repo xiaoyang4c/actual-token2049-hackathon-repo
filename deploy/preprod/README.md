@@ -15,7 +15,7 @@ Nothing here holds a secret. Secrets stay on the server in `~/tally-secrets` (mo
 | Operator UI | systemd, [`tally-ui.service`](tally-ui.service) | `127.0.0.1:8791`, public through Caddy |
 | Caddy | systemd, [`Caddyfile`](Caddyfile) | Ports 80 and 443. Serves `/brand/*` and the operator UI at `/` |
 
-The current server: AWS EC2 `t3.medium`, Ubuntu 24.04, region `ap-southeast-2`, Elastic IP `13.210.42.0`, hostname `13-210-42-0.sslip.io`.
+The current server: AWS EC2 `t3.medium`, Ubuntu 24.04, region `ap-southeast-2`, Elastic IP `13.210.42.0`, HTTPS address `https://13.210.42.0`.
 The hackathon AWS account allows EC2 only in `ap-southeast-2`.
 
 ## Rules
@@ -75,7 +75,7 @@ The hackathon AWS account allows EC2 only in `ap-southeast-2`.
 
 ## Operator UI
 
-The public address <https://13-210-42-0.sslip.io> shows the team's operator UI ([`ui/`](../../ui)).
+The public address <https://13.210.42.0> shows the team's operator UI ([`ui/`](../../ui)).
 It is read-only. The UI server forwards only GET requests on a fixed list of `/reliability` read routes. It refuses every other method with 405.
 There are two exceptions: the Coworker chat (`/coworkers/ask`, read [the Coworker README](../../services/reliability/coworkers/README.md#on-the-tally-website)) and the wallet account routes (read [Wallet accounts](../../docs/wallets.md)).
 The Vercel web app calls the chat and the account routes from the browser. `TALLY_WEB_ORIGINS` in [`tally-ui.service`](tally-ui.service) lists the origins that may do this. No other route allows another origin.
@@ -216,7 +216,7 @@ Read [Two Amplify editions](../../docs/amplify.md) for both website setups.
 11. Copy the four `tally-app-*.service` files to `/etc/systemd/system`.
 12. Run `sudo systemctl daemon-reload`.
 13. Run `sudo systemctl enable --now tally-app-services tally-app-ui tally-app-contracts tally-app-deposits`.
-14. Add the app hostname block from `Caddyfile` to the server's Caddy config.
+14. Add the `/app-api/*` handler from `Caddyfile` to the server's HTTPS site.
 15. Validate the Caddy config.
 16. Reload Caddy.
 
@@ -225,8 +225,11 @@ Do not copy the demo SQLite file to `app-data`.
 Keep the app deposit pool separate from the demo pool.
 Both workers must use the same app pool address and confirmation setting.
 Keep ports 8797, 8798, and 8799 closed in the AWS security group.
-Only Caddy exposes the app gate at `https://app-13-210-42-0.sslip.io`.
-The existing hostname and demo units keep their ports and database.
+Only Caddy exposes the app gate at `https://13.210.42.0/app-api`.
+The demo units keep their ports and database.
+The Elastic IP uses a short-lived public certificate from Let's Encrypt.
+Caddy 2.11.7 renews that certificate automatically.
+Keep port 443 open for the TLS certificate challenge.
 The demo UI unit now includes App A's Amplify origin in `TALLY_WEB_ORIGINS`.
 The app gateway uses the existing public Coworker preview on 8792.
 That worker keeps the demo database. Do not give it the private app database.

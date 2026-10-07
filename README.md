@@ -10,7 +10,7 @@ Every finished deal updates a reliability record for both sides.
 Tally was built for the TOKEN2049 Origins hackathon.
 It runs on Cardano **preprod** with **test USDM**. Nothing has real value.
 
-**Live demo:** <https://13-210-42-0.sslip.io>. 
+**Live demo:** <https://main.d23gra1a9ugqjs.amplifyapp.com>.
 The demo shows paper contracts, labelled SIMULATED.
 The signed-in app edition uses a separate database and shows each user only their own deals.
 Read [Two Amplify editions](docs/amplify.md) for both website and server setups.

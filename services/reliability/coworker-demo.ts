@@ -1,7 +1,10 @@
 /** Read the same public demo records that the hosted Coworker uses. */
-export async function readHostedDemo(url: URL, baseUrl: string, fetcher: typeof fetch = fetch): Promise<Response|null> {
-  if (!url.pathname.startsWith('/reliability/')) return null;
+export async function readHostedDemo(url: URL, baseUrl?: string, fetcher: typeof fetch = fetch): Promise<Response|null> {
+  if (!url.pathname.startsWith('/reliability/') || !baseUrl?.trim()) return null;
   const target = new URL(url.pathname + url.search, baseUrl);
+  // Retired endpoints must not receive data, even through an old env setting.
+  const hostname = target.hostname.toLowerCase().replace(/\.$/, '');
+  if (hostname === 'sslip.io' || hostname.endsWith('.sslip.io')) return null;
   try {
     const response = await fetcher(target, {
       method: 'GET', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5000),

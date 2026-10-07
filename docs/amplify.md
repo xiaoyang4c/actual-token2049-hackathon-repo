@@ -14,11 +14,14 @@ Create a second Amplify app B from `xiaoyang4c/actual-token2049-hackathon-repo`.
 Use `app-edition` to preview this PR.
 Use `main` for both apps after merge.
 Select the repository root as the build root.
+Check the repository owner in Amplify.
+The existing app was linked to the GiftedNovaHD fork.
+That fork does not receive merges from xiaoyang4c automatically.
 
 | App | Build variables |
 | --- | --- |
-| Demo A | `VITE_TALLY_EDITION=demo`, `VITE_TALLY_SERVER_URL=https://13-210-42-0.sslip.io`, `VITE_COWORKER_ASK_URL=https://13-210-42-0.sslip.io` |
-| App B | `VITE_TALLY_EDITION=app`, `VITE_TALLY_SERVER_URL=https://<app server host>`, `VITE_COWORKER_ASK_URL=https://<app server host>` |
+| Demo A | `VITE_TALLY_EDITION=demo`, `VITE_TALLY_SERVER_URL=https://13.210.42.0`, `VITE_COWORKER_ASK_URL=https://13.210.42.0` |
+| App B | `VITE_TALLY_EDITION=app`, `VITE_TALLY_SERVER_URL=https://13.210.42.0/app-api`, `VITE_COWORKER_ASK_URL=https://13.210.42.0/app-api` |
 
 An unset edition builds the demo.
 Build variables are public.
@@ -56,6 +59,9 @@ Read the [Amplify header guide](https://docs.aws.amazon.com/amplify/latest/userg
 
 Paste this YAML in the custom headers editor.
 Replace `<server>` before saving.
+If the console build uses `applications` with `appRoot: web`, wrap these headers
+in `applications`, then `appRoot: web`, then `customHeaders`.
+Read the [monorepo header requirements](https://docs.aws.amazon.com/amplify/latest/userguide/monorepo-custom-headers.html).
 
 ```yaml
 customHeaders:
@@ -80,7 +86,10 @@ The app UI gate listens on 8798.
 It forwards session-gated routes to the app control API on 8797.
 The contract worker uses the app database.
 The deposit worker credits the app database from its own preprod pool.
-Caddy exposes only the UI gate.
+The AWS IP has a trusted HTTPS certificate.
+Caddy renews the certificate and exposes the UI gates.
+The app gate uses `/app-api` on the same HTTPS address.
+The two gates still use separate processes and databases.
 Keep internal ports closed in the AWS security group.
 The app keeps the existing public Coworker preview.
 That worker reads the demo database and cannot open private app cases.

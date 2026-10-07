@@ -53,7 +53,7 @@ A model outage therefore stops explanations, not the numbers.
 Vendor: Tally (`01a11310-03a7-760a-a31a-f6ba1872959c`).
 All three Coworkers have access to the TOKEN2049 Origins workspace.
 Read [the preprod server](../../../deploy/preprod/README.md) to rebuild the payment service and the registrations.
-Each Masumi agent uses `apiBaseUrl` `https://13-210-42-0.sslip.io/<deal-desk|mediator|trust-check>`.
+Each Masumi agent uses `apiBaseUrl` `https://13.210.42.0/<deal-desk|mediator|trust-check>`.
 
 ## The Task worker
 

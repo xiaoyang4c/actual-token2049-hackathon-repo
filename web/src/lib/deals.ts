@@ -6,8 +6,9 @@ import {AccountApiError, savedSession, signOut, type Session} from './account'
 import type {AuditRow, ContractAnchors, ContractSummary, ContractView, DisputeCase, Role} from './api'
 import {hex, type BrowserWallet} from './cardano-keys'
 import {addressToBech32, connect, signInAddress, utf8Hex} from './cip30'
+import {serverUrl} from './server-url'
 
-const SERVER = ((import.meta.env.VITE_TALLY_SERVER_URL as string | undefined) ?? (import.meta.env.VITE_COWORKER_ASK_URL as string | undefined) ?? '').replace(/\/$/, '')
+const SERVER = serverUrl(import.meta.env.VITE_TALLY_SERVER_URL) || serverUrl(import.meta.env.VITE_COWORKER_ASK_URL)
 
 export interface AppMe {
   entityId: string
