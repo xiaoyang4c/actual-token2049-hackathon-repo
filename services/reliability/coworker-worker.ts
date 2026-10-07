@@ -383,7 +383,7 @@ export function providerFromEnv(env: Record<string, string|undefined>, secretsDi
   if (name === 'gemini') {
     const key = secret(secretsDir, 'gemini_api_key');
     if (!key) throw new Error('COWORKER_MODEL_PROVIDER=gemini needs the gemini_api_key secret');
-    return new GeminiProvider(key, env.COWORKER_GEMINI_MODEL ?? 'gemini-2.5-flash');
+    return new GeminiProvider(key, env.COWORKER_GEMINI_MODEL ?? 'gemini-3.8-flash');
   }
   if (name === 'bedrock') {
     const key = secret(secretsDir, 'bedrock_api_key');

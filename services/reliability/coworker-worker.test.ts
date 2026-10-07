@@ -11,7 +11,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {TEST_USDM_UNIT} from './contract-config';
 import {createKit} from './contract-kit';
-import {BedrockProvider, GeminiProvider, ModelError, type ChatTurn, type ModelProvider, type ModelReply, type ToolSpec} from './coworker-models';
+import {BedrockProvider, GeminiProvider, ModelError, runWithTools, type ChatTurn, type ModelProvider, type ModelReply, type ToolSpec} from './coworker-models';
 import {readFields, readRemedy} from './coworker-runner';
 import {CoworkerTools} from './coworker-tools';
 import {CoworkerWorker, Journal, type CoreLike, type MpsLike, type WorkerCoworker} from './coworker-worker';
@@ -316,13 +316,32 @@ describe('providers and parsing', () => {
       return new Response(JSON.stringify({candidates: [{content: {parts: [{functionCall: {name: 'findEntities', args: {query: 'kopi'}}}]}}]}));
     }) as unknown as typeof fetch;
     const reply = await new GeminiProvider('test-key', 'gemini-2.5-flash', {fetch: fetcher}).reply('rules', [{role: 'user', text: 'who is kopi?'}], [tool]);
-    expect(reply.calls).toEqual([{id: 'findEntities-0', name: 'findEntities', args: {query: 'kopi'}}]);
+    expect(reply.calls).toEqual([{id: 'gemini:findEntities-0', name: 'findEntities', args: {query: 'kopi'}}]);
     const request = sent as unknown as {url: string; headers: {[key: string]: string}; body: {tools: Array<{functionDeclarations: Array<{parameters: {type: string; properties: {query: {type: string}}}}>}>}};
     expect(request.url).toContain('/models/gemini-2.5-flash:generateContent');
     expect(request.url).not.toContain('test-key');
     expect(request.headers['x-goog-api-key']).toBe('test-key');
     expect(request.body.tools[0]?.functionDeclarations[0]?.parameters.type).toBe('OBJECT');
     expect(request.body.tools[0]?.functionDeclarations[0]?.parameters.properties.query.type).toBe('STRING');
+  });
+
+  test('Gemini 3: the thought signature and the call id go back unchanged on the next turn', async () => {
+    const bodies: Array<{contents: Array<{role: string; parts: Array<{[key: string]: unknown}>}>}> = [];
+    const replies = [
+      {candidates: [{content: {role: 'model', parts: [{functionCall: {id: 'call_1', name: 'findEntities', args: {query: 'kopi'}}, thoughtSignature: 'sig-abc'}]}}]},
+      {candidates: [{content: {role: 'model', parts: [{text: 'Kopi Origin Roasters has 4 simulated deals.'}]}}]},
+    ];
+    const fetcher = (async (url: string, init: RequestInit) => {
+      expect(url).toContain('gemini-3.8-flash:generateContent');
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify(replies.shift()));
+    }) as unknown as typeof fetch;
+    const provider = new GeminiProvider('test-key', 'gemini-3.8-flash', {fetch: fetcher});
+    const result = await runWithTools(provider, 'rules', 'who is kopi?', [{...tool, run: () => ({ok: true, result: []})}]);
+    expect(result.text).toBe('Kopi Origin Roasters has 4 simulated deals.');
+    const second = bodies[1]?.contents ?? [];
+    expect(second[1]).toEqual({role: 'model', parts: [{functionCall: {id: 'call_1', name: 'findEntities', args: {query: 'kopi'}}, thoughtSignature: 'sig-abc'}]});
+    expect((second[2]?.parts[0]?.functionResponse as {id: string}).id).toBe('call_1');
   });
 
   test('Bedrock: Converse tool use with a bearer API key', async () => {

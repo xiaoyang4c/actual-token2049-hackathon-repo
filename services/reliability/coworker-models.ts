@@ -36,12 +36,15 @@ export interface ToolCall {
 
 export type ChatTurn =
   {role: 'user'; text: string}|
-  {role: 'assistant'; text: string; calls: ToolCall[]}|
+  /** `raw` is the provider's own content for this turn. A provider sends it back unchanged when present. */
+  {role: 'assistant'; text: string; calls: ToolCall[]; raw?: unknown}|
   {role: 'tool'; results: Array<{callId: string; name: string; output: unknown}>};
 
 export interface ModelReply {
   text: string;
   calls: ToolCall[];
+  /** The provider's own content. Gemini 3 needs its thought signatures back on the next turn. */
+  raw?: unknown;
 }
 
 export interface ModelProvider {
@@ -107,9 +110,13 @@ export class GeminiProvider implements ModelProvider {
     const contents = turns.map((turn) => {
       if (turn.role === 'user') return {role: 'user', parts: [{text: turn.text}]};
       if (turn.role === 'assistant') {
+        // Gemini 3 rejects a function call turn without its thought signature, so resend the original content.
+        if (record(turn.raw)?.role === 'model') return turn.raw;
         return {role: 'model', parts: [...(turn.text ? [{text: turn.text}] : []), ...turn.calls.map((call) => ({functionCall: {name: call.name, args: call.args}}))]};
       }
-      return {role: 'user', parts: turn.results.map((result) => ({functionResponse: {name: result.name, response: {result: result.output}}}))};
+      return {role: 'user', parts: turn.results.map((result) => ({
+        functionResponse: {...(result.callId.startsWith('gemini:') ? {} : {id: result.callId}), name: result.name, response: {result: result.output}},
+      }))};
     });
     const body = await postJson(this.fetcher,
       `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`,
@@ -129,10 +136,13 @@ export class GeminiProvider implements ModelProvider {
       if (!part) return;
       if (typeof part.text === 'string') text += part.text;
       const call = record(part.functionCall);
-      if (call && typeof call.name === 'string') calls.push({id: `${call.name}-${index}`, name: call.name, args: record(call.args) ?? {}});
+      // Newer models give each call an id; older ones do not.
+      if (call && typeof call.name === 'string') {
+        calls.push({id: typeof call.id === 'string' ? call.id : `gemini:${call.name}-${index}`, name: call.name, args: record(call.args) ?? {}});
+      }
     });
     if (!text && !calls.length) throw new ModelError(`Gemini returned an empty answer (${String(candidate.finishReason ?? 'no reason')})`);
-    return {text, calls};
+    return {text, calls, raw: candidate.content};
   }
 }
 
@@ -208,7 +218,7 @@ export async function runWithTools(
       if (!reply.text.trim()) throw new ModelError('the model returned no answer');
       return {text: reply.text.trim(), toolCalls};
     }
-    turns.push({role: 'assistant', text: reply.text, calls: reply.calls});
+    turns.push({role: 'assistant', text: reply.text, calls: reply.calls, raw: reply.raw});
     turns.push({
       role: 'tool',
       results: reply.calls.map((call) => {
