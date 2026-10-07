@@ -201,7 +201,7 @@ export class AnchorWorker {
       log({event: 'anchor_batch_expired', batchId: batch.id, txHash: batch.txHash});
       return;
     }
-    if (batch.status === 'prepared' || now() - (batch.submittedAt ?? 0) >= RESEND_AFTER_MS) await this.send(batch);
+    if (this.deps.submit && (batch.status === 'prepared' || now() - (batch.submittedAt ?? 0) >= RESEND_AFTER_MS)) await this.send(batch);
   }
 
   private async startBatch(): Promise<void> {

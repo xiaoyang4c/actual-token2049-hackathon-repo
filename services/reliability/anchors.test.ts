@@ -147,6 +147,24 @@ describe('anchor batches', () => {
     store.close();
   });
 
+  test('turning submission off stops resends of an existing batch but still confirms it', async () => {
+    const {store} = seeded();
+    try {
+      const chain = new FakeChain();
+      await worker(store, chain).run.runOnce();
+      const open = store.getOpenAnchorBatch()!;
+      const readOnly = worker(store, chain, {submit: false, now: () => NOW + RESEND_AFTER_MS}).run;
+      await readOnly.runOnce();
+      expect(chain.sent).toHaveLength(1);
+      chain.block();
+      chain.block();
+      await readOnly.runOnce();
+      expect(store.getAnchorBatch(open.id)?.status).toBe('confirmed');
+    } finally {
+      store.close();
+    }
+  });
+
   test('a batch is saved before it is sent, and confirmed only with enough confirmations and the same message', async () => {
     const {store} = seeded();
     const chain = new FakeChain();
@@ -205,6 +223,10 @@ describe('anchor batches', () => {
     expect(chain.sent).toEqual([first?.txCbor as string, first?.txCbor as string]);
     expect(chain.built).toHaveLength(1);
 
+    // Every resend gets a fresh interval, including after a worker restart.
+    await worker(store, chain, {now: () => now}).run.runOnce();
+    expect(chain.sent).toHaveLength(2);
+
     chain.slot = (first?.invalidHereafter as number) + EXPIRY_MARGIN_SLOTS;
     await run.runOnce();
     expect(store.getAnchorBatch(first?.id as string)?.status).toBe('submitted');
@@ -250,6 +272,9 @@ describe('anchor batches', () => {
     const entries = store.listUnbatchedAnchorEntries(10);
     store.createAnchorBatch({id: 'b1', txHash: 'aa'.repeat(32), txCbor: 'beef', invalidHereafter: 5_000, entryHashes: entries.map((entry) => entry.entryHash), createdAt: NOW});
     await run.runOnce();
+    expect(chain.sent).toHaveLength(0);
+    expect(store.getAnchorBatch('b1')?.status).toBe('prepared');
+    await worker(store, chain, {submit: true}).run.runOnce();
     expect(chain.sent).toEqual(['beef']);
     expect(chain.built).toHaveLength(0);
     expect(store.getAnchorBatch('b1')?.status).toBe('submitted');

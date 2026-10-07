@@ -217,6 +217,7 @@ export class MpsSeller {
   }
 
   private async post(path: string, body: Json): Promise<MpsPayment> {
+    const writes = path !== 'payment/resolve-blockchain-identifier';
     let response: Response;
     try {
       response = await this.fetcher(`${this.baseUrl}/${path}`, {
@@ -226,11 +227,15 @@ export class MpsSeller {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch {
-      throw new MpsError(`MPS ${path} got no response`, path !== 'payment/resolve-blockchain-identifier');
+      throw new MpsError(`MPS ${path} got no response`, writes);
     }
-    if (!response.ok) throw new MpsError(`MPS ${path} returned ${response.status}`, false);
+    if (!response.ok) throw new MpsError(`MPS ${path} returned ${response.status}`, writes && (response.status === 408 || response.status >= 500));
     const envelope = record(await response.json().catch(() => null));
-    return toPayment(envelope?.data);
+    try {
+      return toPayment(envelope?.data);
+    } catch {
+      throw new MpsError(`MPS ${path} returned a malformed payment`, writes);
+    }
   }
 
   async createPayment(plan: PaymentPlan, source: SellerSource): Promise<MpsPayment> {
@@ -247,7 +252,11 @@ export class MpsSeller {
       unlockTime: plan.unlockTime,
       externalDisputeUnlockTime: plan.externalDisputeUnlockTime,
     });
-    checkPayment(payment, plan, source);
+    try {
+      checkPayment(payment, plan, source);
+    } catch {
+      throw new MpsError('MPS created a payment that does not match the request', true);
+    }
     return payment;
   }
 

@@ -277,7 +277,7 @@ export function DealDeskPage() {
       <PageHeader
         eyebrow="Deal Desk"
         title="Draft a contract"
-        description="Describe the deal. The engine returns the escrows, what each side gets in every outcome, the deadlines and the fees, the same numbers the Deal Desk Coworker gives on Sokosumi."
+        description="Describe the deal. The engine returns the escrows, what each side gets in every outcome, the deadlines and the fees, the same numbers the Deal Desk Coworker gives in the chat."
         actions={draft ? <Button variant="outline" onClick={() => { setDraft(null); setError(null); setAttempt(0); setRound((r) => r + 1) }} className="h-10 rounded-[9px] bg-white"><RotateCcw className="size-4" />New draft</Button> : undefined}
       />
       {templates.error ? <ErrorNote>{templates.error}</ErrorNote> : null}

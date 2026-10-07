@@ -121,7 +121,8 @@ export class SokosumiCore {
       parsed = null;
     }
     if (!response.ok) {
-      throw new CoreError(`Core ${method} ${path.split('?')[0]} returned ${response.status}`, response.status, false);
+      const uncertain = method === 'POST' && (response.status === 408 || response.status >= 500);
+      throw new CoreError(`Core ${method} ${path.split('?')[0]} returned ${response.status}`, response.status, uncertain);
     }
     const envelope = record(parsed);
     if (!envelope || !('data' in envelope)) throw new CoreError(`Core ${method} ${path.split('?')[0]} returned no data`, response.status, method === 'POST');
