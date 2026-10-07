@@ -129,6 +129,9 @@ quantity: 1200
 unit: kg
 ```
 
+`item` and `amount` are milestone 1. Add a `milestone: <title> | <amount>` line only for each further lot.
+A milestone line that repeats the item gets a question back, not a second lot.
+
 Mediator: `contract: <contract id>` and `milestone: 0`. Trust Check: `company: <name or Tally id>`.
 
 ## Not done yet

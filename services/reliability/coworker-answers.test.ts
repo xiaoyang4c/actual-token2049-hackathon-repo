@@ -13,7 +13,7 @@ import {loadContractConfig} from './contract-config';
 import {createKit, envOf, KIT_ENV} from './contract-kit';
 import {seedShowcase, SHOWCASE_PARTIES} from './contract-showcase';
 import {plainWordsForPrompt, PLAIN_WORDS} from './coworker-answers';
-import {answerFillIn, needsInputMessage, systemPrompt} from './coworker-runner';
+import {answerFillIn, needsInputMessage, readDealDesk, systemPrompt} from './coworker-runner';
 import {CoworkerTools, type ContractSummary, type ToolResult} from './coworker-tools';
 
 const REQUEST = ['template: physical', 'item: Lot 1, 1,200 kg green arabica, Grade A', 'amount: 4000', 'remedy: partial 70',
@@ -55,6 +55,26 @@ describe('Coworker answers', () => {
       const technical = text.split('\n---\n')[1] ?? '';
       expect(technical).toContain('Template `physical-objective-spec`');
       expect(technical).toContain('```json');
+    } finally {
+      kit.close();
+    }
+  });
+
+  test('Deal Desk: a milestone line that repeats the item asks first; a real second lot shows the total', () => {
+    const kit = createKit();
+    try {
+      const tools = new CoworkerTools(null, {config: kit.service.config, templates: kit.service.templates, now: () => Date.UTC(2026, 9, 8, 2)});
+      // The case from the chat: the item already is milestone 1, so "Lot 1 | 4000" would double the deal.
+      const repeated = answerFillIn('deal-desk', `${REQUEST}\nmilestone: Lot 1 | 4000`, tools);
+      expect(repeated.kind).toBe('needs_input');
+      expect(repeated.kind === 'needs_input' && repeated.message).toContain('milestone "Lot 1 | 4000" repeats the item');
+      expect(readDealDesk(`${REQUEST}\nmilestone: lot 1, 1,200 KG green arabica, grade a | 4000`).problems).toHaveLength(1);
+      expect(readDealDesk(`${REQUEST}\nmilestone: Lot 10 | 4000`).problems).toEqual([]);
+      const two = answerText(answerFillIn('deal-desk', `${REQUEST}\nmilestone: Lot 2 | 2500`, tools));
+      expect(two).toContain('- Total: **6,500 test USDM** in **2 milestones**.');
+      expect(two).toContain('| 2. Lot 2 | 2,500 test USDM |');
+      // One lot: no total line, the price is the total.
+      expect(answerText(answerFillIn('deal-desk', REQUEST, tools))).not.toContain('- Total:');
     } finally {
       kit.close();
     }

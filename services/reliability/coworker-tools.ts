@@ -199,6 +199,8 @@ export interface DraftResult {
   defaultsApplied: string[];
   placeholders: Array<{milestoneIndex: number|null; field: string}>;
   normalized: string[];
+  /** The sum of every milestone price. */
+  total: Money;
   milestones: DraftMilestone[];
   evidence: {delivery: string[]; buyerDispute: string[]};
   judge: {type: string; inspector: string|null; inspectors: string[]};
@@ -653,6 +655,7 @@ export class CoworkerTools {
         defaultsApplied,
         placeholders,
         normalized,
+        total: this.money(contract.milestones.reduce((sum, milestone) => sum + BigInt(milestone.amountAtomic), 0n)),
         milestones: contract.milestones.map((milestone) => this.draftMilestone(milestone, remedy, terms.dispute.tiers)),
         evidence: {delivery: terms.delivery.requiredEvidence.map(describeRule), buyerDispute: terms.dispute.buyerEvidence.map(describeRule)},
         judge: {type: describeJudge(terms.judge), inspector: terms.judgeInspectorId, inspectors: terms.inspectorWhitelist.map((item) => item.id)},
