@@ -65,3 +65,4 @@ In the Vercel project, open **Settings > Environments > Production > Branch Trac
 Set the production branch to `main` and save it. Later merges into `main` start production deployments.
 If the merge already happened, create a deployment from `main` in the project's **Deployments** page.
 Read the [Vercel Git deployment guide](https://vercel.com/docs/git#production-branch) for these project settings.
+ 
