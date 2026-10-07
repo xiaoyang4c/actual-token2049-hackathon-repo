@@ -105,6 +105,8 @@ export default tseslint.config(
       "**/dist/**",
       "services/.data/**",
       "cre/agent-loop/**",
+      // web/ is a Vite app with its own oxlint config.
+      "web/**",
     ],
   },
   {
