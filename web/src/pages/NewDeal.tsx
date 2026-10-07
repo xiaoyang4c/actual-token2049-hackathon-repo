@@ -1,5 +1,5 @@
 import {useState} from 'react'
-import {Link, useNavigate} from 'react-router-dom'
+import {Link, useLocation, useNavigate} from 'react-router-dom'
 import {Plus, Search, Trash2} from 'lucide-react'
 import {ErrorNote, PageHeader, Section, Tag} from '@/components/kit'
 import {Reveal} from '@/components/motion'
@@ -15,24 +15,31 @@ import {DraftPreview} from './DealDesk'
 
 interface MilestoneForm {title: string; amount: string; fields: Record<string, string>}
 const blankMilestone = (): MilestoneForm => ({title: '', amount: '', fields: {}})
+/** The milestones of a Deal Desk chat draft, as form values. */
+const milestonesOf = (draft: DraftInput): MilestoneForm[] => draft.milestones.map((item) => ({
+  title: item.title, amount: item.amount,
+  fields: Object.fromEntries(Object.entries(item.deliverable ?? {}).map(([field, value]) => [field, String(value)])),
+}))
 const FIELD_LABEL: Record<string, string> = {expectedSha256: 'Expected file SHA-256', fileName: 'File name', mediaType: 'Media type', quantity: 'Quantity', revisionRounds: 'Revision rounds'}
 const SELECT = 'h-10 w-full rounded-[9px] border border-input bg-white px-3 text-[13.5px] outline-none focus-visible:border-ring'
 
 export function NewDealPage() {
   const {session, me} = useAppSession()
   const navigate = useNavigate()
+  // "Use this draft in New deal" in the Deal Desk chat passes its draft here.
+  const handoff = (useLocation().state as {draft?: DraftInput} | null)?.draft ?? null
   const templates = useAsync(() => api.templates(), 'app-draft-templates')
   const available = (templates.data ?? []).filter((template) => template.status === 'enabled' && !/signed[_ ]report|monitoring/i.test(template.judge) && ![...template.deliveryEvidence, ...template.buyerDisputeEvidence].some((rule) => /signed by/i.test(rule)))
-  const [templateId, setTemplateId] = useState('')
+  const [templateId, setTemplateId] = useState(handoff?.templateId ?? '')
   const template = available.find((item) => item.id === templateId) ?? available[0]
   const [role, setRole] = useState<Role>('buyer')
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<EntityHit[]>([])
   const [counterparty, setCounterparty] = useState<EntityHit | null>(null)
   const profile = useAsync(() => counterparty ? api.profile(counterparty.id) : Promise.resolve(null), `new-deal-counterparty-${counterparty?.id}`)
-  const [milestones, setMilestones] = useState<MilestoneForm[]>([blankMilestone()])
-  const [remedy, setRemedy] = useState('full_refund_no_return')
-  const [share, setShare] = useState('70')
+  const [milestones, setMilestones] = useState<MilestoneForm[]>(() => handoff?.milestones.length ? milestonesOf(handoff) : [blankMilestone()])
+  const [remedy, setRemedy] = useState(handoff?.remedy?.type ?? 'full_refund_no_return')
+  const [share, setShare] = useState(handoff?.remedy?.sellerSharePercent ?? '70')
   const [preview, setPreview] = useState<{draft: DraftResult; request: CreateDeal} | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,11 +96,19 @@ export function NewDealPage() {
       <PageHeader title="New deal" description="Agree on the deliverable, the evidence, and the remedy. Your counterparty signs the same terms. All amounts use preprod test USDM." />
       {templates.error ? <ErrorNote>{templates.error}</ErrorNote> : null}
       {templates.loading ? <p role="status" className="text-[14px] text-ink-3">Loading deal templates…</p> : templates.data && !available.length ? <ErrorNote>No app templates are available.</ErrorNote> : null}
+      {handoff && templates.data ? <p className="rounded-[12px] bg-yellow-wash px-4 py-3 text-[13.5px] text-ink-2">
+        {available.some((item) => item.id === handoff.templateId)
+          ? 'Filled in from the Deal Desk chat. Find the other party, check the terms, then preview.'
+          : `The Deal Desk chat used the ${pretty(handoff.templateId)} template, which the app does not offer yet. The milestones are filled in. Choose a template, then check each field.`}
+      </p> : null}
       {template ? <form onSubmit={(event) => { event.preventDefault(); void draft() }} className="space-y-6">
         <Reveal><Section title="Deal parties and template">
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="space-y-1.5 text-[13px] font-medium">Template
-              <select className={SELECT} value={template.id} onChange={(event) => { const next = available.find((item) => item.id === event.target.value)!; setTemplateId(next.id); setRemedy(next.remedies.default.split(' ')[0]); setMilestones([blankMilestone()]); setPreview(null) }}>
+              <select className={SELECT} value={template.id} onChange={(event) => { const next = available.find((item) => item.id === event.target.value)!; setTemplateId(next.id); setRemedy(next.remedies.default.split(' ')[0]); setPreview(null)
+                // Keep each title and amount, and the fields that the new template also has.
+                const fields = [...next.deliverableFields.required, ...next.deliverableFields.optional]
+                setMilestones((items) => items.map((item) => ({...item, fields: Object.fromEntries(Object.entries(item.fields).filter(([field]) => fields.includes(field)))}))) }}>
                 {available.map((item) => <option key={item.id} value={item.id}>{pretty(item.id)}</option>)}
               </select>
             </label>

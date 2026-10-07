@@ -278,6 +278,8 @@ export interface AskJob {
   answer: string | null
   mode: 'model' | 'fill-in' | 'needs-input' | null
   error: string | null
+  /** The last Deal Desk proposal that the engine accepted. The app opens it in New deal. */
+  draft?: DraftInput | null
 }
 
 export interface LedgerTransaction {

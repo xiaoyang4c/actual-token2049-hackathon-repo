@@ -69,6 +69,16 @@ describe('Ask a Coworker on the website', () => {
     expect(provider.calls).toBe(0);
   });
 
+  test('a Deal Desk draft that the engine accepts comes back with the job, for New deal', async () => {
+    const {service} = setup(null);
+    const job = await ask(service, 'deal-desk', REQUEST);
+    expect(job?.draft?.templateId).toBe('physical-objective-spec');
+    expect(job?.draft?.milestones[0]?.amount).toBe('4000');
+    expect(job?.draft?.remedy).toEqual({type: 'partial_release', sellerSharePercent: '70'});
+    expect((await ask(service, 'trust-check', 'company: kopi'))?.draft).toBeNull();
+    expect((await ask(service, 'deal-desk', FREE_TEXT))?.draft).toBeNull();
+  });
+
   test('free text uses the model until the website budget for the day is spent', async () => {
     const provider = new FakeProvider(async () => ({text: 'The seller keeps 2,800 test USDM if the buyer wins.', calls: []}));
     const {service, advance} = setup(provider, {modelAnswersPerDay: 1});

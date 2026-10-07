@@ -1,13 +1,14 @@
 import {useEffect, useRef, useState} from 'react'
-import {useSearchParams} from 'react-router-dom'
+import {Link, useSearchParams} from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {motion} from 'motion/react'
-import {ArrowUp, Loader2, RotateCcw, Sparkles, Wand2} from 'lucide-react'
+import {ArrowRight, ArrowUp, Loader2, RotateCcw, Sparkles, Wand2} from 'lucide-react'
 import {PageHeader, Tag} from '@/components/kit'
 import {Reveal} from '@/components/motion'
 import {Textarea} from '@/components/ui/textarea'
-import {api, type AskJob, type AskTicket, type ChatEntry, type CoworkerSlug} from '@/lib/api'
+import {api, type AskJob, type AskTicket, type ChatEntry, type CoworkerSlug, type DraftInput} from '@/lib/api'
+import {APP_EDITION} from '@/lib/edition'
 import {useAsync} from '@/lib/useAsync'
 import {cn} from '@/lib/utils'
 
@@ -40,6 +41,7 @@ interface Message {
   status?: AskJob['status']
   position?: number
   error?: string | null
+  draft?: DraftInput | null
 }
 
 const STORE_KEY = 'tally-coworker-chat'
@@ -108,6 +110,11 @@ function Bubble({message}: {message: Message}) {
         ) : (
           <div className="mt-1 rounded-[14px] rounded-tl-[4px] border border-border bg-white px-4 py-1"><Answer text={message.text} /></div>
         )}
+        {APP_EDITION && message.status === 'done' && message.draft ? (
+          <Link to="/deals/new" state={{draft: message.draft}} className="mt-2 inline-flex items-center gap-1.5 rounded-[9px] bg-ink px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-ink-2">
+            Use this draft in New deal<ArrowRight className="size-4" />
+          </Link>
+        ) : null}
       </div>
     </motion.div>
   )
@@ -144,7 +151,7 @@ export function AskPage() {
 
   const fromJob = (job: AskJob): Partial<Message> => ({
     coworker: job.coworker, routed: job.routed, status: job.status, position: job.position, mode: job.mode,
-    text: job.answer ?? '', error: job.error,
+    text: job.answer ?? '', error: job.error, draft: job.draft ?? null,
   })
 
   const poll = (id: string, ticket: AskTicket, runningSince: number | null = null) => {

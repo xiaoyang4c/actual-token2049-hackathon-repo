@@ -25,7 +25,7 @@
 import {createHash, randomUUID} from 'node:crypto';
 import type {ChatMessage, ModelProvider} from './coworker-models';
 import {answerFillIn, COWORKER_NAMES, COWORKER_SLUGS, fillInProblems, needsInputMessage, runCoworker, type CoworkerSlug} from './coworker-runner';
-import type {CoworkerTools} from './coworker-tools';
+import type {CoworkerTools, DraftInput} from './coworker-tools';
 
 export interface AskLimits {
   maxTextChars: number;
@@ -78,6 +78,8 @@ export interface AskJob {
   answer: string|null;
   mode: AskMode|null;
   error: string|null;
+  /** The last Deal Desk proposal that the engine accepted. The app opens it in New deal. */
+  draft: DraftInput|null;
 }
 
 interface Stored {
@@ -211,7 +213,7 @@ export class AskService {
     this.visits.set(visitor, [...recent, now]);
     const current = [...earlier].reverse().find((entry) => entry.role === 'assistant' && entry.coworker)?.coworker ?? null;
     const slug = isSlug(coworker) ? coworker : chooseCoworker(request, current);
-    const job: AskJob = {id: randomUUID(), coworker: slug, routed: coworker === 'auto', status: 'queued', position: 0, answer: null, mode: null, error: null};
+    const job: AskJob = {id: randomUUID(), coworker: slug, routed: coworker === 'auto', status: 'queued', position: 0, answer: null, mode: null, error: null, draft: null};
     this.jobs.set(job.id, {job, text: request, history: earlier, visitor, createdAt: now});
     this.queue.push(job.id);
     this.deps.log({event: 'ask_queued', id: job.id, coworker: slug, routed: job.routed, history: earlier.length, visitor: createHash('sha256').update(visitor).digest('hex').slice(0, 12)});
@@ -255,24 +257,41 @@ export class AskService {
     }
   }
 
-  private async answer({job: {id, coworker: slug}, text, history, visitor}: Stored): Promise<{text: string; mode: AskMode}> {
+  private async answer({job, text, history, visitor}: Stored): Promise<{text: string; mode: AskMode}> {
+    const {id, coworker: slug} = job;
+    const tools = this.recordDrafts(job);
     const readable = fillInText(slug, text, history);
     const problems = fillInProblems(slug, readable);
     if (!problems.length) {
       // The fill-in format is enough. The model quota stays for paid Tasks.
-      const answer = answerFillIn(slug, readable, this.deps.tools);
+      const answer = answerFillIn(slug, readable, tools);
       return answer.kind === 'answer' ? {text: answer.text, mode: 'fill-in'} : {text: answer.message, mode: 'needs-input'};
     }
     const provider = this.deps.provider;
     if (provider?.available() && this.takeModelAnswer(visitor)) {
       try {
-        const answer = await this.withinAnswerLimit(id, runCoworker(slug, text, this.deps.tools, provider, {history: modelHistory(slug, history)}));
+        const answer = await this.withinAnswerLimit(id, runCoworker(slug, text, tools, provider, {history: modelHistory(slug, history)}));
         return answer.kind === 'answer' ? {text: answer.text, mode: answer.mode} : {text: answer.message, mode: 'needs-input'};
       } catch {
         // The model failed or took too long, and the request is not in the fill-in format.
       }
     }
     return {text: `${needsInputMessage(slug, problems)}${provider ? MODEL_BUSY_NOTE : ''}`, mode: 'needs-input'};
+  }
+
+  /**
+   * The Coworker tools for one job. A Deal Desk draft that the engine accepts
+   * is kept on the job. Every other tool is the shared one, unchanged.
+   */
+  private recordDrafts(job: AskJob): CoworkerTools {
+    const shared = this.deps.tools;
+    const tools = Object.create(shared) as CoworkerTools;
+    tools.draftContract = (input) => {
+      const result = shared.draftContract(input);
+      if (result.ok && job.coworker === 'deal-desk') job.draft = input;
+      return result;
+    };
+    return tools;
   }
 
   /**
