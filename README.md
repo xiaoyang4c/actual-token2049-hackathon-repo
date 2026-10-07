@@ -1,14 +1,44 @@
-# B2B and B2C reliability marketplace
+<p align="center"><img src="docs/brand/tally-logo.png" alt="Tally" width="96" height="96"></p>
 
-This repository builds a marketplace for goods and services.
-It supports business-to-business (B2B) and business-to-consumer (B2C) transactions.
-The reliability checker uses transaction outcomes to assess buyers and sellers.
-Each entity has a separate buyer score and seller score for each category.
+# Tally
 
+Tally is a trust layer for business deals.
+Buyers and sellers who do not know each other agree on the evidence first.
+Funds wait in escrow on Cardano until that evidence arrives.
+Every finished deal updates a reliability record for both sides.
+
+Tally was built for the TOKEN2049 Origins hackathon.
+It runs on Cardano **preprod** with **test USDM**. Nothing has real value.
+
+**Live demo:** <https://13-210-42-0.sslip.io>.
+The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
+
+## What Tally does
+
+| Part | What it does | Read more |
+| --- | --- | --- |
+| Escrowed contracts | Templates, milestones, and the evidence rules both parties sign. Funds lock in a Masumi V2 escrow per milestone. | [Contract lifecycle](docs/contract-lifecycle.md) |
+| Disputes in tiers | Tier 1: the parties agree one fixed outcome. Tier 2: the named judge (code or an inspector) decides. Tier 3: a mediator names a winner. The remedy was fixed before funding. | [Contract lifecycle](docs/contract-lifecycle.md#disputes) |
+| Reliability record | Separate buyer and seller scores per category, terms decisions, and mock KYC. Ignored rulings count against a party. | [Reliability math](docs/reliability-math.md) |
+| Coworkers on Sokosumi | Tally Deal Desk drafts contracts. Tally Mediator drafts rulings for a human mediator. Tally Trust Check explains a company's record. Every number comes from Tally's code. | [Tally Coworkers](services/reliability/coworkers/README.md) |
+| Tally UI | My deals, Mediation desk, Companies, and Operator views. Read-only. | [UI instructions](ui/README.md) |
+
+## Status
+
+| Area | State |
+| --- | --- |
+| Contract engine, disputes, remedies, audit log | Built and tested. Paper by default |
+| Live Masumi V2 escrow | Built. Tested against a fake payment service. No live preprod run yet |
+| Masumi payment service | Running on the preprod server with funded wallets |
+| Coworkers | Registered on the Masumi registry and approved in the TOKEN2049 workspace. The Task worker waits for model access |
+| Tally UI | Hosted publicly with six showcase contracts |
+| Scoring, pair decay, fees | Stubs. Read [Implementation status](docs/implementation-status.md) |
+| KYC | Mock provider |
+| Sign-in | Not built. Role views in the UI are lenses, not access control |
+
+Read [Implementation status](docs/implementation-status.md) for every feature and known gap.
 Read [PLAN.md](PLAN.md) for the product scope and work order.
-Read [Implementation status](docs/implementation-status.md) for implemented features and known gaps.
 Read [lane ownership](docs/reliability-lanes.md) before you change a module.
-Read [Reliability math](docs/reliability-math.md) for equations, examples, and open parameters.
 
 ## Target rules
 
@@ -28,18 +58,20 @@ KYC currently uses a mock provider.
 
 | Path | Purpose |
 | --- | --- |
-| `packages/reliability` | Marketplace types, scoring, terms, KYC, evidence, and escrow lifecycle |
-| `packages/db` | Shared SQLite store, migrations, marketplace records, and payment records |
-| `services/control-api.ts` | Registers marketplace routes against one shared `AgentStore` |
-| `services/reliability` | Read routes, lifecycle actions, the contract lifecycle service, mock KYC, and the Masumi escrow adapters |
+| `packages/reliability` | Marketplace types, scoring, terms, KYC, evidence, the v1 lifecycle, and the contract engine (`src/contract-lifecycle`) |
+| `packages/db` | Shared SQLite store, migrations, marketplace records, contract records, and payment records |
+| `services/control-api.ts` | Registers the marketplace and contract routes against one shared `AgentStore` |
+| `services/reliability` | Read routes, lifecycle actions, the contract service, the Masumi escrow adapters, mock KYC, and the Coworker tools |
+| `services/reliability/coworkers` | Instructions for the three Coworkers |
 | `services/cardano-agents-ts` | Shared Cardano and Masumi adapters, payment evidence, and settlement observer |
-| `ui` | Local display for transactions, receipts, buyer and seller scores, KYC, and listings |
+| `ui` | The Tally UI |
+| `deploy/preprod` | The preprod server: payment service, Caddy, systemd units, and the deploy script |
+| `docs/brand` | The Tally mark, logo, and Coworker avatars |
 
 Some source code still supports the retired trading runtime.
 The control API obtains its shared store through that runtime.
 Cardano payment code also uses shared core types.
 Remove these dependencies through a separate refactor.
-The current product plan covers the marketplace and reliability checker.
 
 ## Run locally
 
@@ -47,23 +79,38 @@ Install [Bun](https://bun.sh), version 1.2.21 or later.
 
 ```sh
 bun install
+CONTROL_DB_PATH=services/.data/agent.sqlite bun run contracts:showcase   # once: six demo contracts
 bun run services
 # In another terminal:
 bun run ui/server.ts
 ```
 
 Open <http://localhost:8791>.
-The operator UI is a local display.
-It does not accept offers or submit lifecycle actions.
-Read [UI instructions](ui/README.md) for its views and evidence labels.
+Open an area directly with `/?view=deals`, `/?view=mediation`, `/?view=companies`, or `/?view=operator`.
 
 The shared launcher starts the control API on port 8787.
 It also starts payment services on ports 8788 and 8789.
 It still starts the legacy market feed on port 8790.
 Separate marketplace startup from that feed in the runtime refactor.
-The marketplace UI reads the control API.
 
-## Marketplace routes
+Other demos:
+
+```sh
+bun run contracts:demo     # paper contract demo in the terminal
+bun run funding:demo       # paper pool ledger
+bun run contracts:smoke    # preprod escrow proof (needs both network gates)
+```
+
+## Hosted demo
+
+The preprod server runs the Masumi payment service, the control API, and the UI.
+Only the UI is public. It forwards GET reads from a fixed list and refuses writes.
+Deploy a git ref with `deploy/preprod/deploy-app.sh <ref>`.
+Read [the preprod server](deploy/preprod/README.md) to rebuild or operate it.
+
+## Routes
+
+### Marketplace
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -77,6 +124,19 @@ The marketplace UI reads the control API.
 | `POST` | `/reliability/lifecycle/open` | Open a stored transaction |
 | `POST` | `/reliability/lifecycle/terms` | Record transaction terms |
 | `POST` | `/reliability/lifecycle/transition` | Submit a lifecycle action |
+
+Entity, listing, and transaction reads accept an optional `id` query.
+Score reads accept an optional `entityId` query.
+Receipt reads require `transactionId`.
+Lifecycle reads require `transactionId` and accept an optional `now` query.
+Collections include stored records. A stored record takes precedence over a fixture with the same ID.
+Use the lifecycle read for stage history and current terms recommendations.
+Listing and offer write routes still need implementation.
+
+### Contracts
+
+| Method | Path | Purpose |
+| --- | --- | --- |
 | `GET` | `/reliability/contracts/templates` | List contract templates |
 | `POST` | `/reliability/contracts/parties` | Link a signing key and a preprod address to an entity |
 | `POST` | `/reliability/contracts` | Create a contract |
@@ -96,16 +156,11 @@ The marketplace UI reads the control API.
 | `GET` | `/reliability/profile` | Read a company record |
 | `GET` | `/reliability/profile/search` | Find companies by name or id |
 
-Entity, listing, and transaction reads accept an optional `id` query.
-Score reads accept an optional `entityId` query.
-Receipt reads require `transactionId`.
-Lifecycle reads require `transactionId` and accept an optional `now` query.
-Collections include stored records. A stored record takes precedence over a fixture with the same ID.
-Use the lifecycle read for stage history and current terms recommendations.
-Listing and offer write routes still need implementation.
+Every party action carries an Ed25519 signature.
+The read views use the Coworker tools, so the UI and the Coworkers show the same engine numbers.
 
-Read [Transaction lifecycle](docs/reliability-lifecycle.md) for actions and evidence rules.
-Read [Contract lifecycle](docs/contract-lifecycle.md) for contract templates, tiered disputes, signed party actions, and live Masumi escrow.
+Read [Transaction lifecycle](docs/reliability-lifecycle.md) for v1 actions and evidence rules.
+Read [Contract lifecycle](docs/contract-lifecycle.md) for templates, tiered disputes, signed party actions, and live Masumi escrow.
 Read [mock KYC](docs/kyc.md) for onboarding states and tier rules.
 Read [module boundaries](docs/reliability-modules.md) before you extend a lane.
 
@@ -148,5 +203,5 @@ bun run payments:typecheck
 bun run lint
 ```
 
-These checks cover shared code, marketplace code, and the operator UI.
+These checks cover shared code, marketplace code, contracts, the Coworker tools, and the UI.
 No CRE installation is required for these checks.

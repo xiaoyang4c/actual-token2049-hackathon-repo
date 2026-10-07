@@ -18,14 +18,14 @@ See [Open decisions](#open-decisions).
 
 | Item | Status | Owner |
 | --- | --- | --- |
-| Good UI | local display implemented; transactions, receipts, scores, mock KYC, and listings | Lane C |
+| Good UI | Tally UI implemented: My deals, Mediation desk, Companies, and Operator; hosted as a read-only public demo | Lane C |
 | KYC verification | mock verification merged on main in pull request #8 | Lane A |
 | Score change scaled by transaction value | not started | Math lane |
 | Separate buyer score and seller score | done on main | Math lane |
 | Platform fee on the buyer side and the seller side | stub rate offers; no fee collection | Lane B |
 | Diminishing returns for the same pair | not started | Math lane |
 
-Lane C builds the local operator UI against `GET /reliability/*`. It shows transactions, receipts, separate buyer and seller scores, mock KYC, and listings. Read [UI instructions](../ui/README.md). The operator UI sends no orders. The operator UI edits no policy.
+Lane C builds the Tally UI against `GET /reliability/*`. It shows contracts and their next actions, disputes with their case files, company records, transactions, receipts, separate buyer and seller scores, mock KYC, and listings. Read [UI instructions](../ui/README.md). The UI sends no orders, edits no policy, and signs nothing.
 
 Pull request #8 adds mock KYC on main. Lane A owns mock KYC. Read [mock KYC](kyc.md). `KYC_TIER_RULES` contains the default tier rules. The product owner has not decided the final KYC bar.
 

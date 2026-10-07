@@ -221,7 +221,7 @@ A late ruling compliance instruction remains permitted and receives the existing
 7. **Platform fees are not in the escrow amount.** Lane B owns fees.
 8. **A person holds the mediator key.** The Tally Mediator Coworker drafts the ruling and returns the exact bytes to sign. The Task worker is not built yet. Read [Tally Coworkers](../services/reliability/coworkers/README.md).
 9. **Evidence lives in SQLite.** Production needs object storage.
-10. **The operator UI does not show contracts yet.** The routes exist for lane C.
+10. **The UI shows contracts read-only.** Parties and the mediator sign their actions outside the UI. Before real data, add sign-in and show each party only its own deals.
 11. **Two lifecycles exist.** Keep v1 for the paper sales demo. Use contracts for live escrow. The v1 live path now stops with a clear error before it reaches Masumi.
 
 ### Improvements to consider
