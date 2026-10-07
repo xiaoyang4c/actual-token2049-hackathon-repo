@@ -27,7 +27,7 @@ export interface ContractConfig {
 }
 
 /** Test USDM on Cardano preprod (policy id + asset name), from the Masumi TOKEN2049 guide. */
-const TEST_USDM_UNIT = '16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d';
+export const TEST_USDM_UNIT = '16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d';
 /** USDM has 6 decimals: 1 USDM = 1000000 atomic units (Masumi TOKEN2049 guide). */
 const TEST_USDM_DECIMALS = 6;
 /** Core plus holdback. A third escrow per milestone has no remedy that uses it. */
@@ -37,7 +37,7 @@ const DEFAULT_DISPUTE_MARGIN_MS = 120_000;
 /** Evidence above 1 MiB belongs in object storage, not in the SQLite store. */
 const DEFAULT_MAX_EVIDENCE_BYTES = 1_048_576;
 /** MPS waits 10 minutes after unlockTime before it withdraws (rev d569a33). */
-const MPS_AUTO_WITHDRAW_DELAY_MS = 600_000;
+export const MPS_AUTO_WITHDRAW_DELAY_MS = 600_000;
 /** A paper confirmation feels like a short block wait. */
 const DEFAULT_PAPER_CONFIRMATION_MS = 3_000;
 /** The worker polls MPS no faster than this. MPS itself batches jobs on a similar cadence. */

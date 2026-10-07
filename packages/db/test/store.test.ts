@@ -89,6 +89,8 @@ describe('AgentStore', () => {
         'payment_settlements',
         'policy',
         'position_events',
+        'reliability_anchor_batches',
+        'reliability_anchor_entries',
         'reliability_entities',
         'reliability_event_revisions',
         'reliability_events',
@@ -120,8 +122,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-006, 008, and 010-014. 007 and 009 are reserved.
-      expect(versions.versions).toBe(12);
+      // 001-006, 008, and 010-015. 007 and 009 are reserved.
+      expect(versions.versions).toBe(13);
     } finally {
       db.close();
     }

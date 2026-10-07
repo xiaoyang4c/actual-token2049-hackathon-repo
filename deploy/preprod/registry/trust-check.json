@@ -1,0 +1,35 @@
+{
+  "network": "Preprod",
+  "sellingWalletVkey": "96740dce7a58e99e5ac969d2672d48fcfd350f09aff58c3b0983396a",
+  "supportedPaymentSources": [
+    {
+      "chain": "Cardano",
+      "network": "Preprod",
+      "paymentSourceType": "Web3CardanoV2",
+      "address": "addr_test1wzs4e6wc95hkwezlccjw9mdvq0r0rsgx6zk34avptga3ftgn37w4g",
+      "pricing": {
+        "pricingType": "Dynamic"
+      }
+    }
+  ],
+  "ExampleOutputs": [],
+  "Tags": [
+    "reliability",
+    "credit",
+    "risk",
+    "b2b",
+    "cardano",
+    "token2049"
+  ],
+  "name": "Tally Trust Check",
+  "apiBaseUrl": "https://13-210-42-0.sslip.io/trust-check",
+  "description": "Explains a company's Tally reliability record before you deal with it: completed deals, disputes, rulings followed, and the escrow terms its score supports. Preprod demo, test USDM only.",
+  "Capability": {
+    "name": "tally-trust-check",
+    "version": "0.1.0"
+  },
+  "Author": {
+    "name": "Tally",
+    "organization": "Tally"
+  }
+}

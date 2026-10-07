@@ -86,7 +86,7 @@ describe('marketplace read model', () => {
     expect(html).toContain('Expired');
     expect(html).toContain('New check pending');
     expect(html).toContain('Re-registration flag: old-entity');
-    expect(html).toContain('Reliability does not transfer');
+    expect(html).toContain('reliability record of the earlier entity does not transfer');
   });
 
   test('does not replace an unavailable KYC read with a verified seed badge', () => {
@@ -239,8 +239,8 @@ describe('receipt evidence', () => {
     const stale = buildView(sample(), {source: 'stale', updatedAt: '2026-10-06T12:00:00Z'});
     expect(renderDesk(fixture)).toContain('Saved demo snapshot');
     expect(renderDesk(stale)).toContain('Showing the last response');
-    expect(deskTitle(fixture)).toBe('Offline sample · Transactions · Reliability');
-    expect(deskTitle(stale)).toBe('Stale · Transactions · Reliability');
+    expect(deskTitle(fixture)).toBe('Offline sample · Transactions · Tally');
+    expect(deskTitle(stale)).toBe('Stale · Transactions · Tally');
   });
 });
 

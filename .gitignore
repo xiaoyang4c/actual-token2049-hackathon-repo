@@ -24,3 +24,8 @@ services/.data/
 **/.impeccable/live/deferred-svelte-component-accepts.json
 **/.impeccable/live/*.png
 # impeccable-ignore-end
+
+# Vercel CLI project link and the demo database built by api/_seed.ts
+.vercel
+.env.local
+.demo-data

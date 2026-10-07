@@ -6,6 +6,7 @@
       "name": "prediction-agent-runtime",
       "dependencies": {
         "@blockfrost/blockfrost-js": "6.2.0",
+        "@emurgo/cardano-serialization-lib-nodejs": "15.0.3",
         "lz-string": "1.5.0",
       },
       "devDependencies": {

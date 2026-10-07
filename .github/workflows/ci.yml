@@ -22,3 +22,20 @@ jobs:
       - run: bun run typecheck:control
       - run: bun run payments:typecheck
       - run: bun run lint
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: web
+      - run: bun run test
+        working-directory: web
+      - run: bun run lint
+        working-directory: web
+      - run: bun run build
+        working-directory: web

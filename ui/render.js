@@ -1,12 +1,21 @@
 // Render prepared read models. Controls only select and filter local views.
 
-import { formatFee, formatPct, formatValue, label, stamp } from "./format.js"
+import { escapeHtml, formatFee, formatPct, formatValue, label, stamp } from "./format.js"
 import { evidenceRows, participantName } from "./model.js"
+import { renderAsk, renderCompanies, renderContractsTable, renderDeals, renderMediation } from "./tally-views.js"
 
-export function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[character])
+export { escapeHtml }
+
+/** The Tally mark: four tally strokes and a fifth across them. Transparent, so it takes the text colour. */
+const BRAND_MARK = `<svg class="brand-svg" viewBox="10 16 80 68" aria-hidden="true"><defs><mask id="brand-gap" maskUnits="userSpaceOnUse"><rect width="100" height="100" fill="white"/><polygon fill="black" points="18.58,79.05 90.58,36.45 81.42,20.95 9.42,63.55"/></mask></defs><g fill="currentColor" mask="url(#brand-gap)"><rect x="17.5" y="32.5" width="11" height="50"/><rect x="35.5" y="27.5" width="11" height="50"/><rect x="53.5" y="22.5" width="11" height="50"/><rect x="71.5" y="17.5" width="11" height="50"/></g><polygon fill="currentColor" points="16.55,75.6 88.55,33 83.45,24.4 11.45,67"/></svg>`
+
+export const AREAS = ["deals", "mediation", "companies", "ask", "operator"]
+const AREA_TEXT = {
+  deals: ["My deals", "Every milestone, who acts next, and by when."],
+  mediation: ["Mediation desk", "Disputes that need a decision, with the evidence and what each ruling pays."],
+  companies: ["Companies", "A company's Tally record before you deal with it. Facts, not a verdict."],
+  ask: ["Ask a Coworker", "Ask Tally's Coworkers to draft a contract, prepare a dispute case, or check a company. A free preview: no payment, and nothing is saved."],
+  operator: ["Operator", "The marketplace ledger, participants, listings, and every contract."],
 }
 
 const e = escapeHtml
@@ -33,13 +42,13 @@ const modeBadge = (mode) => `<span class="mode-label mode-${e(mode)}">${e(mode.t
 const facts = (rows) => `<dl class="facts">${rows.map(([key, value]) => `<div><dt>${e(key)}</dt><dd>${e(value)}</dd></div>`).join("")}</dl>`
 const empty = (title, detail) => `<div class="empty-state"><strong>${e(title)}</strong><p>${e(detail)}</p></div>`
 
-function renderHeader(view, theme) {
+function renderHeader(view, theme, area) {
   const connection = { connected: "Connected", fixture: view.error ? "Offline sample" : "Loading", stale: "Connection lost" }[view.source]
   return `<header class="app-header">
-    <a class="brand" href="/" aria-label="Reliability home"><span class="brand-mark">R</span>Reliability</a>
-    <nav aria-label="Marketplace views">${["transactions", "attention", "participants", "listings"].map((tab) =>
-      `<button type="button" id="nav-${tab}" data-tab="${tab}" ${view.tab === tab ? 'aria-current="page"' : ""}>${tabName(tab)}</button>`).join("")}</nav>
-    <div class="header-status"><span class="local-label">Local operator</span><span class="connection connection-${view.source}"><span class="status-dot" aria-hidden="true"></span>${connection}</span>
+    <a class="brand" href="/" aria-label="Tally home">${BRAND_MARK}Tally</a>
+    <nav aria-label="Tally views">${AREAS.map((name) =>
+      `<button type="button" id="nav-${name}" data-area="${name}" ${area === name ? 'aria-current="page"' : ""}>${AREA_TEXT[name][0]}</button>`).join("")}</nav>
+    <div class="header-status"><span class="local-label">Demo · read only</span><span class="connection connection-${view.source}"><span class="status-dot" aria-hidden="true"></span>${connection}</span>
     <button type="button" id="theme-toggle" class="icon-button" data-theme-toggle aria-label="Switch to ${theme === "dark" ? "light" : "dark"} mode" title="Switch to ${theme === "dark" ? "light" : "dark"} mode">${icon(theme === "dark" ? "sun" : "moon")}</button>
     <button type="button" id="refresh-marketplace" class="icon-button" data-refresh aria-label="Refresh marketplace">${icon("refresh")}</button></div>
   </header>`
@@ -50,7 +59,7 @@ function renderNotice(view) {
     `<div class="connection-notice" role="status"><strong>Saved demo snapshot</strong> ${view.error ? "The control API is unavailable." : "Waiting for the control API."} This sample is not current data. ${e(view.error)}</div>` :
     view.source === "stale" ?
       `<div class="connection-notice" role="status"><strong>Showing the last response</strong> Last received ${e(stamp(view.updatedAt))}. ${e(view.error)}</div>` : ""
-  return `${status}<div class="demo-notice">${icon("alert")}<strong>Demo marketplace</strong><span>Paper marketplace orders. Escrow mode is shown in each receipt. Scores and fees use stubs. KYC is mocked.</span></div>`
+  return `${status}<div class="demo-notice">${icon("alert")}<strong>Tally demo</strong><span>Cardano preprod with test USDM. Paper contracts are labelled SIMULATED. Scores and fees use stubs. KYC is mocked. Role views are lenses, not sign-in.</span></div>`
 }
 
 function renderMetrics(view) {
@@ -140,7 +149,7 @@ function roleScores(entity, role) {
 function renderKyc(entity) {
   return `${badge(entity.kycBadge)}<small>${e(label(entity.kycTier))} tier · ${e(entity.kycSource)}</small>${entity.checkPending ? '<small class="data-warning">New check pending</small>' : ""}
   ${entity.kycError ? `<small class="data-warning">${e(entity.kycError)}</small>` : ""}
-  ${entity.reRegistration ? `<p class="flag">Re-registration flag: ${e(entity.reRegistration.ofEntityId)} · ${e(label(entity.reRegistration.signal))}</p><p class="fine">Reliability does not transfer to this entity.</p>` : ""}`
+  ${entity.reRegistration ? `<p class="flag">Re-registration flag: ${e(entity.reRegistration.ofEntityId)} · ${e(label(entity.reRegistration.signal))}</p><p class="fine">The reliability record of the earlier entity does not transfer to this entity.</p>` : ""}`
 }
 
 function renderAttentionParticipants(view) {
@@ -173,21 +182,40 @@ export function renderLookup(lookup = {}) {
   return `<section class="lookup-section" aria-label="Transaction lookup"><form id="lookup-form"><label for="transaction-id">Inspect a transaction by ID</label><div><input id="transaction-id" name="transactionId" placeholder="Transaction ID" value="${e(lookup.value ?? "")}" required><button type="submit" class="button" ${lookup.busy ? "disabled" : ""}>${lookup.busy ? "Loading…" : "Inspect receipt"}</button></div></form><p class="fine">Read a durable lifecycle transaction or a demo receipt.</p><p id="lookup-message" class="data-warning" role="status">${e(lookup.error ?? "")}</p></section>`
 }
 
-export function renderDesk(view, lookup = {}, theme = "light", copy = {}) {
+const OPERATOR_TABS = ["transactions", "attention", "participants", "listings", "contracts"]
+
+function renderOperator(view, lookup, tally, copy) {
   const descriptions = {
     transactions: "Inspect agreements, outcomes, and the evidence behind each result.",
     attention: "Review transaction exceptions and participant KYC issues in the loaded records.",
-    participants: "Separate buyer and seller reliability, with the evidence and identity status behind each score.",
+    participants: "Separate buyer and seller reliability scores, with the evidence and identity status behind each score.",
     listings: "Inspect goods and service offers, seller records, and required terms.",
+    contracts: "Every Tally contract and milestone, with the next action on each.",
   }
-  return `<div class="desk" data-source="${e(view.source)}">${renderHeader(view, theme)}<main id="main" class="main-shell">
-    <div class="page-heading"><div><h1 id="page-title" tabindex="-1">${e(tabName(view.tab))}</h1><p>${descriptions[view.tab]}</p></div><span class="read-only">${icon("lock")}Read only</span></div>
-    ${renderMetrics(view)}${renderNotice(view)}
-    ${["transactions", "attention"].includes(view.tab) ? `<div class="workspace">${renderLedger(view)}${renderReceipt(view, copy)}</div>${view.tab === "attention" ? renderAttentionParticipants(view) : ""}${renderLookup(lookup)}` : view.tab === "participants" ? renderParticipants(view) : renderListings(view)}
-    <footer class="app-footer"><span>Local marketplace operator · Read only</span><span>${view.source === "fixture" ? "Saved demo snapshot" : `Last received ${e(stamp(view.updatedAt))}`}</span></footer>
+  const tab = OPERATOR_TABS.includes(tally.operatorTab) ? tally.operatorTab : view.tab
+  return `<div class="subnav" role="group" aria-label="Operator views">${OPERATOR_TABS.map((name) =>
+      `<button type="button" id="tab-${name}" data-tab="${name}" aria-pressed="${tab === name}">${tabName(name)}</button>`).join("")}</div>
+    <p class="subnav-note">${descriptions[tab]}</p>
+    ${tab === "contracts" ? renderContractsTable(tally) : `${renderMetrics(view)}${["transactions", "attention"].includes(tab) ?
+      `<div class="workspace">${renderLedger(view)}${renderReceipt(view, copy)}</div>${tab === "attention" ? renderAttentionParticipants(view) : ""}${renderLookup(lookup)}` :
+      tab === "participants" ? renderParticipants(view) : renderListings(view)}`}`
+}
+
+export function renderDesk(view, lookup = {}, theme = "light", copy = {}, tally = null) {
+  const state = tally ?? { area: "operator", operatorTab: view.tab, contracts: [] }
+  const area = AREAS.includes(state.area) ? state.area : "deals"
+  const [title, description] = AREA_TEXT[area]
+  const body = area === "deals" ? renderDeals(state) : area === "mediation" ? renderMediation(state) :
+    area === "companies" ? renderCompanies(state) : area === "ask" ? renderAsk(state) : renderOperator(view, lookup, state, copy)
+  return `<div class="desk" data-source="${e(view.source)}">${renderHeader(view, theme, area)}<main id="main" class="main-shell">
+    <div class="page-heading"><div><h1 id="page-title" tabindex="-1">${e(title)}</h1><p>${e(description)}</p></div><span class="read-only">${icon("lock")}${area === "ask" ? "Nothing is saved" : "Read only"}</span></div>
+    ${renderNotice(view)}${state.contractsError && area !== "operator" ? `<div class="connection-notice" role="status"><strong>Contracts</strong> ${e(state.contractsError)}</div>` : ""}
+    ${body}
+    <footer class="app-footer"><span>Tally · Cardano preprod demo · Read only</span><span>${view.source === "fixture" ? "Saved demo snapshot" : `Last received ${e(stamp(view.updatedAt))}`}</span></footer>
   </main></div>`
 }
 
-export function deskTitle(view) {
-  return `${view.source === "fixture" ? "Offline sample · " : view.source === "stale" ? "Stale · " : ""}${tabName(view.tab)} · Reliability`
+export function deskTitle(view, area = "operator", operatorTab = view.tab) {
+  const name = area === "operator" ? tabName(operatorTab) : AREA_TEXT[area]?.[0] ?? tabName(view.tab)
+  return `${view.source === "fixture" ? "Offline sample · " : view.source === "stale" ? "Stale · " : ""}${name} · Tally`
 }

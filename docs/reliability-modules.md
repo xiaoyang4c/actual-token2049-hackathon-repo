@@ -50,6 +50,7 @@ The scoring, pair-decay, fee, and KYC interfaces stay in their lane files.
 | `contract-paper-escrow.ts` | Paper model of the Masumi V2 escrow. |
 | `contract-masumi-escrow.ts` | Live Masumi V2 escrow on the shared payment client. |
 | `routes-lane-a-contracts.ts` | Map signed contract requests and errors to HTTP responses. |
+| `coworker-tools.ts` | Deterministic tools for the Tally Coworkers. Read [Tally Coworkers](../services/reliability/coworkers/README.md). |
 
 `createLaneARoutes` accepts policies, a clock, and an escrow factory for each store.
 It keeps a separate service cache for each route table and store.
