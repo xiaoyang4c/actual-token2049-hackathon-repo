@@ -36,9 +36,11 @@ Unknown IDs show an error and keep the current display.
 ## Data and evidence
 
 The UI polls the marketplace read routes every five seconds.
-The entity, listing, transaction, and receipt collections currently serve seed fixtures.
-New stored transactions do not appear automatically in these collections.
-Use the transaction ID field to inspect one stored transaction.
+Entity, listing, and transaction reads combine stored records with seed fixtures.
+A stored record takes precedence for the same ID.
+New stored transactions appear in the transaction collection.
+Receipt reads use stored transactions, outcomes, and events first.
+Use the transaction ID field to inspect the complete lifecycle history.
 The score route combines stored states with fixtures. A stored state takes precedence
 for the same entity, category, and role.
 The mock KYC route can return a stored entity record.

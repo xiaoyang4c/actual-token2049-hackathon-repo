@@ -13,6 +13,7 @@ and store writes. Its public exports stay available at the same import paths.
 | Module under `packages/reliability/src/lifecycle/` | Responsibility |
 | --- | --- |
 | `contracts.ts` | Lifecycle interfaces, stage rules, delivery tiers, and the shared error class |
+| `commands.ts` | Persist command identities, external-call checkpoints, and completed results. Block ambiguous resubmission. |
 | `codecs.ts` | Validate timestamps and evidence. Copy terms and stored transitions. |
 | `escrow-evidence.ts` | Convert an escrow session to scalar evidence. Restore the session from that evidence. |
 | `outcome.ts` | Project stage history into an outcome, fault, and verification confidence. No store writes. |
@@ -29,9 +30,10 @@ The scoring, pair-decay, fee, and KYC interfaces stay in their lane files.
 | `lifecycle-request.ts` | Parse HTTP values and dispatch lifecycle actions. No direct store access. |
 | `lifecycle-service.ts` | Use one shared `AgentStore` for parties, lifecycle views, events, states, and terms. |
 | `routes-lane-a.ts` | Map lifecycle requests and errors to HTTP responses. |
-| `routes-plumbing.ts` | Serve fixture reads and receipts through the policy interfaces. |
+| `routes-plumbing.ts` | Merge stored collection records over fixtures. Read stored receipts first. |
+| `masumi-escrow.ts` | Submit escrow actions. Use the shared verifier for live funds locks, payouts, and refunds. |
 
-`createLaneARoutes` accepts policies and an escrow factory for each store.
+`createLaneARoutes` accepts policies, a clock, and an escrow factory for each store.
 It keeps a separate service cache for each route table and store.
 `createPlumbingRoutes` accepts the same policy bundle.
 The existing `laneARoutes` and `plumbingRoutes` exports use the defaults.
@@ -56,7 +58,16 @@ It commits new events, score updates, and terms decisions in one transaction.
 Repeated reads return current terms without applying the event again.
 If an older write left events without a score, the service rebuilds that missing
 score from its event history under the active scoring policy.
+Changed outcomes archive and replace their active events.
+The service rebuilds affected scores from saved baselines and active history.
+It commits corrections with current terms under the same write lock.
 The score read route uses stored rows when available. Fixture rows fill missing triples.
+
+Migration `014` stores commands, event revisions, score baselines, and listings.
+The command journal claims the transaction before an external action.
+It commits a completed money stage and command result together.
+An unknown external response requires reconciliation.
+The API does not yet provide that operator flow.
 
 The scoring policy still uses unit weights.
 Value weighting and cumulative pair history are not implemented.

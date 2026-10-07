@@ -194,6 +194,41 @@ export class ChainEscrow implements EscrowPort {
     );
   }
 
+  async verify(
+    session: EscrowSession, action: 'fund'|'release'|'refund', resultHash?: string,
+  ): Promise<EscrowStatus> {
+    const terms = toTerms(session);
+    const snapshot = await this.masumi.getSettlement(terms);
+    const expected = action === 'fund' ? ['FundsLocked'] :
+      action === 'release' ? ['Withdrawn'] : ['RefundWithdrawn'];
+    for (const view of [snapshot.purchase, snapshot.payment]) {
+      for (const transaction of view?.transactions ?? []) {
+        if (!expected.includes(transaction.newOnChainState ?? '') || !transaction.txHash) continue;
+        const check = await this.cardano.verifySettlement({
+          terms, depositTxHash: session.txHash, transaction,
+          kind: action === 'fund' ? 'state' : action === 'release' ? 'withdrawal' : 'refund',
+          resultHash, sellerAddress: session.sellerReturnAddress,
+          buyerAddress: this.config.walletAddress,
+          withdrawnForSeller: view?.withdrawnForSeller,
+          withdrawnForBuyer: view?.withdrawnForBuyer,
+          protocolFees: snapshot.protocolFees,
+        });
+        if (!check.confirmed || (action === 'fund' && check.onChainState !== 'FundsLocked')) continue;
+        const observed = check.evidence.find((item) => item.txHash === check.txHash);
+        return {
+          simulated: this.simulated, mode: this.orderMode, verified: true,
+          onChainState: check.onChainState ?? transaction.newOnChainState ?? null,
+          txHash: check.txHash, blockTime: observed?.blockTime,
+          escrowAddress: session.escrowAddress,
+        };
+      }
+    }
+    return {
+      simulated: this.simulated, mode: this.orderMode, verified: false,
+      onChainState: snapshot.purchase?.onChainState ?? snapshot.payment?.onChainState ?? null,
+    };
+  }
+
   async mutualTerminate(
     session: EscrowSession, consent: EscrowConsent,
   ): Promise<EscrowMutualTerminationResult> {

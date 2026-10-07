@@ -79,15 +79,19 @@ describe('AgentStore', () => {
         'policy',
         'position_events',
         'reliability_entities',
+        'reliability_event_revisions',
         'reliability_events',
         'reliability_kyc_identifiers',
         'reliability_kyc_profiles',
         'reliability_kyc_status_records',
+        'reliability_lifecycle_commands',
         'reliability_lifecycle_transitions',
+        'reliability_listings',
         'reliability_omnibus_deal_funding',
         'reliability_omnibus_deposits',
         'reliability_omnibus_pools',
         'reliability_outcomes',
+        'reliability_score_baselines',
         'reliability_state',
         'reliability_terms_decisions',
         'reliability_terms_versions',
@@ -105,8 +109,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-006, 008, 010-011, and 013. 012 is allocated to PR #17.
-      expect(versions.versions).toBe(10);
+      // 001-006, 008, 010-011, and 013-014. 012 is allocated to PR #17.
+      expect(versions.versions).toBe(11);
     } finally {
       db.close();
     }

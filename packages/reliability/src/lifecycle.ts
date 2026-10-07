@@ -5,6 +5,7 @@
  */
 
 import {createHash} from 'node:crypto';
+import {LifecycleCommands, LifecyclePendingError, type LifecycleCommandStore} from './lifecycle/commands';
 import type {EscrowFundRequest, EscrowPort, EscrowSession} from './escrow-port';
 import type {
   JsonValue, MarketplaceTransaction, Outcome, OutcomeState, TermsVersion,
@@ -60,11 +61,21 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
   private readonly transactions = new Map<string, MarketplaceTransaction>();
   private readonly memory = new Map<string, LifecycleTransition[]>();
   private escrowDepth = 0;
+  private readonly commands: LifecycleCommands;
+  private readonly outcomes = new Map<string, Outcome>();
 
   constructor(private readonly options: {
     store?: LifecycleStore;
     escrow?: EscrowPort;
-  } = {}) {}
+    clock?: () => string;
+  } = {}) {
+    const store = options.store;
+    if (store && (!store.getLifecycleCommand || !store.getPendingLifecycleCommand ||
+        !store.saveLifecycleCommand || !store.deleteLifecycleCommand || !store.transaction)) {
+      throw new LifecycleError('a durable lifecycle store must support command checkpoints');
+    }
+    this.commands = new LifecycleCommands(store as LifecycleCommandStore|undefined);
+  }
 
   /**
    * Records terms version 1 and moves the sale to `offer_accepted`.
@@ -80,7 +91,7 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     if (!TRANSACTION_TYPES.includes(input.type)) {
       throw new LifecycleError('unknown transaction type');
     }
-    parseTime(input.at, 'at');
+    this.assertTime(input.id, input.at);
     if (input.value !== undefined && (!Number.isFinite(input.value) || input.value < 0)) {
       throw new LifecycleError('value must be a non-negative number');
     }
@@ -141,8 +152,9 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     reason: string,
     at: string,
   ): TermsVersion {
+    this.commands.assertAvailable(transactionId);
     this.requireText(reason, 'reason');
-    parseTime(at, 'at');
+    this.assertTime(transactionId, at);
     assertJson(terms, 'terms');
     const current = this.transaction(transactionId);
     const stage = this.currentStage(transactionId);
@@ -189,13 +201,19 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
 
   /** Returns whether creation already recorded this id. */
   hasTransaction(transactionId: string): boolean {
-    if (this.transactions.has(transactionId)) return true;
-    return this.options.store?.getTransaction(transactionId) !== undefined;
+    return this.options.store ? this.options.store.getTransaction(transactionId) !== undefined :
+      this.transactions.has(transactionId);
   }
 
   /** Funds paper escrow through the escrow port. */
   async fund(input: FundEscrowInput): Promise<LifecycleTransition> {
-    parseTime(input.at, 'at');
+    this.requireStage(input.transactionId);
+    return this.commands.run('fund', input, 0,
+      (saved) => this.fundOnce(saved));
+  }
+
+  private async fundOnce(input: FundEscrowInput): Promise<LifecycleTransition> {
+    this.assertTime(input.transactionId, input.at);
     const windowEnds = parseTime(input.disputeWindowEnds, 'disputeWindowEnds');
     if (windowEnds <= parseTime(input.at, 'at')) {
       throw new LifecycleError('the dispute window must end after funding');
@@ -222,9 +240,9 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
       ),
     };
     const port = this.requireEscrow();
-    const session = await port.fund(request);
+    const session = await this.commands.effect('fund', () => port.fund(request));
     this.assertEscrowResult(session.simulated, session.mode);
-    const chain = await this.chainEvidence(session);
+    const chain = await this.chainEvidence(session, 'fund');
     return this.commitEscrow({
       transactionId: input.transactionId,
       from: 'offer_accepted',
@@ -258,7 +276,13 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
    * From `escrow_funded`, the only path is silent release.
    */
   async release(input: ReleaseEscrowInput): Promise<LifecycleTransition> {
-    parseTime(input.at, 'at');
+    this.requireStage(input.transactionId);
+    return this.commands.run('release', input, 0,
+      (saved) => this.releaseOnce(saved));
+  }
+
+  private async releaseOnce(input: ReleaseEscrowInput): Promise<LifecycleTransition> {
+    this.assertTime(input.transactionId, input.at);
     let stage = this.requireStage(input.transactionId);
     if (stage === 'escrow_funded') {
       const evidence = input.evidence ?? {};
@@ -297,12 +321,10 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     }
     const session = this.sessionFor(input.transactionId);
     const port = this.requireEscrow();
-    const result = await port.release(
-      session,
-      sha256(`${input.transactionId}:${tier ?? 'resolver'}:${input.at}`),
-    );
+    const resultHash = sha256(`${session.blockchainIdentifier}:${tier ?? 'resolver'}:release`);
+    const result = await this.commands.effect('release', () => port.release(session, resultHash));
     this.assertEscrowResult(result.simulated, result.mode);
-    const chain = await this.chainEvidence(session);
+    const chain = await this.chainEvidence(session, 'release', result.resultHash);
     return this.commitEscrow({
       transactionId: input.transactionId,
       from: stage,
@@ -326,7 +348,13 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
 
   /** Queues a Masumi refund request. */
   async refund(input: RefundEscrowInput): Promise<LifecycleTransition> {
-    parseTime(input.at, 'at');
+    this.requireStage(input.transactionId);
+    return this.commands.run('refund', input, 0,
+      (saved) => this.refundOnce(saved));
+  }
+
+  private async refundOnce(input: RefundEscrowInput): Promise<LifecycleTransition> {
+    this.assertTime(input.transactionId, input.at);
     if (input.reason !== undefined) this.requireText(input.reason, 'reason');
     const stage = this.requireStage(input.transactionId);
     if (stage !== 'escrow_funded' && stage !== 'dispute_resolved') {
@@ -338,9 +366,9 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     }
     const session = this.sessionFor(input.transactionId);
     const port = this.requireEscrow();
-    const result = await port.refund(session);
+    const result = await this.commands.effect('refund', () => port.refund(session));
     this.assertEscrowResult(result.simulated, result.mode);
-    const chain = await this.chainEvidence(session);
+    const chain = await this.chainEvidence(session, 'refund');
     const fault = stage === 'dispute_resolved' ? 'seller' :
       input.fault === 'buyer' ? 'buyer' : 'none';
     return this.commitEscrow({
@@ -369,10 +397,20 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
    */
   async mutualTerminate(input: {
     transactionId: string;
+    commandId?: string;
     at: string;
     buyerConsentAt: string;
     sellerConsentAt: string;
   }): Promise<LifecycleTransition> {
+    this.requireStage(input.transactionId);
+    return this.commands.run('terminate', input, 0, (saved) => this.mutualTerminateOnce(saved));
+  }
+
+  private async mutualTerminateOnce(input: {
+    transactionId: string; commandId?: string; at: string;
+    buyerConsentAt: string; sellerConsentAt: string;
+  }): Promise<LifecycleTransition> {
+    this.assertTime(input.transactionId, input.at);
     const at = parseTime(input.at, 'at');
     const buyerConsentAt = parseTime(input.buyerConsentAt, 'buyerConsentAt');
     const sellerConsentAt = parseTime(input.sellerConsentAt, 'sellerConsentAt');
@@ -405,14 +443,14 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     }
     const session = this.sessionFor(input.transactionId);
     const port = this.requireEscrow();
-    const result = await port.mutualTerminate(session, {
+    const result = await this.commands.effect('terminate', () => port.mutualTerminate(session, {
       buyerConsentAt: input.buyerConsentAt,
       sellerConsentAt: input.sellerConsentAt,
       contractEnds: ends,
       terminatedAt: input.at,
-    });
+    }));
     this.assertEscrowResult(result.simulated, result.mode);
-    const chain = await this.chainEvidence(session);
+    const chain = await this.chainEvidence(session, 'refund');
     return this.commitEscrow({
       transactionId: input.transactionId,
       from: stage,
@@ -468,8 +506,20 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
    * Seller upheld releases escrow. Buyer upheld requests a refund.
    */
   async resolveDispute(input: ResolveDisputeInput): Promise<LifecycleTransition> {
+    this.requireStage(input.transactionId);
+    return this.commands.run('resolve', input, this.history(input.transactionId).filter((item) => item.to === 'dispute_opened').length,
+      (saved) => this.resolveDisputeOnce(saved));
+  }
+
+  private async resolveDisputeOnce(input: ResolveDisputeInput): Promise<LifecycleTransition> {
     const stage = this.currentStage(input.transactionId);
-    this.advance({
+    if (stage === 'dispute_resolved') {
+      if (input.resolver !== this.disputeRecord(input.transactionId).resolver ||
+          input.decision !== this.requireDecision(input.transactionId)) {
+        throw new LifecycleError('resolution conflicts with the recorded resolver decision');
+      }
+    }
+    if (stage !== 'dispute_resolved') this.advance({
       transactionId: input.transactionId,
       from: stage,
       to: 'dispute_resolved',
@@ -477,13 +527,15 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
       evidence: {resolver: input.resolver, decision: input.decision},
     });
     if (input.decision === 'uphold_seller') {
-      return this.release({transactionId: input.transactionId, at: input.at});
+      return this.releaseOnce({transactionId: input.transactionId, at: input.at});
     }
-    return this.refund({transactionId: input.transactionId, at: input.at});
+    return this.refundOnce({transactionId: input.transactionId, at: input.at});
   }
 
   /** Stage changes that do not move escrow. */
   advance(transition: LifecycleTransition): LifecycleTransition {
+    this.commands.assertAvailable(transition.transactionId);
+    this.assertTime(transition.transactionId, transition.at);
     const stored = copyTransition(transition);
     assertEvidence(stored.evidence);
     parseTime(stored.at, 'at');
@@ -533,10 +585,14 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     },
   ): Outcome {
     parseTime(options.now, 'now');
+    const previous = this.options.store ? this.options.store.getOutcome?.(transactionId) : this.outcomes.get(transactionId);
+    const current = this.currentStage(transactionId);
+    if (previous?.state === 'unresolved' && current === 'dispute_opened') return previous;
     const outcome = projectLifecycleOutcome(
       transactionId, this.history(transactionId), options, this.version,
     );
     this.persist(outcome);
+    this.outcomes.set(transactionId, outcome);
     return outcome;
   }
 
@@ -652,7 +708,12 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
   private commitEscrow(transition: LifecycleTransition): LifecycleTransition {
     this.escrowDepth += 1;
     try {
-      return this.advance(transition);
+      const commit = () => {
+        const result = this.advance(transition);
+        this.commands.complete(result);
+        return result;
+      };
+      return this.options.store?.transaction ? this.options.store.transaction(commit) : commit();
     } finally {
       this.escrowDepth -= 1;
     }
@@ -666,6 +727,9 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     }
     if (!port.simulated && !port.broadcast) {
       throw new LifecycleError('escrow must stay simulated; live broadcast is disabled');
+    }
+    if (!port.simulated && !port.verify) {
+      throw new LifecycleError('live escrow requires a chain settlement verifier');
     }
     return port;
   }
@@ -683,10 +747,18 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     }
   }
 
-  private async chainEvidence(session: EscrowSession): Promise<Evidence> {
-    const status = await this.requireEscrow().status(session);
+  private async chainEvidence(
+    session: EscrowSession, action: 'fund'|'release'|'refund', resultHash?: string,
+  ): Promise<Evidence> {
+    const port = this.requireEscrow();
+    const status = session.simulated ? await port.status(session) :
+      await port.verify?.(session, action, resultHash);
+    if (!status || (!session.simulated && (!status.verified || status.simulated || status.mode !== 'live'))) {
+      throw new LifecyclePendingError(`${action} is pending confirmed chain evidence`);
+    }
     const evidence: Evidence = {
       escrowState: status.onChainState ?? session.onChainState,
+      settlementVerified: !session.simulated && status.verified === true,
     };
     if (status.txHash) evidence.txHash = status.txHash;
     if (status.blockTime) evidence.blockTime = status.blockTime;
@@ -714,7 +786,7 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
     store.saveOutcome(outcome);
     if (!TERMINAL_OUTCOMES.includes(outcome.state)) return;
     const current = this.transaction(outcome.transactionId);
-    if (current.completedAt) return;
+    if (current.completedAt === outcome.decidedAt) return;
     store.setTransactionCompletedAt(outcome.transactionId, outcome.decidedAt);
     current.completedAt = outcome.decidedAt;
   }
@@ -751,12 +823,12 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
   }
 
   private transaction(id: string): MarketplaceTransaction {
+    const stored = this.options.store?.getTransaction(id);
+    if (stored) return stored;
+    if (this.options.store) throw new LifecycleError(`unknown transaction ${id}`);
     const cached = this.transactions.get(id);
     if (cached) return cached;
-    const stored = this.options.store?.getTransaction(id);
-    if (!stored) throw new LifecycleError(`unknown transaction ${id}`);
-    this.transactions.set(id, stored);
-    return stored;
+    throw new LifecycleError(`unknown transaction ${id}`);
   }
 
   private requireStage(transactionId: string): LifecycleStage {
@@ -816,14 +888,29 @@ export class EscrowTransactionLifecycle implements TransactionLifecycle {
   }
 
   private pastDeadline(transactionId: string, at: string): boolean {
+    const previous = this.options.store ? this.options.store.getOutcome?.(transactionId) : this.outcomes.get(transactionId);
+    if (previous?.state === 'unresolved') return true;
+    const checkedAt = this.options.clock ? Math.max(Date.parse(at), Date.parse(this.options.clock())) : Date.parse(at);
     const dispute = this.disputeRecord(transactionId);
-    return parseTime(at, 'at') > parseTime(dispute.resolveBy, 'resolveBy');
+    return checkedAt > parseTime(dispute.resolveBy, 'resolveBy');
   }
 
   private sessionFor(transactionId: string): EscrowSession {
     const funded = this.findStage(transactionId, 'escrow_funded');
     if (!funded) throw new LifecycleError('escrow is not funded');
     return sessionFromEvidence(funded.evidence);
+  }
+
+  private assertTime(transactionId: string, at: string): void {
+    const time = parseTime(at, 'at');
+    if (!this.hasTransaction(transactionId)) return;
+    const transaction = this.transaction(transactionId);
+    const history = this.history(transactionId);
+    const last = history[history.length - 1]?.at ?? transaction.createdAt;
+    const termsAt = transaction.versions[transaction.versions.length - 1]?.createdAt ?? last;
+    if (time < Math.max(Date.parse(last), Date.parse(termsAt))) {
+      throw new LifecycleError('at must not precede the transaction history');
+    }
   }
 
   private requireText(value: string, label: string): void {
