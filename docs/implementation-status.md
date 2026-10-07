@@ -1,8 +1,8 @@
 # Implementation status
 
-This page describes the marketplace after the lifecycle correctness fixes.
+This page describes the marketplace after the priority 2 product logic.
 The review date is 2026-10-07.
-The fixes build on main at commit `05790d6`.
+The change builds on main at commit `f353625`.
 Update this page when a change removes a listed limit.
 
 The product is the B2B and B2C marketplace with its reliability checker.
@@ -28,30 +28,29 @@ Read [Contract lifecycle](contract-lifecycle.md).
 
 | Feature | Current implementation | Remaining work |
 | --- | --- | --- |
-| Buyer and seller scores | Separate stored scores by category and role; outcome corrections rebuild affected scores | Controlled policy changes and complete history repair |
-| Scoring model | Unit event weights and a placeholder lower bound | Value weighting and a Beta credible bound |
-| Repeat-pair control | A decay interface; the event flow discards its weight | Stored pair counts and applied decay |
-| Fees and terms | Buyer and seller rate offers from a stub | Agreed fee curves, fee collection, and term enforcement |
-| KYC | Mock checks, tiers, history, expiry actions, and re-registration flags | A verified provider and enforced restrictions |
-| Invoice evidence | A stub compares supplied payment and due dates | Agreed terms hashes and verified settlement times |
-| Listings | Stored reads with fixture fallback | Listing writes and a buyer/seller offer flow |
-| Contract lifecycle | Signed terms, milestones, dispute tiers, remedies, durable escrow recovery, and audit history | Verified key registration, actual preprod testing, token receipt checks, and contract UI |
+| Buyer and seller scores | Separate stored scores by category and role; outcome corrections rebuild affected scores; `bun run scores:rebuild` rebuilds every score | Selected parameters and a paper/live history split |
+| Scoring model | Weighted Beta model: $W = a \cdot \ln(1 + v / v_0) \cdot D(n)$, the fifth-percentile lower bound, recorded weights, and `GET /reliability/scores/explain` | Selected value scales and display scale; calibration |
+| Repeat-pair control | Stored pair positions per buyer, seller, and category; hyperbolic decay applied to each event | Selected decay rate and pair direction; a contribution cap |
+| Fees and terms | Fee curve on both sides; accepted charges snapshot before a sale; collected, waived, or refunded from the outcome; exposure limits and invoice payment days enforced | Selected fee bounds and term scales; fees inside the escrow amount |
+| KYC | Mock checks, tiers, history, expiry, and re-registration flags; enforced before a sale, an invoice, a contract, and key registration | A verified provider |
+| Invoice evidence | Canonical terms hash at issue; payment checked for hash, currency, amount, and due date plus grace; overdue review | Live settlement source with the USDM receipt check |
+| Delivery evidence | Goods delivery and service acceptance checked against `terms.delivery` and `terms.service` | Carrier and inspector identity checks |
+| Listings | Listing writes, buyer offers, seller acceptance or decline, buyer withdrawal, and expiry | Caller authentication |
+| Contract lifecycle | Signed terms, milestones, dispute tiers, remedies, durable escrow recovery, audit history, KYC-gated key registration, and fee charges per milestone | Actual preprod testing, token receipt checks, contract UI, and score-based escrow terms |
 | Operator display | Read-only stored transactions, receipts, scores, KYC, and listings | Pagination and clear source labels |
 | Pooled funding | Paper deposits and deal allocations | Escrow integration, return credits, and reconciliation |
 
-The target value weight is $w = \ln(1 + v / v_0)$.
-The score stub does not use this weight or repeat-pair decay.
-Read [Reliability math](reliability-math.md) for the target equations.
-The lifecycle fixes implement unit-weight corrections only.
-The fee stub returns offers for one entity.
-Those offers are not charged totals for both participants.
-
+Read [Reliability math](reliability-math.md) for the equations.
+Read [Marketplace rules and writes](marketplace.md) for the checks, fees, listings, offers, and invoices.
 Read [scoring](../packages/reliability/src/scoring.ts),
-[event flow](../packages/reliability/src/event-flow.ts), and
-[fee policy](../packages/reliability/src/fees-policy.ts) for the implementations.
+[score ledger](../services/reliability/score-ledger.ts),
+[fee policy](../packages/reliability/src/fees-policy.ts), and
+[marketplace gate](../services/reliability/marketplace-gate.ts) for the implementations.
 
-The product owner must decide fee bounds, pair decay, and the KYC bar.
+Every parameter is a default.
+The product owner must decide fee bounds, value scales, pair decay, the KYC bar, and KYC caps.
 Delivery evidence, dispute policy, and preprod key ownership also need decisions.
+Run `bun run scores:rebuild` after a parameter change.
 
 ## Logic gaps
 
@@ -73,11 +72,10 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for stage and evidence ru
 
 | Area | Remaining work |
 | --- | --- |
-| Caller identity | Authenticate v1 participants and resolvers. Bind contract key registration to verified identity and KYC. |
+| Caller identity | Authenticate participants, sellers, buyers, and resolvers. Key registration checks KYC, but not who sends the request. |
 | External recovery | Add an operator reconciliation flow for a call that started but lost its response. Automatic resubmission stays blocked. |
 | Legacy records | Reconcile old live stages that lack proof. Repair score history when a valid baseline cannot be recovered. |
-| Policy history | Store value, pair weight, and policy inputs. Add controlled policy migrations and rebuilds. |
-| Agreement history | Store accepted charges separately from later score recommendations. |
+| Policy history | Version the selected parameters. Keep a paper score history apart from live evidence. |
 | Operator freshness | Add pagination, bounded reads, and clear source labels. |
 | Marketplace startup | Remove the legacy trading runtime and market-feed startup dependencies. Preserve shared storage and payment functions. |
 
@@ -100,15 +98,17 @@ Cancellation and refund actions do not return its allocated credit.
 Live custody requires a separate implementation.
 
 Actual preprod settlement has not been tested.
-The v1 demo routes do not authenticate callers.
-Contract actions check signatures, but initial key registration is open.
+The v1 demo routes and the marketplace write routes do not authenticate callers.
+Contract actions check signatures. Key registration needs a KYC-verified entity.
+Invoice payments are paper. They record `settlementVerified: false`.
 
 ## Validation
 
-All 546 local tests pass under `packages`, `services`, and `ui`.
+All 613 local tests pass under `packages`, `services`, and `ui`.
 The control and payment TypeScript checks pass.
 Lint passes.
 Regression tests cover all seven gaps, restart behavior, and two database writers.
+Score tests reproduce the worked example in the math page.
 Escrow checks use injected ports and offline adapter tests.
 They make no live chain calls.
 Existing PR CI also runs the workflow tests and workflow TypeScript check.

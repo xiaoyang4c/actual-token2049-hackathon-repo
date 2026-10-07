@@ -80,11 +80,11 @@ The control API demo routes already exist. Extend the demo routes. Do not replac
 
 Take the next free migration number.
 
-These numbers are reserved: `007` for the math lane, `008` for KYC, and `009` for lane D.
+Migrations `001` to `014` and `016` are used.
 
-Migrations `010`, `011`, `012`, `013`, and `014` are used.
+Number `015` is reserved for the settlement anchor branch.
 
-The next free number is `015`.
+The next free number is `017`.
 
 Use "paper" for a simulated fill. Use "live" for a real venue order.
 

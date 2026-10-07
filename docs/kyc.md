@@ -111,6 +111,23 @@ KYC tables are in `packages/db/migrations/008_lane_a_kyc.sql`.
 
 Lifecycle tables are in `packages/db/migrations/011_lane_a_lifecycle.sql`.
 
+## Enforcement
+
+The marketplace gate reads the entity row and the KYC profile before these actions:
+
+- opening a sale, accepting an offer, or issuing an invoice
+- creating a contract
+- registering a contract signing key
+- creating a listing
+
+A party passes when `countsAsVerified` is true for its row and its verification is inside `verificationTtlMs`.
+A contract template can raise the required tier with `minimumKycTier`.
+An entity that re-registers the identity of a rejected entity does not pass.
+An entity row created outside onboarding counts by its row status.
+Read [Marketplace rules and writes](marketplace.md) for the violation codes.
+
+KYC tier `none` has a zero exposure cap. The terms policy gives it no limit.
+
 ## Fees and terms lane
 
 Read `policyInput` on the KYC view.

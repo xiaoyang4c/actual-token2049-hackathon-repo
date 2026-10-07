@@ -89,6 +89,14 @@ The marketplace UI reads the control API.
 | `POST` | `/reliability/contracts/ruling` | Submit a Tier 3 ruling signed by the mediator |
 | `POST` | `/reliability/contracts/tick` | Run one contract scheduler pass |
 | `GET` | `/reliability/contracts/audit` | Read a contract audit log and its hash-chain status |
+| `POST` | `/reliability/listings` | Create a listing |
+| `POST` | `/reliability/offers` | Make, then `/accept`, `/decline`, or `/withdraw` an offer |
+| `GET` | `/reliability/offers` | Read offers |
+| `POST` | `/reliability/invoices` | Issue an invoice, then `/settle` or `/review` it |
+| `GET` | `/reliability/invoices` | Read an invoice by `id` |
+| `GET` | `/reliability/fees` | Read the accepted fee charge for a transaction |
+| `GET` | `/reliability/fees/quote` | Preview the checks and fees for a sale |
+| `GET` | `/reliability/scores/explain` | Explain each score change |
 
 Entity, listing, and transaction reads accept an optional `id` query.
 Score reads accept an optional `entityId` query.
@@ -96,7 +104,8 @@ Receipt reads require `transactionId`.
 Lifecycle reads require `transactionId` and accept an optional `now` query.
 Collections include stored records. A stored record takes precedence over a fixture with the same ID.
 Use the lifecycle read for stage history and current terms recommendations.
-Listing and offer write routes still need implementation.
+A sale, an invoice, and a contract open only after KYC and limit checks.
+Read [Marketplace rules and writes](docs/marketplace.md) for the checks, fees, listings, offers, and invoices.
 
 Read [Transaction lifecycle](docs/reliability-lifecycle.md) for actions and evidence rules.
 Read [Contract lifecycle](docs/contract-lifecycle.md) for contract templates, tiered disputes, signed party actions, and live Masumi escrow.
@@ -119,10 +128,11 @@ Paper stages remain simulations.
 Commands use durable identities and saved responses for safe retries.
 Read [chain evidence](docs/reliability-lifecycle.md#chain-evidence) before you use these stages.
 
-The fee stub returns buyer and seller rate offers for one entity.
-The lifecycle does not collect platform fees or enforce those offers.
-The scoring stub uses unit event weights.
-It does not apply value weighting or repeat-pair decay.
+Scores use the weighted Beta model with value weights, repeat-pair decay, and the fifth-percentile lower bound.
+Each sale records an accepted buyer fee and seller fee. The paper ledger collects, waives, or refunds them.
+The parameters are defaults until the product owner selects them.
+Run `bun run scores:rebuild` after a policy change.
+Read [Reliability math](docs/reliability-math.md).
 
 Run `bun run funding:demo` for the paper pool ledger.
 Read [paper omnibus funding](docs/omnibus-funding.md) for allocation rules and live custody requirements.
