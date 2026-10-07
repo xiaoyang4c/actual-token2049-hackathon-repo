@@ -141,7 +141,7 @@ export function OperatorPage() {
       <Reveal>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Tabs value={view} onValueChange={(v) => setView(v as View)}>
-            <TabsList className="h-auto flex-wrap gap-0.5 rounded-[11px] border border-white/70 bg-white/45 p-1 backdrop-blur-md">
+            <TabsList className="h-auto flex-wrap gap-0.5 group-data-horizontal/tabs:h-auto rounded-[11px] border border-white/70 bg-white/45 p-1 backdrop-blur-md">
               {([['transactions', 'Transactions', transactions.length], ['attention', 'Needs attention', attentionTx.length + attentionKyc.length], ['participants', 'Participants', participants.length], ['listings', 'Listings', listings.length]] as const).map(([value, label, n]) => (
                 <TabsTrigger key={value} value={value} className="h-9 shrink-0 rounded-[8px] px-2.5 text-[13px] data-active:bg-ink data-active:text-white sm:px-3.5">
                   {label}<span className="mono ml-1.5 text-[11px] opacity-60">{n}</span>

@@ -4,6 +4,7 @@
 @import "@fontsource-variable/unbounded";
 @import "@fontsource-variable/sora";
 @import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource/archivo-black";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -187,6 +188,18 @@
   font-family: var(--font-mono);
   font-variant-numeric: slashed-zero;
   letter-spacing: -0.01em;
+}
+
+/*
+ * The Tally wordmark is set in Krungthep, as in the deck. Krungthep ships with
+ * macOS and its licence does not allow serving it as a web font, so it is used
+ * where the visitor has it installed; Archivo Black is the close fallback.
+ */
+.wordmark {
+  font-family: Krungthep, 'Archivo Black', var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1;
 }
 
 .display {
