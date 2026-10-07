@@ -63,7 +63,7 @@ B2C evidence must establish delivery or service acceptance under the agreed term
 Use the natural logarithm for the value weight.
 
 $$
-w_j=\ln\!\left(1+\frac{v_j}{v_0}\right).
+w_j=\ln\left(1+\frac{v_j}{v_0}\right).
 $$
 
 The ratio inside the logarithm is dimensionless.
@@ -76,7 +76,7 @@ The proposed decay curve is:
 $$
 D_\lambda(n)=\frac{1}{1+\lambda n},
 \qquad
-W_j=a_j\,w_j\,D_\lambda(n_j).
+W_j=a_j\cdot w_j\cdot D_\lambda(n_j).
 $$
 
 The first eligible transaction has $n_j=0$ and no pair reduction.
@@ -184,7 +184,7 @@ Use the applicable category for each bound.
 Take both score snapshots before agreeing on the transaction terms.
 Do not price an agreement from the success event it later creates.
 
-A proposed fee curve for side $x\in\{b,s\}$ is:
+A proposed fee curve for side $x\in\lbrace b,s\rbrace$ is:
 
 $$
 f_x(L_x)=f_{x,\min}+
@@ -230,7 +230,7 @@ d(L)=d_{\max}(1-L),\qquad p(L)=k(1-L),
 $$
 
 $$
-u(L)=\max\!\left(u_{\min},u_0(1-L)\right),
+u(L)=\max(u_{\min},u_0(1-L)),
 $$
 
 $$
@@ -247,7 +247,7 @@ The policy must specify rounding and which role controls each term.
 A proposed exposure limit is:
 
 $$
-E(L)=\min\!\left(E_{\max}L^\gamma,E_{\mathrm{KYC}}\right),
+E(L)=\min(E_{\max}L^\gamma,E_{\mathrm{KYC}}),
 \qquad\gamma>0.
 $$
 
