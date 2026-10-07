@@ -101,6 +101,7 @@ export async function runAction(
     }
     return lifecycle.fund({
       transactionId,
+      commandId: optionalText(body, 'commandId'),
       amountLovelace: amount,
       sellerReturnAddress: textField(body, 'sellerReturnAddress'),
       disputeWindowEnds: textField(body, 'disputeWindowEnds'),
@@ -117,15 +118,21 @@ export async function runAction(
   if (action === 'release') {
     return lifecycle.release({
       transactionId,
+      commandId: optionalText(body, 'commandId'),
       at,
       evidence: body.evidence === undefined ? undefined : evidenceField(body.evidence),
     });
   }
   if (action === 'refund') {
+    if (body.fault !== undefined && body.fault !== 'buyer') {
+      throw new LifecycleError('refund fault must be buyer when supplied');
+    }
     return lifecycle.refund({
       transactionId,
+      commandId: optionalText(body, 'commandId'),
       at,
       reason: optionalText(body, 'reason'),
+      fault: body.fault === 'buyer' ? 'buyer' : undefined,
     });
   }
   if (action === 'cancel') {
@@ -136,6 +143,7 @@ export async function runAction(
   if (action === 'terminate') {
     return lifecycle.mutualTerminate({
       transactionId,
+      commandId: optionalText(body, 'commandId'),
       at,
       buyerConsentAt: textField(body, 'buyerConsentAt'),
       sellerConsentAt: textField(body, 'sellerConsentAt'),
@@ -159,6 +167,7 @@ export async function runAction(
     }
     return lifecycle.resolveDispute({
       transactionId,
+      commandId: optionalText(body, 'commandId'),
       at,
       resolver: textField(body, 'resolver'),
       decision,

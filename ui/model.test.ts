@@ -1,7 +1,7 @@
 import {describe, expect, test} from 'bun:test';
 import {FIXTURE} from './fixture.js';
 import {formatFee, formatPct, formatValue, label} from './format.js';
-import {buildView, escrowOf, evidenceRows, executionOf, fillMode} from './model.js';
+import {buildView, escrowOf, evidenceRows, executionOf, fillMode, receiptLink} from './model.js';
 import {deskTitle, renderDesk} from './render.js';
 
 const sample = () => structuredClone(FIXTURE);
@@ -36,7 +36,7 @@ describe('marketplace read model', () => {
     snapshot.receipts['tx-invoice-1'].outcome.state = 'disputed';
     const view = buildView(snapshot);
     expect(view.metrics.completed).toBe(1);
-    expect(view.metrics.attention).toBe(1);
+    expect(view.metrics.attention).toBe(3);
     expect(view.metrics.unknown).toBe(1);
     expect(view.transactions[0].outcome).toBe('unknown');
   });
@@ -94,6 +94,100 @@ describe('marketplace read model', () => {
     const entity = buildView(snapshot).entities.find((entry: {id: string}) => entry.id === 'entity-established');
     expect(entity.kycBadge).toBe('unknown');
     expect(entity.kycSource).toBe('Mock KYC unavailable');
+  });
+});
+
+describe('needs attention', () => {
+  const now = Date.parse('2026-10-07T12:00:00Z');
+
+  test('includes pending and unavailable outcomes and counts each record once', () => {
+    const snapshot = {
+      ...sample(),
+      kycById: {'entity-established': {badge: 'expired', checkPending: true}},
+    };
+    snapshot.entities[0].kycStatus = 'unverified';
+    Object.assign(snapshot.receipts['tx-service-1'].outcome, {
+      state: 'disputed', resolveBy: '2026-10-06T12:00:00Z',
+    });
+    snapshot.receipts['tx-invoice-1'].outcome.state = 'pending';
+    const goodsId = snapshot.transactions[2].id;
+    delete snapshot.receipts[goodsId];
+    const view = buildView(snapshot, {}, {tab: 'attention'}, now);
+    expect(view.rows.map((row: {id: string}) => row.id)).toEqual([
+      'tx-service-1', 'tx-invoice-1', goodsId,
+    ]);
+    expect(view.rows[0].attentionReasons).toEqual(['Disputed', 'Resolution deadline passed']);
+    expect(view.attentionEntities[0].attentionReasons).toEqual(['KYC expired', 'KYC check pending']);
+    expect(view.metrics.attention).toBe(4);
+    expect(view.metrics.attentionTransactions).toBe(3);
+    expect(view.metrics.attentionParticipants).toBe(1);
+    expect(renderDesk(view)).toContain('Resolution deadline passed');
+    expect(deskTitle(view)).toContain('Needs attention');
+  });
+
+  test('does not turn a past deadline into a failed or unresolved outcome', () => {
+    const snapshot = sample();
+    Object.assign(snapshot.receipts['tx-service-1'].outcome, {
+      state: 'disputed', resolveBy: '2026-10-07T12:00:00Z',
+    });
+    expect(buildView(snapshot, {}, {}, now - 1).transactions[0].attentionReasons).toEqual(['Disputed']);
+    const overdue = buildView(snapshot, {}, {}, now).transactions[0];
+    expect(overdue.outcome).toBe('disputed');
+    expect(overdue.attentionReasons).toContain('Resolution deadline passed');
+    snapshot.receipts['tx-service-1'].outcome.resolveBy = 'invalid';
+    expect(buildView(snapshot, {}, {}, now).transactions[0].attentionReasons).toEqual(['Disputed']);
+    snapshot.receipts['tx-service-1'].outcome.state = 'successful';
+    snapshot.receipts['tx-service-1'].outcome.resolveBy = '2020-01-01T00:00:00Z';
+    expect(buildView(snapshot, {}, {}, now).transactions[0].attentionReasons).toEqual([]);
+  });
+
+  test('filters both groups by participant and keeps global counts independent of filters', () => {
+    const snapshot = {...sample(), kycErrors: {'entity-established': 'KYC unavailable'}};
+    snapshot.receipts['tx-invoice-1'].outcome.state = 'failed';
+    const view = buildView(snapshot, {}, {tab: 'attention', query: 'meridian', type: 'invoice'}, now);
+    expect(view.rows.map((row: {id: string}) => row.id)).toEqual(['tx-invoice-1']);
+    expect(view.attentionEntities.map((entity: {id: string}) => entity.id)).toEqual(['entity-established']);
+    expect(view.metrics.attention).toBe(3);
+    const empty = buildView(snapshot, {}, {tab: 'attention', query: 'missing'}, now);
+    expect(empty.rows).toEqual([]);
+    expect(empty.attentionEntities).toEqual([]);
+    expect(empty.metrics.attention).toBe(3);
+    expect(renderDesk(empty)).toContain('No matching KYC issues');
+  });
+
+  test('does not use KYC badge examples or unverified status as alerts', () => {
+    const snapshot = sample();
+    snapshot.entities[0].kycStatus = 'unverified';
+    const view = buildView(snapshot, {}, {tab: 'attention'}, now);
+    expect(view.attentionEntities).toEqual([]);
+    expect(view.metrics.attention).toBe(0);
+    expect(renderDesk(view)).toContain('No transactions need attention');
+    expect(renderDesk(view)).toContain('No KYC issues in loaded participants');
+  });
+});
+
+describe('receipt copy actions', () => {
+  test('encodes IDs and removes unrelated URL query parameters and fragments', () => {
+    const id = 'a/b? &+#=☃';
+    const url = new URL(receiptLink(id, 'http://localhost:8791/index.html?other=value#receipt'));
+    expect(url.origin).toBe('http://localhost:8791');
+    expect(url.pathname).toBe('/');
+    expect([...url.searchParams]).toEqual([['transactionId', id]]);
+    expect(url.hash).toBe('');
+  });
+
+  test('shows feedback only for the selected receipt and escapes fallback text', () => {
+    const view = buildView(sample());
+    const copy = {
+      transactionId: view.selected.id, fallback: true, kind: 'link',
+      value: 'http://localhost:8791/?transactionId="<img>', message: 'Copy the selected text.',
+    };
+    const html = renderDesk(view, {}, 'light', copy);
+    expect(html).toContain('Copy ID');
+    expect(html).toContain('Copy receipt link');
+    expect(html).toContain('id="copy-value" readonly');
+    expect(html).not.toContain('<img>');
+    expect(renderDesk(view, {}, 'light', {...copy, transactionId: 'other'})).not.toContain('id="copy-value"');
   });
 });
 

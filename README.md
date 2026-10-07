@@ -67,11 +67,11 @@ The marketplace UI reads the control API.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/reliability/entities` | Read participant fixtures |
+| `GET` | `/reliability/entities` | Read stored participants and fixtures |
 | `GET` | `/reliability/scores` | Read stored scores and fixture scores |
-| `GET` | `/reliability/listings` | Read listing fixtures |
-| `GET` | `/reliability/transactions` | Read transaction fixtures |
-| `GET` | `/reliability/receipts` | Read a fixture receipt and fee offers |
+| `GET` | `/reliability/listings` | Read stored listings and fixtures |
+| `GET` | `/reliability/transactions` | Read stored transactions and fixtures |
+| `GET` | `/reliability/receipts` | Read a stored or fixture receipt and fee offers |
 | `GET` | `/reliability/kyc` | Read a mock KYC record |
 | `GET` | `/reliability/lifecycle` | Read a stored lifecycle by transaction ID |
 | `POST` | `/reliability/lifecycle/open` | Open a stored transaction |
@@ -100,8 +100,9 @@ Entity, listing, and transaction reads accept an optional `id` query.
 Score reads accept an optional `entityId` query.
 Receipt reads require `transactionId`.
 Lifecycle reads require `transactionId` and accept an optional `now` query.
-Collection reads do not discover new stored deals.
-Use the lifecycle read to inspect a stored deal by ID.
+Collections include stored records. A stored record takes precedence over a fixture with the same ID.
+Use the lifecycle read for stage history and current terms recommendations.
+Listing and offer write routes still need implementation.
 
 Read [Transaction lifecycle](docs/reliability-lifecycle.md) for actions and evidence rules.
 Read [Contract lifecycle](docs/contract-lifecycle.md) for contract templates, tiered disputes, signed party actions, and live Masumi escrow.
@@ -116,9 +117,12 @@ Preprod requests need `CARDANO_MODE=preprod` and `CARDANO_ALLOW_NETWORK=true`.
 An enabled preprod request has `mode: live`.
 This mode does not prove confirmed settlement.
 
-`payment_settled` records an application stage.
-It does not prove a confirmed seller payout.
-`refunded` does not prove a completed buyer refund.
+The v1 lifecycle remains the paper demo. Its standard adapter rejects live funding.
+Use the signed [contract lifecycle](docs/contract-lifecycle.md) for live escrow.
+A v1 live port must verify `escrow_funded`, `payment_settled`, and `refunded` on chain.
+An accepted action stays pending until the required money movement is confirmed.
+Paper stages remain simulations.
+Commands use durable identities and saved responses for safe retries.
 Read [chain evidence](docs/reliability-lifecycle.md#chain-evidence) before you use these stages.
 
 The fee stub returns buyer and seller rate offers for one entity.
@@ -132,7 +136,8 @@ This ledger does not send chain transactions or fund lifecycle escrow.
 
 Read [Cardano payment adapters](docs/cardano-payments.md) and
 [settlement evidence](docs/masumi-settlement.md) for shared payment components.
-Their confirmation checks are separate from the marketplace lifecycle.
+The v1 verification seam uses the shared settlement verifier.
+The contract adapter has separate settlement checks. Read its known limits before a live run.
 
 ## Checks
 

@@ -69,6 +69,8 @@ export interface EscrowRefundResult {
 
 /** On-chain or simulated observation for one escrow session. */
 export interface EscrowStatus {
+  /** True only after the adapter verifies the bound chain transaction and outputs. */
+  verified?: boolean;
   simulated: boolean;
   mode: 'paper'|'live';
   onChainState: string|null;
@@ -117,6 +119,9 @@ export interface EscrowPort {
   release(session: EscrowSession, resultHash: string): Promise<EscrowReleaseResult>;
   refund(session: EscrowSession): Promise<EscrowRefundResult>;
   status(session: EscrowSession): Promise<EscrowStatus>;
+  verify?(
+    session: EscrowSession, action: 'fund'|'release'|'refund', resultHash?: string,
+  ): Promise<EscrowStatus>;
   mutualTerminate(
     session: EscrowSession, consent: EscrowConsent,
   ): Promise<EscrowMutualTerminationResult>;

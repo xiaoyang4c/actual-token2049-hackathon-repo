@@ -1,6 +1,6 @@
 import { FIXTURE } from "./fixture.js"
 import { loadMarketplace, loadTransaction } from "./data.js"
-import { buildView } from "./model.js"
+import { buildView, receiptLink } from "./model.js"
 import { AREAS, deskTitle, renderDesk } from "./render.js"
 import {
   loadCase, loadContract, loadContracts, loadProfile, loadRulingOptions, loadRulingPayload, searchCompanies,
@@ -17,6 +17,8 @@ let lookup = { value: "", busy: false, error: "" }
 let inspectedId = ""
 let lookupVersion = 0
 let pollRunning = false
+let copy = {}
+let copyVersion = 0
 
 const startArea = new URL(location.href).searchParams.get("view")
 const tally = {
@@ -41,26 +43,51 @@ function paint() {
   const selection = textField ? [active.selectionStart, active.selectionEnd] : null
   const disclosures = [...app.querySelectorAll("details[open]")].map((element) => element.id)
   const scroll = app.querySelector(".table-wrap")?.scrollLeft ?? 0
+  const navScroll = app.querySelector("nav")?.scrollLeft ?? 0
   const windowScroll = window.scrollY
   const view = buildView(snapshot, meta, controls)
   controls.page = view.page
   document.title = deskTitle(view, tally.area, tally.operatorTab)
-  app.innerHTML = renderDesk(view, lookup, document.documentElement.dataset.theme, tally)
+  app.innerHTML = renderDesk(view, lookup, document.documentElement.dataset.theme, copy, tally)
   for (const id of disclosures) {
     const detail = document.getElementById(id)
     if (detail instanceof HTMLDetailsElement) detail.open = true
   }
   const table = app.querySelector(".table-wrap")
   if (table) table.scrollLeft = scroll
+  const nav = app.querySelector("nav")
+  if (nav) nav.scrollLeft = navScroll
   const focus = focusId ? document.getElementById(focusId) :
     summaryId ? document.getElementById(summaryId)?.querySelector("summary") : null
   if (focus) {
     focus.focus({ preventScroll: true })
+    if (nav?.contains(focus)) focus.scrollIntoView({block: "nearest", inline: "nearest", behavior: "instant"})
     if (selection && (focus instanceof HTMLInputElement || focus instanceof HTMLTextAreaElement) && focus.type !== "radio") {
       try { focus.setSelectionRange(...selection) } catch {}
     }
   }
   window.scrollTo({top: windowScroll, behavior: "instant"})
+}
+
+async function copyReceipt(id, kind) {
+  const version = ++copyVersion
+  const value = kind === "id" ? id : receiptLink(id, location.href)
+  copy = {transactionId: id, kind, value, busy: true, message: "Copying…"}
+  paint()
+  try {
+    await navigator.clipboard.writeText(value)
+    if (version !== copyVersion) return
+    copy = {...copy, busy: false, message: kind === "id" ? "Transaction ID copied." : "Receipt link copied. Open it on this local operator UI."}
+  } catch {
+    if (version !== copyVersion) return
+    copy = {...copy, busy: false, fallback: true, message: "Clipboard access is unavailable. Copy the selected text below."}
+  }
+  paint()
+  if (copy.fallback) {
+    const field = document.getElementById("copy-value")
+    field?.focus({preventScroll: true})
+    field?.select()
+  }
 }
 
 function mergeReceipt(target, receipt) {
@@ -256,6 +283,10 @@ function setArea(area) {
 app.addEventListener("click", (event) => {
   const button = event.target.closest("button")
   if (!button || button.disabled) return
+  if (button.hasAttribute("data-copy")) {
+    copyReceipt(button.dataset.transactionId, button.dataset.copy)
+    return
+  }
   if (button.hasAttribute("data-theme-toggle")) {
     const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"
     document.documentElement.dataset.theme = theme
@@ -275,9 +306,17 @@ app.addEventListener("click", (event) => {
   } else if (button.hasAttribute("data-company")) {
     openCompany(button.dataset.company)
     return
+  } else if (button.hasAttribute("data-open-attention")) {
+    setArea("operator")
+    tally.operatorTab = "attention"
+    controls = {tab: "attention", query: "", type: "", outcome: "", page: 0}
+  } else if (button.hasAttribute("data-open-participant")) {
+    setArea("operator")
+    tally.operatorTab = "participants"
+    controls = {tab: "participants", query: button.dataset.openParticipant, type: "", outcome: "", page: 0}
   } else if (button.hasAttribute("data-tab")) {
     tally.operatorTab = button.dataset.tab
-    if (button.dataset.tab !== "contracts") controls = { ...controls, tab: button.dataset.tab, query: "", page: 0 }
+    if (button.dataset.tab !== "contracts") controls = {tab: button.dataset.tab, query: "", type: "", outcome: "", page: 0}
   } else if (button.hasAttribute("data-type")) {
     controls = { ...controls, type: button.dataset.type, selectedId: undefined, page: 0 }
   } else if (button.hasAttribute("data-select-id")) {
@@ -287,6 +326,10 @@ app.addEventListener("click", (event) => {
     controls.selectedId = undefined
   } else return
   paint()
+  if (button.hasAttribute("data-open-participant")) {
+    document.getElementById("page-title")?.focus({preventScroll: true})
+    window.scrollTo({top: 0, behavior: "instant"})
+  }
   if (button.hasAttribute("data-select-id") && window.matchMedia("(max-width: 980px)").matches) {
     document.getElementById("receipt")?.scrollIntoView({ block: "start" })
   }

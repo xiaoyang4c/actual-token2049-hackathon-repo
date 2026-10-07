@@ -106,7 +106,7 @@ describe('tally views render safely', () => {
     expect(renderCompanies(tally())).toContain('Try “kopi”');
     const view = buildView({}, {source: 'connected'}, {});
     for (const area of ['deals', 'mediation', 'companies', 'operator']) {
-      const html = renderDesk(view, {}, 'light', tally({area}));
+      const html = renderDesk(view, {}, 'light', {}, tally({area}));
       expect(html).toContain('aria-label="Tally home"');
       expect(html).not.toContain('Reliability home');
     }
