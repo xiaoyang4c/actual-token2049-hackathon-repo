@@ -1,0 +1,16 @@
+# Public entry point for Tally. The payment service is NOT exposed here (it listens on 127.0.0.1:3001 only).
+13-210-42-0.sslip.io {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	handle_path /brand/* {
+		root * /srv/tally/brand
+		file_server
+	}
+	handle {
+		respond "Tally" 200
+	}
+}
