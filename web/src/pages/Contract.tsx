@@ -46,6 +46,7 @@ export function ContractPage() {
   const v = view.data
   const k = kase.data
   const m = v.milestones[0]
+  const fault = m.reliability?.fault ?? 'none'
   const rawNext = summary?.milestones[0]?.next
   const next = rawNext && rawNext.actor !== 'none' ? rawNext : null
   const outcome = summary?.milestones[0]?.outcome
@@ -78,7 +79,7 @@ export function ContractPage() {
         <div className="mt-6 flex flex-col gap-3 rounded-[12px] bg-black/[0.035] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           {next ? (
             <p className="text-[14px]"><span className="font-semibold">Waiting for the {next.actor}</span><span className="text-ink-2"> · {next.action}</span>{next.dueAt ? <span className="text-ink-3"> · by {dateTime(next.dueAt.ms)}, <Countdown ms={next.dueAt.ms} /></span> : null}</p>
-          ) : <p className="text-[14px] text-ink-2">{outcome ? <><span className="font-semibold text-ink">Closed</span> · {pretty(outcome.toLowerCase())}{m.reliability ? `, recorded as ${m.reliability.state}${m.reliability.fault !== 'none' ? ` with the ${m.reliability.fault} at fault` : ''}` : ''}.</> : k.nextStep}</p>}
+          ) : <p className="text-[14px] text-ink-2">{outcome ? <><span className="font-semibold text-ink">Closed</span> · {pretty(outcome.toLowerCase())}{m.reliability ? `, recorded as ${m.reliability.state}${fault !== 'none' ? ` with the ${fault} at fault` : ''}` : ''}.</> : k.nextStep}</p>}
           {inT3 ? <Link to={`/mediation?case=${id}`} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] bg-ink px-3.5 text-[13px] font-semibold text-white hover:bg-ink-2"><Gavel className="size-4" />Open the case</Link> : null}
         </div>
       </header>
@@ -154,7 +155,7 @@ export function ContractPage() {
             {m.reliability ? (
               <KV rows={[
                 ['Result', <Tag key="r" tone={m.reliability.state === 'successful' ? 'up' : m.reliability.state === 'failed' ? 'down' : 'quiet'}>{pretty(m.reliability.state)}</Tag>],
-                ['At fault', pretty(m.reliability.fault)],
+                ['At fault', pretty(fault)],
                 ['Confidence', m.reliability.verificationConfidence !== undefined ? pct(m.reliability.verificationConfidence) : '—'],
                 ['Record id', <span key="t" className="mono text-[12px]">{m.reliability.transactionId.split('/').pop()}</span>],
               ]} />

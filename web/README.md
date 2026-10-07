@@ -21,6 +21,9 @@ The dev server proxies `/reliability/*` to the control API (`TALLY_API_URL`, def
 that the Coworkers are offline; every other view works.
 
 `bun run build` type-checks and writes `dist/`. `bun run lint` runs oxlint.
+`bun run test` renders the contract page with actual API responses from the paper showcase.
+The tests cover outcomes that omit `fault`. The tests use a temporary database and remove it after the run.
+CI runs all three checks. Read the [Bun testing guide](https://bun.com/docs/test/writing-tests) for the test runner.
 
 ## Views and routes
 
@@ -63,7 +66,8 @@ Each function instance uses the same fallback IDs.
 When the hosted Coworker is offline, Ask a Coworker answers without a model in the same request.
 The fallback accepts the fill-in format. Plain English gets the fill-in instructions.
 
-```sh
-bunx vercel link --project tally-origins   # once
-bunx vercel deploy --prod
-```
+Deploy production from `main`. Merge changes through a pull request.
+In the Vercel project, open **Settings > Environments > Production > Branch Tracking**.
+Set the production branch to `main` and save it. Later merges into `main` start production deployments.
+If the merge already happened, create a deployment from `main` in the project's **Deployments** page.
+Read the [Vercel Git deployment guide](https://vercel.com/docs/git#production-branch) for these project settings.
