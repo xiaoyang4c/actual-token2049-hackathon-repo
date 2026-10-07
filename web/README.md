@@ -52,9 +52,9 @@ for the white-to-gray theme. Type: Unbounded, Sora, JetBrains Mono.
 
 <https://tally-origins.vercel.app> is built from this repository. [`vercel.json`](../vercel.json) builds
 `web/` and routes `/reliability/*` and `/coworkers/ask` to [`api/demo.ts`](../api/demo.ts), a Vercel
-function on the Bun runtime. On a cold start the function seeds a paper database in `/tmp` with the six
-showcase contracts and their settlement fingerprints (`submit: false`, nothing goes to the chain). It
-serves the control API's GET routes only. Ask a Coworker runs without a model and answers in the same
+function on the Bun runtime. The build runs [`api/_seed.ts`](../api/_seed.ts), which seeds one paper
+database with the six showcase contracts and their settlement fingerprints (`submit: false`, nothing goes
+to the chain), so every function instance serves the same ids. The function the control API's GET routes only. Ask a Coworker runs without a model and answers in the same
 request, so the fill-in format works and plain English gets the fill-in instructions.
 
 ```sh

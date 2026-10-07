@@ -2,11 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "bunVersion": "1.x",
   "installCommand": "bun install && cd web && bun install",
-  "buildCommand": "cd web && bun run build",
+  "buildCommand": "bun run api/_seed.ts && cd web && bun run build",
   "outputDirectory": "web/dist",
   "functions": {
     "api/demo.ts": {
-      "includeFiles": "{packages/db/migrations/**,packages/reliability/src/contract-lifecycle/templates/**}",
+      "includeFiles": "{.demo-data/**,packages/db/migrations/**,packages/reliability/src/contract-lifecycle/templates/**}",
       "maxDuration": 30
     }
   },
