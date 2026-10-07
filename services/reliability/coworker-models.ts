@@ -307,26 +307,58 @@ export interface RunnableTool extends ToolSpec {
  * quota or stays overloaded in the middle of an answer, the answer starts
  * again on the next model.
  * That is safe because every Coworker tool only reads (a draft uses a sandbox).
+ *
+ * `history` holds earlier chat messages as text only. They go first, so the
+ * model reads the conversation before the new message.
  */
 export async function runWithTools(
   provider: ModelProvider, system: string, userText: string, tools: RunnableTool[], maxSteps = MAX_TOOL_STEPS,
+  history: ChatMessage[] = [],
 ): Promise<{text: string; toolCalls: number}> {
   for (let restart = 0; ; restart++) {
     try {
-      return await converse(provider, system, userText, tools, maxSteps);
+      return await converse(provider, system, userText, tools, maxSteps, history);
     } catch (error) {
       if (!(error instanceof ModelBusyError) || restart >= 2 || !provider.available()) throw error;
     }
   }
 }
 
+/** One earlier message in a chat. */
+export interface ChatMessage {
+  role: 'user'|'assistant';
+  text: string;
+}
+
+/**
+ * Earlier messages as model turns. Bedrock needs user and assistant turns to
+ * alternate and to start with a user turn, so this drops a leading assistant
+ * message and joins two messages in a row from the same side. The new message
+ * must follow an assistant turn, so a trailing user message is returned apart.
+ */
+export function historyTurns(history: ChatMessage[]): {turns: ChatTurn[]; pending: string|null} {
+  const merged: ChatMessage[] = [];
+  for (const message of history) {
+    const text = message.text.trim();
+    if (!text || (!merged.length && message.role === 'assistant')) continue;
+    const last = merged.at(-1);
+    if (last?.role === message.role) last.text = `${last.text}\n\n${text}`;
+    else merged.push({role: message.role, text});
+  }
+  const pending = merged.at(-1)?.role === 'user' ? (merged.pop() as ChatMessage).text : null;
+  const turns = merged.map((message): ChatTurn => (message.role === 'user' ? {role: 'user', text: message.text} : {role: 'assistant', text: message.text, calls: []}));
+  return {turns, pending};
+}
+
 /** One conversation on one model. Tool errors go back to the model as data. */
 async function converse(
   provider: ModelProvider, system: string, userText: string, tools: RunnableTool[], maxSteps: number,
+  history: ChatMessage[],
 ): Promise<{text: string; toolCalls: number}> {
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   const specs: ToolSpec[] = tools.map(({name, description, parameters}) => ({name, description, parameters}));
-  const turns: ChatTurn[] = [{role: 'user', text: userText}];
+  const earlier = historyTurns(history);
+  const turns: ChatTurn[] = [...earlier.turns, {role: 'user', text: earlier.pending ? `${earlier.pending}\n\n${userText}` : userText}];
   let toolCalls = 0;
   for (let step = 0; step < maxSteps; step++) {
     const reply = await provider.reply(system, turns, specs);

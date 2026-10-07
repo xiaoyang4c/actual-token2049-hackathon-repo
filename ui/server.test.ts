@@ -75,7 +75,7 @@ describe("operator ui server", () => {
       expect(favicon.headers.get("content-type")).toContain("svg")
 
       for (const name of ["entities", "scores", "listings", "transactions", "receipts", "lifecycle", "kyc", "kyc/fixtures",
-        "contracts", "contracts/list", "contracts/templates", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload",
+        "contracts", "contracts/list", "contracts/templates", "contracts/audit", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload",
         "profile", "profile/search", "anchors/contract", "anchors/company"]) {
         const path = `/reliability/${name}`
         const query = new URLSearchParams({transactionId: "a/b & c", entityId: "entity-new", now: "2026-10-06T12:00:00Z"})
@@ -123,8 +123,33 @@ describe("operator ui server", () => {
       expect(seen[1]?.visitor).toMatch(/127\.0\.0\.1/)
 
       expect((await fetch(`${origin}/coworkers/ask`, { method: "PUT", body })).status).toBe(405)
-      expect((await fetch(`${origin}/coworkers/ask`, { method: "POST", body: "x".repeat(17_000) })).status).toBe(413)
+      expect((await fetch(`${origin}/coworkers/ask`, { method: "POST", body: "x".repeat(300_000) })).status).toBe(413)
       expect(seen).toHaveLength(2)
+    } finally {
+      ui.stop(true)
+      ask.stop(true)
+    }
+  })
+
+  test("lets only the listed web app origins call the chat from the browser", async () => {
+    const ask = Bun.serve({ port: 0, fetch: () => Response.json({ job: { id: "j1" } }, { status: 202 }) })
+    const app = "https://tally-origins.vercel.app"
+    const ui = startUi({ port: 0, controlApiUrl: "http://127.0.0.1:9", askUrl: `http://127.0.0.1:${ask.port}`, askOrigins: [`${app}/`] })
+    try {
+      const base = `http://127.0.0.1:${ui.port}`
+      const preflight = await fetch(`${base}/coworkers/ask`, { method: "OPTIONS", headers: { origin: app } })
+      expect(preflight.status).toBe(204)
+      expect(preflight.headers.get("access-control-allow-origin")).toBe(app)
+      expect(preflight.headers.get("access-control-allow-methods")).toBe("GET, POST")
+      expect((await fetch(`${base}/coworkers/ask`, { method: "OPTIONS", headers: { origin: "https://evil.example" } })).status).toBe(403)
+
+      const posted = await fetch(`${base}/coworkers/ask`, { method: "POST", headers: { origin: app }, body: "{}" })
+      expect(posted.headers.get("access-control-allow-origin")).toBe(app)
+      const other = await fetch(`${base}/coworkers/ask`, { method: "POST", headers: { origin: "https://evil.example" }, body: "{}" })
+      expect(other.headers.get("access-control-allow-origin")).toBeNull()
+      // The read routes stay same-origin.
+      expect((await fetch(`${base}/reliability/contracts`, { headers: { origin: app } })).headers.get("access-control-allow-origin")).toBeNull()
+      expect((await fetch(`${base}/reliability/contracts`, { method: "OPTIONS", headers: { origin: app } })).status).toBe(405)
     } finally {
       ui.stop(true)
       ask.stop(true)

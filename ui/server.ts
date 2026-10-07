@@ -9,9 +9,11 @@
 // so the browser stays on one origin. Port 8791 leaves the market feed on 8790.
 // Writes (policy, orders, shock, reset) are not forwarded.
 //
-// One exception: "Ask a Coworker". POST /coworkers/ask and GET /coworkers/ask?id=
+// One exception: the Coworker chat. POST /coworkers/ask and GET /coworkers/ask?id=
 // go to the Coworker worker (COWORKER_ASK_URL, default http://127.0.0.1:8792).
-// It answers a free preview: its tools only read, and nothing is paid or stored.
+// The chat is free: its tools only read, and nothing is paid or stored.
+// The Tally web app on another origin (COWORKER_ASK_ORIGINS, comma-separated)
+// may call these two routes from the browser. No other route allows another origin.
 
 const FILES: Record<string, string> = {
   "/": "index.html",
@@ -36,7 +38,7 @@ const PROXY_PATHS = new Set([
   "/reliability/transactions", "/reliability/receipts", "/reliability/lifecycle",
   "/reliability/kyc", "/reliability/kyc/fixtures",
   // Tally contract views. All GET, all read-only.
-  "/reliability/contracts", "/reliability/contracts/list", "/reliability/contracts/templates",
+  "/reliability/contracts", "/reliability/contracts/list", "/reliability/contracts/templates", "/reliability/contracts/audit",
   "/reliability/contracts/case", "/reliability/contracts/ruling-options", "/reliability/contracts/ruling-payload",
   "/reliability/profile", "/reliability/profile/search",
   "/reliability/anchors/contract", "/reliability/anchors/company",
@@ -45,8 +47,19 @@ const PROXY_PATHS = new Set([
 ])
 
 const ASK_PATH = "/coworkers/ask"
-/** A request is at most 4,000 characters; the JSON around it is small. */
-const ASK_BODY_LIMIT = 16_384
+/** A message is at most 4,000 characters. The chat sends at most 12 earlier messages of 6,000 characters. */
+const ASK_BODY_LIMIT = 262_144
+
+/** CORS headers for an allowed web app origin, or none. */
+const corsFor = (req: Request, origins: ReadonlySet<string>): Record<string, string> => {
+  const origin = req.headers.get("origin")
+  return origin && origins.has(origin) ? { "access-control-allow-origin": origin, "vary": "Origin" } : {}
+}
+
+const withHeaders = (res: Response, headers: Record<string, string>) => {
+  for (const [name, value] of Object.entries(headers)) res.headers.set(name, value)
+  return res
+}
 
 const fileUrl = (name: string) => new URL(name, import.meta.url)
 
@@ -98,10 +111,12 @@ const proxyGet = async (controlApiUrl: string, path: string) => {
   }
 }
 
-export const startUi = (options?: { port?: number; controlApiUrl?: string; askUrl?: string }) => {
+export const startUi = (options?: { port?: number; controlApiUrl?: string; askUrl?: string; askOrigins?: string[] }) => {
   const port = options?.port ?? Number(process.env.UI_PORT ?? 8791)
   const controlApiUrl = (options?.controlApiUrl ?? process.env.CONTROL_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "")
   const askUrl = (options?.askUrl ?? process.env.COWORKER_ASK_URL ?? "http://127.0.0.1:8792").replace(/\/$/, "")
+  const askOrigins = new Set((options?.askOrigins ?? (process.env.COWORKER_ASK_ORIGINS ?? "").split(","))
+    .map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean))
 
   return Bun.serve({
     hostname: "127.0.0.1",
@@ -109,8 +124,14 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string; askUr
     async fetch(req, server) {
       const url = new URL(req.url)
       let res: Response
-      if (url.pathname === ASK_PATH && (req.method === "POST" || req.method === "GET")) {
-        res = await proxyAsk(askUrl, req, visitorOf(req, server.requestIP(req)?.address), url.search)
+      if (url.pathname === ASK_PATH && req.method === "OPTIONS") {
+        // The browser asks first because the chat posts JSON from another origin.
+        const cors = corsFor(req, askOrigins)
+        res = cors["access-control-allow-origin"]
+          ? new Response(null, { status: 204, headers: { ...cors, "access-control-allow-methods": "GET, POST", "access-control-allow-headers": "content-type", "access-control-max-age": "600" } })
+          : new Response("origin not allowed", { status: 403 })
+      } else if (url.pathname === ASK_PATH && (req.method === "POST" || req.method === "GET")) {
+        res = withHeaders(await proxyAsk(askUrl, req, visitorOf(req, server.requestIP(req)?.address), url.search), corsFor(req, askOrigins))
       } else if ((req.method === "GET" || req.method === "HEAD") && PROXY_PATHS.has(url.pathname)) {
         res = await proxyGet(controlApiUrl, url.pathname + url.search)
         // HEAD gets the GET status and headers with no body.
@@ -135,5 +156,5 @@ if (import.meta.main) {
   console.log(`operator ui   http://localhost:${server.port}`)
   console.log(`control api   ${control}`)
   console.log("read only — marketplace display; writes stay on the control API")
-  console.log(`coworker ask  ${process.env.COWORKER_ASK_URL ?? "http://127.0.0.1:8792"} (free preview, reads only)`)
+  console.log(`coworker chat ${process.env.COWORKER_ASK_URL ?? "http://127.0.0.1:8792"} (free, reads only)`)
 }
