@@ -113,6 +113,8 @@ The chat is free: no Masumi payment, no Sokosumi Task, and nothing is stored. Ev
 - One visitor gets at most 5 of those model answers a day (`COWORKER_ASK_MODEL_PER_VISITOR`).
 - Each visitor can send 20 messages every 10 minutes.
 - One answer runs at a time, and at most 5 wait.
+- A model answer gets 2 minutes. After that, the request gets the fill-in format, and the next answer starts.
+  The chat page stops waiting for an answer that runs for more than 4 minutes.
 - An answer stays readable for 30 minutes. The worker keeps jobs in memory, so a restart forgets them.
 
 ### Fill-in format

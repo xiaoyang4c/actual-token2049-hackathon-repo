@@ -15,6 +15,8 @@
  *   and at most `modelAnswersPerVisitorPerDay` for one visitor.
  * - Each visitor may send `perVisitor` messages in `visitorWindowMs`.
  * - One answer runs at a time, and at most `maxQueued` wait.
+ * - A model answer gets `answerMs`. After that the job asks for the fill-in
+ *   format, so one slow model call cannot hold the queue.
  *
  * The worker starts this server on 127.0.0.1 when COWORKER_ASK_PORT is set.
  * The UI server forwards POST /coworkers/ask and GET /coworkers/ask?id= here.
@@ -36,6 +38,8 @@ export interface AskLimits {
   modelAnswersPerDay: number;
   modelAnswersPerVisitorPerDay: number;
   maxQueued: number;
+  /** The longest wait for a model answer. A model call retries for minutes when the model is busy. */
+  answerMs: number;
   /** A finished answer can be read for this long. */
   keepMs: number;
 }
@@ -49,6 +53,7 @@ export const DEFAULT_ASK_LIMITS: AskLimits = {
   modelAnswersPerDay: 10,
   modelAnswersPerVisitorPerDay: 5,
   maxQueued: 5,
+  answerMs: 2 * 60_000,
   keepMs: 30 * 60_000,
 };
 
@@ -250,7 +255,7 @@ export class AskService {
     }
   }
 
-  private async answer({job: {coworker: slug}, text, history, visitor}: Stored): Promise<{text: string; mode: AskMode}> {
+  private async answer({job: {id, coworker: slug}, text, history, visitor}: Stored): Promise<{text: string; mode: AskMode}> {
     const readable = fillInText(slug, text, history);
     const problems = fillInProblems(slug, readable);
     if (!problems.length) {
@@ -261,13 +266,28 @@ export class AskService {
     const provider = this.deps.provider;
     if (provider?.available() && this.takeModelAnswer(visitor)) {
       try {
-        const answer = await runCoworker(slug, text, this.deps.tools, provider, {history: modelHistory(slug, history)});
+        const answer = await this.withinAnswerLimit(id, runCoworker(slug, text, this.deps.tools, provider, {history: modelHistory(slug, history)}));
         return answer.kind === 'answer' ? {text: answer.text, mode: answer.mode} : {text: answer.message, mode: 'needs-input'};
       } catch {
-        // The model failed and the request is not in the fill-in format.
+        // The model failed or took too long, and the request is not in the fill-in format.
       }
     }
     return {text: `${needsInputMessage(slug, problems)}${provider ? MODEL_BUSY_NOTE : ''}`, mode: 'needs-input'};
+  }
+
+  /**
+   * Stops waiting for a model answer after `answerMs`. The model call cannot be
+   * cancelled. It ends later on its own request timeouts, and its result is dropped.
+   */
+  private withinAnswerLimit<T>(id: string, work: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>|undefined;
+    const limit = new Promise<never>((resolve, reject) => {
+      timer = setTimeout(() => {
+        this.deps.log({event: 'ask_model_timeout', id, ms: this.limits.answerMs});
+        reject(new Error('the model took too long'));
+      }, this.limits.answerMs);
+    });
+    return Promise.race([work, limit]).finally(() => clearTimeout(timer));
   }
 
   /** Takes one model answer from today's website budget and the visitor's share of it. */

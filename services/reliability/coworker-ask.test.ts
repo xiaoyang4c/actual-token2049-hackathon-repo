@@ -90,6 +90,16 @@ describe('Ask a Coworker on the website', () => {
     expect(job?.answer).toContain('company: <company name or Tally id>');
   });
 
+  test('a model answer that takes too long asks for the fill-in format and frees the queue', async () => {
+    const provider = new FakeProvider(() => new Promise<ModelReply>(() => {}));
+    const {service} = setup(provider, {answerMs: 20});
+    const slow = await ask(service, 'deal-desk', FREE_TEXT);
+    expect(slow).toMatchObject({status: 'done', mode: 'needs-input'});
+    expect(slow?.answer).toContain('```text\ntemplate: physical');
+    // The next request does not wait for the model call that never ended.
+    expect(await ask(service, 'deal-desk', REQUEST)).toMatchObject({status: 'done', mode: 'fill-in'});
+  });
+
   test('without a model, free text asks for the fill-in format, with no note about a busy model', async () => {
     const {service} = setup(null);
     const job = await ask(service, 'deal-desk', FREE_TEXT);
