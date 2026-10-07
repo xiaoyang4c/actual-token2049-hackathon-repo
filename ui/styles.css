@@ -92,7 +92,7 @@ small { display: block; font-size: 12px; color: var(--muted); line-height: 1.5; 
 
 .app-header { height: 60px; padding: 0 40px; display: flex; align-items: center; gap: 48px; border-bottom: 1px solid var(--line); }
 .brand { display: inline-flex; gap: 10px; align-items: center; text-decoration: none; font-size: 19px; font-weight: 650; }
-.brand-svg { width: 46px; height: 30px; color: var(--text); }
+.brand-svg { width: 34px; height: 29px; color: var(--text); }
 nav { display: flex; align-self: stretch; gap: 30px; }
 nav button { border: 0; border-bottom: 3px solid transparent; background: none; padding: 0 6px; font-weight: 500; }
 nav button[aria-current] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 650; }
@@ -318,7 +318,7 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
 @media (max-width: 640px) {
   .app-header { height: auto; padding: 16px 16px 0; gap: 12px; flex-wrap: wrap; }
   .brand { font-size: 17px; gap: 10px; }
-  .brand-svg { width: 40px; height: 26px; }
+  .brand-svg { width: 30px; height: 26px; }
   .header-status { font-size: 11px; gap: 4px; }
   nav { order: 3; flex: 1 0 100%; gap: 8px; height: 46px; }
   nav button { padding: 0 4px; font-size: 12px; }

@@ -1,20 +1,17 @@
 # Tally brand mark
 
-The mark is an exchequer tally stick.
-A notched stick was split lengthwise. Each party kept one half.
-The halves matched only if nobody changed them.
-The longer half, the stock, went to the creditor.
+The mark is a tally: four strokes, and a fifth across them.
+It is the oldest way to keep a count that both sides can check.
 
-That is the product: two parties, one agreed record, tamper-evident.
+| File | Use | Colours |
+| --- | --- | --- |
+| `tally-logo.svg`, `tally-logo.png` | The Tally logo. Sokosumi company logo and the browser tab icon | Black `#0B0E0F` on white `#FFFFFF` |
+| `tally-mark.svg` | The mark on a transparent background, for light surfaces. The site header draws the same shapes in the text colour | Black `#0B0E0F` |
+| `deal-desk-avatar.*` | Tally Deal Desk Coworker | Black on yellow `#FFD400` |
+| `mediator-avatar.*` | Tally Mediator Coworker | White on Cardano blue `#0033AD` |
+| `trust-check-avatar.*` | Tally Trust Check Coworker | Green `#53FC18` on black `#0B0E0F` |
 
-| File | Use |
-| --- | --- |
-| `tally-logo.svg`, `tally-logo.png` | The mark on a transparent background |
-| `tally-logo-on-paper.svg`, `tally-logo-on-paper.png` | The mark on a light rounded tile, for app icons |
-| `deal-desk-avatar.*` | Tally Deal Desk Coworker (amber) |
-| `mediator-avatar.*` | Tally Mediator Coworker (teal) |
-| `trust-check-avatar.*` | Tally Trust Check Coworker (green) |
+The PNG files are 1024 × 1024. The SVG files are the source.
 
-Colours: navy `#14213D`, amber `#F2A541`, paper `#FAF7F0`, teal `#2A9D8F`, green `#52B788`.
-
-The SVG files are the source. Render a PNG with `rsvg-convert -w 512 -h 512 <file>.svg -o <file>.png`.
+The logo and avatar files have a solid background. Do not place them on a surface of a different colour without the background.
+`tally-mark.svg` cuts the gap around the fifth stroke out of the four strokes, so it works on any light background.

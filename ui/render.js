@@ -6,12 +6,8 @@ import { renderCompanies, renderContractsTable, renderDeals, renderMediation } f
 
 export { escapeHtml }
 
-/** The Tally mark: a tally stick split in two. The halves match only if nobody changed them. */
-const BRAND_MARK = `<svg class="brand-svg" viewBox="80 140 352 232" aria-hidden="true"><defs>
-  <mask id="brand-cut-top" maskUnits="userSpaceOnUse"><rect width="512" height="512" fill="white"/><g fill="black"><path d="M190 175 L214 208 L238 175 Z"/><path d="M260 175 L276 200 L292 175 Z"/><path d="M310 175 L322 194 L334 175 Z"/><path d="M348 175 L360 194 L372 175 Z"/></g></mask>
-  <mask id="brand-cut-bottom" maskUnits="userSpaceOnUse"><rect width="512" height="512" fill="white"/><g fill="black"><path d="M190 339 L214 306 L238 339 Z"/><path d="M260 339 L276 314 L292 339 Z"/><path d="M310 339 L322 320 L334 339 Z"/><path d="M348 339 L360 320 L372 339 Z"/></g></mask></defs>
-  <g transform="rotate(-10 256 256)"><rect x="96" y="178" width="320" height="70" rx="14" fill="currentColor" mask="url(#brand-cut-top)"/>
-  <rect x="160" y="266" width="256" height="70" rx="14" fill="#F2A541" mask="url(#brand-cut-bottom)"/></g></svg>`
+/** The Tally mark: four tally strokes and a fifth across them. Transparent, so it takes the text colour. */
+const BRAND_MARK = `<svg class="brand-svg" viewBox="10 16 80 68" aria-hidden="true"><defs><mask id="brand-gap" maskUnits="userSpaceOnUse"><rect width="100" height="100" fill="white"/><polygon fill="black" points="18.58,79.05 90.58,36.45 81.42,20.95 9.42,63.55"/></mask></defs><g fill="currentColor" mask="url(#brand-gap)"><rect x="17.5" y="32.5" width="11" height="50"/><rect x="35.5" y="27.5" width="11" height="50"/><rect x="53.5" y="22.5" width="11" height="50"/><rect x="71.5" y="17.5" width="11" height="50"/></g><polygon fill="currentColor" points="16.55,75.6 88.55,33 83.45,24.4 11.45,67"/></svg>`
 
 export const AREAS = ["deals", "mediation", "companies", "operator"]
 const AREA_TEXT = {
