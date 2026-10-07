@@ -2,6 +2,7 @@ import {useEffect, useMemo, useState} from 'react'
 import {Link, useSearchParams} from 'react-router-dom'
 import {ArrowUpRight, Building2, Search} from 'lucide-react'
 import {motion} from 'motion/react'
+import {CompanyChain} from '@/components/Anchors'
 import {Amount, Empty, ErrorNote, PageHeader, Section, StateTag, Tag} from '@/components/kit'
 import {Reveal, Stagger, StaggerItem} from '@/components/motion'
 import {Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList} from '@/components/ui/command'
@@ -65,6 +66,7 @@ function Finder({onPick}: {onPick: (id: string) => void}) {
 }
 
 function Record({p, names}: {p: Profile; names: Map<string, string>}) {
+  const anchors = useAsync(() => api.companyAnchors(p.entity.id), `company-anchors-${p.entity.id}`)
   return (
     <div className="space-y-6">
       <Reveal><section className="surface rounded-[18px] p-6 sm:p-8">
@@ -93,6 +95,12 @@ function Record({p, names}: {p: Profile; names: Map<string, string>}) {
           })}
         </Stagger>
       </section></Reveal>
+
+      <Reveal>
+        <Section title="On-chain record" aside="Settlement fingerprints on Cardano preprod">
+          {anchors.data ? <CompanyChain anchors={anchors.data} /> : anchors.error ? <p className="text-[13px] text-ink-3">{anchors.error}</p> : <p className="text-[13px] text-ink-3">Loading the on-chain record…</p>}
+        </Section>
+      </Reveal>
 
       <Reveal className="grid gap-6 lg:grid-cols-2">
         <Section title="Scores" aside={p.scoringPolicy.provisional ? `${p.scoringPolicy.version}, provisional` : p.scoringPolicy.version}>

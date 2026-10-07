@@ -315,6 +315,33 @@ export interface Listing {
   createdAt: string
 }
 
+export interface AnchorView {
+  status: 'waiting' | 'sending' | 'confirmed'
+  txHashes: string[]
+  explorerUrls: string[]
+  blockHeight: number | null
+  anchoredAt: string | null
+}
+
+export interface ContractAnchors {
+  contractId: string
+  records: Array<{
+    publicationId: string
+    milestoneId: string
+    outcome: string | null
+    recordHash: string
+    recordUnchanged: boolean
+    entries: Array<{entityId: string; seq: number; entryHash: string}>
+    anchor: AnchorView
+  }>
+}
+
+export interface CompanyAnchors {
+  entityId: string
+  chain: {intact: boolean; problems: string[]; length: number; anchored: number; head: string | null}
+  entries: Array<{seq: number; entryHash: string; recordHash: string; contractId: string; milestoneId: string; anchor: AnchorView}>
+}
+
 export class ApiError extends Error {}
 
 async function read<T>(path: string, init?: RequestInit): Promise<T> {
@@ -346,6 +373,10 @@ export const api = {
   ask: (coworker: CoworkerSlug, text: string) =>
     read<{job: AskJob}>('/coworkers/ask', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({coworker, text})}),
   askStatus: (id: string) => read<{job: AskJob}>(`/coworkers/ask?${q({id})}`, {cache: 'no-store'}),
+
+  // Settlement anchors: fingerprints of final records on Cardano preprod.
+  contractAnchors: (id: string) => read<ContractAnchors>(`/reliability/anchors/contract?${q({id})}`),
+  companyAnchors: (entityId: string) => read<CompanyAnchors>(`/reliability/anchors/company?${q({entityId})}`),
 
   // Operator: the v1 marketplace ledger.
   transactions: () => read<LedgerTransaction[]>('/reliability/transactions'),
