@@ -8,7 +8,16 @@
  * the tool and returns the result. Read services/reliability/coworkers/README.md.
  */
 
+import {setTimeout as delay} from 'node:timers/promises';
+
 const REQUEST_TIMEOUT_MS = 60_000;
+/**
+ * A model call has no side effects, so a rate limit or an overloaded server is
+ * retried. The Gemini free tier returns 429 and 503 often.
+ */
+const RETRY_STATUSES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504]);
+export const MODEL_ATTEMPTS = 4;
+const RETRY_MAX_DELAY_MS = 30_000;
 /** Each tool round trip is one step. A draft needs two or three. */
 export const MAX_TOOL_STEPS = 8;
 
@@ -64,20 +73,53 @@ type Json = {[key: string]: unknown};
 const record = (value: unknown): Json|null =>
   (typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Json : null);
 
-async function postJson(fetcher: typeof fetch, url: string, headers: {[key: string]: string}, body: Json, label: string): Promise<Json> {
-  let response: Response;
-  try {
-    response = await fetcher(url, {
-      method: 'POST', redirect: 'error', headers: {...headers, 'content-type': 'application/json'},
-      body: JSON.stringify(body), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch {
-    throw new ModelError(`${label} got no response`);
+export interface ProviderOptions {
+  fetch?: typeof fetch;
+  /** Waits between retries. Tests pass a fake. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+interface Http {
+  fetch: typeof fetch;
+  sleep: (ms: number) => Promise<void>;
+}
+
+const http = (options: ProviderOptions): Http => ({fetch: options.fetch ?? fetch, sleep: options.sleep ?? ((ms) => delay(ms))});
+
+/** Google's RetryInfo delay ("7s", "1.5s"), when the error body has one. */
+function retryDelayMs(errorBody: unknown): number|null {
+  const details = record(record(errorBody)?.error)?.details;
+  if (!Array.isArray(details)) return null;
+  for (const detail of details.map(record)) {
+    const match = typeof detail?.retryDelay === 'string' ? /^(\d+(?:\.\d+)?)s$/.exec(detail.retryDelay) : null;
+    if (match) return Math.ceil(Number(match[1]) * 1000);
   }
-  if (!response.ok) throw new ModelError(`${label} returned ${response.status}`);
-  const parsed = record(await response.json().catch(() => null));
-  if (!parsed) throw new ModelError(`${label} returned no JSON`);
-  return parsed;
+  return null;
+}
+
+async function postJson(client: Http, url: string, headers: {[key: string]: string}, body: Json, label: string): Promise<Json> {
+  for (let attempt = 1; ; attempt++) {
+    let response: Response|null;
+    try {
+      response = await client.fetch(url, {
+        method: 'POST', redirect: 'error', headers: {...headers, 'content-type': 'application/json'},
+        body: JSON.stringify(body), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      response = null;
+    }
+    if (response?.ok) {
+      const parsed = record(await response.json().catch(() => null));
+      if (!parsed) throw new ModelError(`${label} returned no JSON`);
+      return parsed;
+    }
+    const problem = response ? `returned ${response.status}` : 'got no response';
+    if ((response && !RETRY_STATUSES.has(response.status)) || attempt >= MODEL_ATTEMPTS) {
+      throw new ModelError(`${label} ${problem}${attempt > 1 ? ` after ${attempt} tries` : ''}`);
+    }
+    const hinted = response ? retryDelayMs(await response.json().catch(() => null)) : null;
+    await client.sleep(Math.min(hinted ?? 2000 * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -98,12 +140,12 @@ function geminiSchema(schema: ParamSchema): Json {
 
 export class GeminiProvider implements ModelProvider {
   readonly name = 'gemini' as const;
-  private readonly fetcher: typeof fetch;
+  private readonly http: Http;
 
-  constructor(private readonly apiKey: string, private readonly model: string, options: {fetch?: typeof fetch} = {}) {
+  constructor(private readonly apiKey: string, private readonly model: string, options: ProviderOptions = {}) {
     if (!apiKey.trim() || /\s/.test(apiKey)) throw new Error('missing or invalid Gemini API key');
     if (!/^[a-z0-9.-]+$/.test(model)) throw new Error(`invalid Gemini model name ${model}`);
-    this.fetcher = options.fetch ?? fetch;
+    this.http = http(options);
   }
 
   async reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {
@@ -118,7 +160,7 @@ export class GeminiProvider implements ModelProvider {
         functionResponse: {...(result.callId.startsWith('gemini:') ? {} : {id: result.callId}), name: result.name, response: {result: result.output}},
       }))};
     });
-    const body = await postJson(this.fetcher,
+    const body = await postJson(this.http,
       `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`,
       {'x-goog-api-key': this.apiKey},
       {
@@ -152,16 +194,16 @@ export class GeminiProvider implements ModelProvider {
 
 export class BedrockProvider implements ModelProvider {
   readonly name = 'bedrock' as const;
-  private readonly fetcher: typeof fetch;
+  private readonly http: Http;
 
   constructor(
     private readonly apiKey: string, private readonly region: string, private readonly modelId: string,
-    options: {fetch?: typeof fetch} = {},
+    options: ProviderOptions = {},
   ) {
     if (!apiKey.trim() || /\s/.test(apiKey)) throw new Error('missing or invalid Bedrock API key');
     if (!/^[a-z]{2}-[a-z]+-\d$/.test(region)) throw new Error(`invalid AWS region ${region}`);
     if (!/^[a-zA-Z0-9.:-]+$/.test(modelId)) throw new Error(`invalid Bedrock model id ${modelId}`);
-    this.fetcher = options.fetch ?? fetch;
+    this.http = http(options);
   }
 
   async reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {
@@ -172,7 +214,7 @@ export class BedrockProvider implements ModelProvider {
       }
       return {role: 'user', content: turn.results.map((result) => ({toolResult: {toolUseId: result.callId, content: [{json: {result: result.output}}]}}))};
     });
-    const body = await postJson(this.fetcher,
+    const body = await postJson(this.http,
       `https://bedrock-runtime.${this.region}.amazonaws.com/model/${encodeURIComponent(this.modelId)}/converse`,
       {'authorization': `Bearer ${this.apiKey}`},
       {

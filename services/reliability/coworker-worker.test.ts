@@ -344,6 +344,39 @@ describe('providers and parsing', () => {
     expect((second[2]?.parts[0]?.functionResponse as {id: string}).id).toBe('call_1');
   });
 
+  test('a rate limit or an overloaded model is retried, with the wait Google asks for', async () => {
+    const statuses: number[] = [];
+    const replies: Array<[number, unknown]> = [
+      [503, {error: {code: 503, status: 'UNAVAILABLE'}}],
+      [429, {error: {code: 429, status: 'RESOURCE_EXHAUSTED', details: [{'@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '7s'}]}}],
+      [200, {candidates: [{content: {role: 'model', parts: [{text: 'OK'}]}}]}],
+    ];
+    const fetcher = (async () => {
+      const [status, body] = replies.shift() as [number, unknown];
+      statuses.push(status);
+      return new Response(JSON.stringify(body), {status});
+    }) as unknown as typeof fetch;
+    const waits: number[] = [];
+    const provider = new GeminiProvider('test-key', 'gemini-3.8-flash', {fetch: fetcher, sleep: async (ms) => { waits.push(ms); }});
+    expect((await provider.reply('rules', [{role: 'user', text: 'hi'}], [])).text).toBe('OK');
+    expect(statuses).toEqual([503, 429, 200]);
+    expect(waits).toEqual([2000, 7000]);
+  });
+
+  test('model retries stop after the last try, and a bad request is not retried', async () => {
+    let calls = 0;
+    const overloaded = (async () => { calls++; return new Response('{}', {status: 503}); }) as unknown as typeof fetch;
+    const noWait = {sleep: async () => {}};
+    await expect(new GeminiProvider('k', 'gemini-3.8-flash', {fetch: overloaded, ...noWait}).reply('rules', [{role: 'user', text: 'hi'}], []))
+      .rejects.toThrow('Gemini returned 503 after 4 tries');
+    expect(calls).toBe(4);
+    calls = 0;
+    const invalid = (async () => { calls++; return new Response('{}', {status: 400}); }) as unknown as typeof fetch;
+    await expect(new BedrockProvider('k', 'ap-southeast-2', 'au.anthropic.claude-sonnet-4-5-20250929-v1:0', {fetch: invalid, ...noWait})
+      .reply('rules', [{role: 'user', text: 'hi'}], [])).rejects.toThrow('Bedrock returned 400');
+    expect(calls).toBe(1);
+  });
+
   test('Bedrock: Converse tool use with a bearer API key', async () => {
     let auth = '';
     const fetcher = (async (url: string, init: RequestInit) => {
