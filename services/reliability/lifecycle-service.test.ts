@@ -13,7 +13,8 @@ import {flowLifecycleOutcome} from '../../packages/reliability/src/lifecycle-flo
 import type {ScoreView, TransactionType} from '../../packages/reliability/src/types';
 import {LifecycleService} from './lifecycle-service';
 import {createSimulatedMasumiEscrow} from './masumi-escrow';
-import {DEFAULT_RELIABILITY_POLICIES, type ReliabilityPolicies} from './policies';
+// These tests pin cumulative mechanics with unit weights.
+import {STUB_RELIABILITY_POLICIES as DEFAULT_RELIABILITY_POLICIES, type ReliabilityPolicies} from './policies';
 import {createPlumbingRoutes} from './routes-plumbing';
 
 const NOW = '2026-10-06T00:00:00.000Z';
@@ -75,6 +76,7 @@ describe('cumulative lifecycle scoring', () => {
       scoring: {
         version: defaults.scoring.version,
         initialState: defaults.scoring.initialState.bind(defaults.scoring),
+        baseWeight: defaults.scoring.baseWeight.bind(defaults.scoring),
         scoreView: defaults.scoring.scoreView.bind(defaults.scoring),
         applyEvent: (...args: Parameters<typeof defaults.scoring.applyEvent>) => {
           applied++;

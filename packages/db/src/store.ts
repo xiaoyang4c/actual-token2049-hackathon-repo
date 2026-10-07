@@ -27,6 +27,8 @@ import type {
 } from '../../reliability/src/contract-lifecycle/types';
 import * as reliabilityRecords from './reliability';
 import * as omnibusFunding from './omnibus-funding';
+import * as scoreWeights from './score-weights';
+import type {EventWeightRecord} from '../../reliability/src/event-weights';
 import type {
   DealFundingRequest, OmnibusBalance, PaperDealFundingRecord,
   PaperOmnibusPool, PaperPoolDeposit,
@@ -438,6 +440,38 @@ export class AgentStore {
     return this.db.query<{listingJson: string}, []>(
       'SELECT listing_json AS listingJson FROM reliability_listings ORDER BY id',
     ).all().map((row) => JSON.parse(row.listingJson) as Listing);
+  }
+
+  /** Inserts or replaces the recorded weight of one event (migration 007). */
+  saveEventWeight(record: EventWeightRecord): void {
+    scoreWeights.saveEventWeight(this.db, record);
+  }
+
+  getEventWeight(eventId: string): EventWeightRecord|undefined {
+    return scoreWeights.getEventWeight(this.db, eventId);
+  }
+
+  listEventWeightsForTransaction(transactionId: string): EventWeightRecord[] {
+    return scoreWeights.listEventWeightsForTransaction(this.db, transactionId);
+  }
+
+  getPairPosition(pairKey: string, transactionId: string): number|undefined {
+    return scoreWeights.getPairPosition(this.db, pairKey, transactionId);
+  }
+
+  /** Adds an eligible transaction to a pair. Repeated calls return the first position. */
+  addPairTransaction(pairKey: string, transactionId: string, at: string): number {
+    return scoreWeights.addPairTransaction(this.db, pairKey, transactionId, at);
+  }
+
+  /** Removes a transaction from its pairs. Returns transactions that moved down. */
+  removePairTransaction(transactionId: string): string[] {
+    return scoreWeights.removePairTransaction(this.db, transactionId);
+  }
+
+  /** Deletes every weight and pair row before a full score rebuild. */
+  clearScoreWeights(): void {
+    scoreWeights.clearScoreWeights(this.db);
   }
 
   /** Archives and replaces the active events after an outcome correction. */

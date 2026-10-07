@@ -31,19 +31,43 @@ export type {
   VerificationMethod,
 } from './types';
 export {
+  BETA_SCORING_VERSION,
+  BetaScoringPolicy,
+  DEFAULT_BETA_SCORING_PARAMS,
   STUB_SCORING_VERSION,
   stubInitialState,
   StubScoringPolicy,
+  type BaseEventWeight,
+  type BetaScoringParams,
   type ScoringPolicy,
+  type WeightReason,
 } from './scoring';
+export {betaCdf, betaQuantile, logGamma} from './beta-math';
 export {
+  composeEventWeight,
+  weightInputsKey,
+  type EventWeightRecord,
+} from './event-weights';
+export {
+  DEFAULT_PAIR_DECAY_PARAMS,
+  HYPERBOLIC_PAIR_DECAY_VERSION,
+  HyperbolicPairDecay,
+  pairKeyFor,
   STUB_PAIR_DECAY_VERSION,
   StubPairDecay,
+  type HyperbolicPairDecayParams,
   type PairDecay,
+  type PairDirection,
 } from './pair-decay';
 export {
+  CURVE_FEE_TERMS_VERSION,
+  CurveFeeTermsPolicy,
+  DEFAULT_CURVE_FEE_TERMS_PARAMS,
+  feeBpsFor,
   STUB_FEE_TERMS_VERSION,
   StubFeeTermsPolicy,
+  type CurveFeeTermsParams,
+  type FeeCurveSide,
   type FeeTermsPolicy,
   type TermsPolicyInput,
 } from './fees-policy';

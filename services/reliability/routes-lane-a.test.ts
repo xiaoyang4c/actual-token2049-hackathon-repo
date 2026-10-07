@@ -124,7 +124,7 @@ describe('lifecycle demo routes', () => {
       expect(settledBody.events).toHaveLength(2);
       expect(settledBody.events.every((event) => event.outcome === 'success')).toBe(true);
       expect(settledBody.termsDecisions).toHaveLength(2);
-      expect(settledBody.termsDecisions[0]?.policyVersion).toBe('fee-terms-stub-v0');
+      expect(settledBody.termsDecisions[0]?.policyVersion).toBe('fee-terms-curve-v1');
       expect(settledBody.termsDecisions[0]?.buyerFeeBps).toBeGreaterThan(0);
       expect(settledBody.termsDecisions[0]?.sellerFeeBps).toBeGreaterThan(0);
 

@@ -23,6 +23,7 @@ import {MasumiContractEscrow} from './contract-masumi-escrow';
 import {PaperContractEscrow} from './contract-paper-escrow';
 import {DEFAULT_RELIABILITY_POLICIES, type ReliabilityPolicies} from './policies';
 import {projectOutcome} from './reliability-projection';
+import {withRecordedWeights} from './score-ledger';
 
 /** Paper time = system time + a stored offset. Raising the offset fast-forwards a demo. */
 export class PaperClock implements ContractClock {
@@ -79,7 +80,7 @@ export class ContractService {
     this.clock = clock;
     this.paperClock = clock instanceof PaperClock ? clock : null;
     this.templates = options.templates ?? TemplateRegistry.fromDirectory();
-    this.policies = options.policies ?? DEFAULT_RELIABILITY_POLICIES;
+    this.policies = withRecordedWeights(store, options.policies ?? DEFAULT_RELIABILITY_POLICIES);
     this.lifecycle = new ContractLifecycle({
       store,
       escrow,

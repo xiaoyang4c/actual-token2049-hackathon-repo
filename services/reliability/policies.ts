@@ -4,13 +4,13 @@
  */
 
 import {
-  StubFeeTermsPolicy, type FeeTermsPolicy,
+  CurveFeeTermsPolicy, StubFeeTermsPolicy, type FeeTermsPolicy,
 } from '../../packages/reliability/src/fees-policy';
 import {
-  StubPairDecay, type PairDecay,
+  HyperbolicPairDecay, StubPairDecay, type PairDecay,
 } from '../../packages/reliability/src/pair-decay';
 import {
-  StubScoringPolicy, type ScoringPolicy,
+  BetaScoringPolicy, StubScoringPolicy, type ScoringPolicy,
 } from '../../packages/reliability/src/scoring';
 
 /** Policies shared by fixture reads and lifecycle projections. */
@@ -20,8 +20,18 @@ export interface ReliabilityPolicies {
   readonly fees: FeeTermsPolicy;
 }
 
-/** Current defaults. The agreed scoring and fee curves are not implemented. */
+/**
+ * Current defaults: the weighted Beta model, hyperbolic pair decay, and
+ * the fee curve. Their parameters are defaults, not product decisions.
+ */
 export const DEFAULT_RELIABILITY_POLICIES: ReliabilityPolicies = {
+  scoring: new BetaScoringPolicy(),
+  decay: new HyperbolicPairDecay(),
+  fees: new CurveFeeTermsPolicy(),
+};
+
+/** Unit-weight placeholders. Tests of cumulative mechanics use them. */
+export const STUB_RELIABILITY_POLICIES: ReliabilityPolicies = {
   scoring: new StubScoringPolicy(),
   decay: new StubPairDecay(),
   fees: new StubFeeTermsPolicy(),

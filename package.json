@@ -13,6 +13,7 @@
     "contracts:demo": "bun run services/reliability/contract-demo.ts",
     "contracts:worker": "bun run services/reliability/contract-worker.ts",
     "contracts:smoke": "bun run services/reliability/contract-preprod-smoke.ts",
+    "scores:rebuild": "bun run services/reliability/scores-rebuild.ts",
     "test": "bun test packages services ui && cd cre/agent-loop && bun test",
     "typecheck:workflow": "cd cre/agent-loop && bun run typecheck",
     "typecheck:control": "tsc --noEmit -p tsconfig.control.json",

@@ -15,6 +15,7 @@ import {createEscrowPort} from './masumi-escrow';
 import {
   DEFAULT_RELIABILITY_POLICIES, type ReliabilityPolicies,
 } from './policies';
+import {withRecordedWeights, type ScoreLedger} from './score-ledger';
 
 /** Dependencies for one store. Default escrow keeps the existing network gates. */
 export interface LifecycleServiceOptions {
@@ -26,13 +27,17 @@ export interface LifecycleServiceOptions {
 /** One service per control store. The route factory owns its lifetime. */
 export class LifecycleService {
   readonly lifecycle: EscrowTransactionLifecycle;
-  private readonly policies: ReliabilityPolicies;
+  /** Recorded event weights and score rebuilds for this store. */
+  readonly ledger: ScoreLedger;
+  readonly policies: ReliabilityPolicies;
 
   constructor(
     private readonly store: AgentStore,
     options: LifecycleServiceOptions = {},
   ) {
-    this.policies = options.policies ?? DEFAULT_RELIABILITY_POLICIES;
+    const policies = withRecordedWeights(store, options.policies ?? DEFAULT_RELIABILITY_POLICIES);
+    this.policies = policies;
+    this.ledger = policies.ledger;
     this.lifecycle = new EscrowTransactionLifecycle({
       store,
       clock: options.clock,
@@ -107,6 +112,18 @@ export class LifecycleService {
       const recoveredEventIds = new Set<string>();
       if (corrected) {
         this.store.replaceReliabilityEvents(transactionId, desired, outcome.decidedAt);
+        // A transaction that lost its eligibility leaves its pairs. Later
+        // pair members move down, so their states rebuild too.
+        for (const key of this.ledger.reconcilePairs(transactionId, desired, outcome.decidedAt)) {
+          const state = this.ledger.rebuildState(key);
+          if (!state) continue;
+          this.store.insertTermsDecision(this.policies.fees.decide({
+            entityId: key.entityId, category: key.category,
+            score: this.policies.scoring.scoreView(state),
+            kycTier: entities.get(key.entityId)?.kycTier ?? 'none',
+            repeatPairCount: 0, inputs: {eventCount: state.eventCount, pairRebuild: true}, now,
+          }));
+        }
         for (const event of affected.values()) {
           const baseline = this.store.getReliabilityBaseline(event.entityId, event.category, event.role)!;
           const recorded = this.store.listReliabilityEventsForState(
