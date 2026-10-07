@@ -319,6 +319,31 @@ describe('marketplace correctness regressions', () => {
     } finally { store.close(); rmSync(directory, {recursive: true, force: true}); }
   });
 
+  test('returns pending and conflict responses, then completes from the saved external response', async () => {
+    const store = AgentStore.open();
+    try {
+      const l = live(store);
+      open(service(store, l.port));
+      const routes = createLaneARoutes({clock: () => AT, escrowForStore: () => l.port});
+      const body = {action: 'fund', ...funding(), commandId: 'purchase-1'};
+      const pending = await request(routes, store, '/reliability/lifecycle/transition', body);
+      expect(pending.status).toBe(202);
+      expect(await pending.json()).toMatchObject({pending: true});
+      expect((await request(routes, store, '/reliability/lifecycle/transition', {
+        ...body, amountLovelace: 60_000_000,
+      })).status).toBe(409);
+      expect((await request(routes, store, '/reliability/lifecycle/transition', {
+        action: 'deliver', transactionId: 'sale', at: AT,
+        evidence: {deliveryTier: 'buyer_confirmation', confirmedBy: 'buyer'},
+      })).status).toBe(409);
+      l.confirmed.fund = true;
+      const completed = await request(routes, store, '/reliability/lifecycle/transition', {...body, at: LATER});
+      expect(completed.status).toBe(200);
+      expect(await completed.json()).toMatchObject({stage: 'escrow_funded', transition: {at: AT}});
+      expect(l.counts.fund).toBe(1);
+    } finally { store.close(); }
+  });
+
   test('forwards buyer fault, validates it, and serves stored collections and receipts', async () => {
     const store = AgentStore.open();
     try {

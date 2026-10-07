@@ -254,7 +254,11 @@ Keep `CARDANO_ALLOW_NETWORK` at `false` for a dry run.
 
 A dry run does not call Masumi or Blockfrost.
 
-Set both gates to send a live preprod order:
+These gates are required for live adapters.
+They do not bypass the v1 live funding guard.
+Use the [contract setup](contract-lifecycle.md#run) for a live contract.
+
+Set the adapter gates as follows:
 
 1. Set `CARDANO_MODE` to `preprod`.
 2. Set `CARDANO_ALLOW_NETWORK` to `true`.
@@ -362,7 +366,8 @@ Changing the scoring policy still requires a separate controlled rebuild.
 ## Command retries
 
 `fund`, `release`, `refund`, `terminate`, and `resolve` accept an optional `commandId`.
-The default identity uses the transaction, action, and dispute generation.
+The default identity uses the transaction and action.
+For resolution, it also includes the dispute generation.
 Use the same identity for a retry.
 A changed action or payload with the same identity returns HTTP 409.
 The first request fixes `at`.

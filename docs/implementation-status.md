@@ -35,6 +35,7 @@ Read [Contract lifecycle](contract-lifecycle.md).
 | KYC | Mock checks, tiers, history, expiry actions, and re-registration flags | A verified provider and enforced restrictions |
 | Invoice evidence | A stub compares supplied payment and due dates | Agreed terms hashes and verified settlement times |
 | Listings | Stored reads with fixture fallback | Listing writes and a buyer/seller offer flow |
+| Contract lifecycle | Signed terms, milestones, dispute tiers, remedies, durable escrow recovery, and audit history | Verified key registration, actual preprod testing, token receipt checks, and contract UI |
 | Operator display | Read-only stored transactions, receipts, scores, KYC, and listings | Pagination and clear source labels |
 | Pooled funding | Paper deposits and deal allocations | Escrow integration, return credits, and reconciliation |
 
@@ -104,7 +105,7 @@ Contract actions check signatures, but initial key registration is open.
 
 ## Validation
 
-The local test suite covers `packages`, `services`, and `ui`.
+All 546 local tests pass under `packages`, `services`, and `ui`.
 The control and payment TypeScript checks pass.
 Lint passes.
 Regression tests cover all seven gaps, restart behavior, and two database writers.

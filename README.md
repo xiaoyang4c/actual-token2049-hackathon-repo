@@ -111,7 +111,9 @@ Preprod requests need `CARDANO_MODE=preprod` and `CARDANO_ALLOW_NETWORK=true`.
 An enabled preprod request has `mode: live`.
 This mode does not prove confirmed settlement.
 
-Live `escrow_funded`, `payment_settled`, and `refunded` stages require chain verification.
+The v1 lifecycle remains the paper demo. Its standard adapter rejects live funding.
+Use the signed [contract lifecycle](docs/contract-lifecycle.md) for live escrow.
+A v1 live port must verify `escrow_funded`, `payment_settled`, and `refunded` on chain.
 An accepted action stays pending until the required money movement is confirmed.
 Paper stages remain simulations.
 Commands use durable identities and saved responses for safe retries.
@@ -128,7 +130,8 @@ This ledger does not send chain transactions or fund lifecycle escrow.
 
 Read [Cardano payment adapters](docs/cardano-payments.md) and
 [settlement evidence](docs/masumi-settlement.md) for shared payment components.
-The live marketplace lifecycle uses their settlement verification checks.
+The v1 verification seam uses the shared settlement verifier.
+The contract adapter has separate settlement checks. Read its known limits before a live run.
 
 ## Checks
 
