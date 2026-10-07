@@ -34,7 +34,7 @@ interface CaseFileView {
 
 /** The profile fields these tests read. */
 interface ProfileView {
-  scoringPolicy: {provisional: boolean};
+  scoringPolicy: {version: string; provisional: boolean; parametersSelected: boolean};
   scores: unknown[];
   contractSummary: {simulated: {[key: string]: number}; live: {milestones: number}};
   deals: Array<{[key: string]: unknown}>;
@@ -356,7 +356,7 @@ describe('Trust Check: profile and search', () => {
     expect(ok(coworker.findEntities('globex')).map((item) => item.id)).toEqual([kit.sellerId]);
     expect(errorCode(coworker.findEntities('g'))).toBe('invalid_query');
     const profile = ok(coworker.reliabilityProfile(kit.sellerId)) as unknown as ProfileView;
-    expect(profile.scoringPolicy.provisional).toBe(true);
+    expect(profile.scoringPolicy).toEqual({version: 'beta-weighted-v1', provisional: false, parametersSelected: false});
     expect(profile.scores.length).toBeGreaterThan(0);
     expect(profile.contractSummary.simulated).toEqual({milestones: 1, open: 0, disputed: 1, disputesLost: 1, rulingsIgnored: 0, lateDeliveries: 0, atFault: 1});
     expect(profile.contractSummary.live.milestones).toBe(0);

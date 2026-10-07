@@ -38,7 +38,7 @@ import {
 import type {JsonValue, ReliabilityCategory} from '../../packages/reliability/src/types';
 import {loadContractConfig, MPS_AUTO_WITHDRAW_DELAY_MS, type ContractConfig} from './contract-config';
 import {ContractService} from './contract-service';
-import {DEFAULT_RELIABILITY_POLICIES, type ReliabilityPolicies} from './policies';
+import {DEFAULT_RELIABILITY_POLICIES, POLICY_PARAMETERS_SELECTED, type ReliabilityPolicies} from './policies';
 
 // ---------------------------------------------------------------------------
 // Value types. Every number carries its exact source value and a display form.
@@ -524,7 +524,12 @@ export class CoworkerTools {
       ...this.config,
       settings: {...this.config.settings, mode: 'paper', mediator: {id: 'sandbox-mediator', publicKeyHex: mediatorKey.publicKeyHex}},
     };
-    const service = new ContractService(store, {config, clock: new FixedClock(at), templates: this.templates, policies: this.policies});
+    // The sandbox uses placeholder parties. KYC, limits, and fees apply when
+    // the parties create the real contract, so the sandbox skips them.
+    const service = new ContractService(store, {
+      config, clock: new FixedClock(at), templates: this.templates, policies: this.policies,
+      enforceMarketplaceRules: false,
+    });
     return {store, service, mediatorKey};
   }
 
@@ -937,8 +942,10 @@ export class CoworkerTools {
         score: view.value,
         lowerBound: view.lowerBound,
         confidence: view.confidence,
+        // `weighted` counts the events that changed the score. Unverified
+        // events and events without a value carry no weight.
         events: {total: events.length, success: events.filter((item) => item.outcome === 'success').length,
-          failure: events.filter((item) => item.outcome === 'failure').length},
+          failure: events.filter((item) => item.outcome === 'failure').length, weighted: view.eventCount},
         updatedAt: state.updatedAt,
       };
     });
@@ -997,7 +1004,10 @@ export class CoworkerTools {
     };
     return {
       entity: {id: entity.id, displayName: entity.displayName, kycStatus: entity.kycStatus, kycTier: entity.kycTier, createdAt: entity.createdAt},
-      scoringPolicy: {version: scoring.version, provisional: scoring.version.includes('stub')},
+      scoringPolicy: {
+        version: scoring.version, provisional: scoring.version.includes('stub'),
+        parametersSelected: POLICY_PARAMETERS_SELECTED,
+      },
       scores,
       termsDecisions: [...latestTerms.values()].map((decision) => ({
         category: decision.category, terms: decision.terms, buyerFeeBps: decision.buyerFeeBps, sellerFeeBps: decision.sellerFeeBps,

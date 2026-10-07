@@ -6,7 +6,10 @@ import {describe, expect, test} from 'bun:test';
 import {AgentStore} from '../../packages/db/src/index';
 import type {TermsPolicyInput} from '../../packages/reliability/src/fees-policy';
 import {createSimulatedMasumiEscrow} from './masumi-escrow';
-import {DEFAULT_RELIABILITY_POLICIES} from './policies';
+import {
+  DEFAULT_RELIABILITY_POLICIES as SHIPPED_POLICIES,
+  STUB_RELIABILITY_POLICIES as DEFAULT_RELIABILITY_POLICIES,
+} from './policies';
 import {createLaneARoutes} from './routes-lane-a';
 import {createPlumbingRoutes} from './routes-plumbing';
 import type {ReliabilityRoute} from './route';
@@ -31,9 +34,21 @@ async function request(
   }), url, store);
 }
 
+/** The marketplace gate needs KYC-verified parties before a sale opens. */
+function verifyParties(store: AgentStore): void {
+  for (const id of ['buyer', 'seller']) {
+    if (store.getEntity(id)) continue;
+    store.insertEntity({
+      id, displayName: id, wallets: [], roles: ['buyer', 'seller'],
+      kycStatus: 'verified', kycTier: 'basic', createdAt: NOW,
+    });
+  }
+}
+
 async function openSale(
   routes: ReliabilityRoute[], store: AgentStore, value = 50,
 ): Promise<void> {
+  verifyParties(store);
   const response = await request(routes, store, '/reliability/lifecycle/open', {
     id: 'sale', type: 'goods', buyerId: 'buyer', sellerId: 'seller',
     terms: {goods: 'cable'}, value, at: NOW,
@@ -76,6 +91,7 @@ describe('reliability route composition', () => {
       scoring: {
         version: 'test-scoring',
         initialState: defaults.scoring.initialState.bind(defaults.scoring),
+        baseWeight: defaults.scoring.baseWeight.bind(defaults.scoring),
         applyEvent: defaults.scoring.applyEvent.bind(defaults.scoring),
         scoreView: (state: Parameters<typeof defaults.scoring.scoreView>[0]) => ({
           ...defaults.scoring.scoreView(state), lowerBound: 0.25,
@@ -133,7 +149,7 @@ describe('reliability route composition', () => {
         createPlumbingRoutes(), store,
         '/reliability/receipts?transactionId=tx-invoice-1',
       )).json() as {termsDecision: {policyVersion: string}};
-      expect(defaultReceipt.termsDecision.policyVersion).toBe(defaults.fees.version);
+      expect(defaultReceipt.termsDecision.policyVersion).toBe(SHIPPED_POLICIES.fees.version);
     } finally {
       store.close();
     }

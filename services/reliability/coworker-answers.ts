@@ -301,7 +301,7 @@ type SummaryCounts = {[key: string]: number};
 /** The profile fields the template answer reads (from CoworkerTools.reliabilityProfile). */
 export interface ProfileView {
   entity: {id: string; displayName: string; kycStatus: string; kycTier: string; createdAt: string};
-  scoringPolicy: {version: string; provisional: boolean};
+  scoringPolicy: {version: string; provisional: boolean; parametersSelected?: boolean};
   scores: Array<{category: string; role: string; score: number; lowerBound: number; events: {success: number; failure: number}}>;
   contractSummary: {live: SummaryCounts; simulated: SummaryCounts};
   deals: Array<{label: string; role: string; counterpartyId: string; amount: Money; state: string; disputed: boolean; disputeWinner: string|null; ignoredRuling: boolean|null}>;
@@ -336,7 +336,8 @@ export function renderProfile(data: ProfileView): string {
       '| --- | --- | --- | --- |',
       ...data.scores.map((score) => `| ${plain(score.category)} (as ${score.role}) | ${score.score.toFixed(2)} | ${score.lowerBound.toFixed(2)} | ${score.events.success} ok, ${score.events.failure} failed |`),
     ] : ['No scored events yet.']),
-    ...(data.scoringPolicy.provisional ? ['', `The scoring policy (${data.scoringPolicy.version}) is provisional. Read the scores as counts of successes and failures, not as a calibrated rating.`] : []),
+    ...(data.scoringPolicy.provisional ? ['', `The scoring policy (${data.scoringPolicy.version}) is provisional. Read the scores as counts of successes and failures, not as a calibrated rating.`] :
+      data.scoringPolicy.parametersSelected === false ? ['', `Scores weight each deal by its value and give less weight to repeat deals with the same partner. The policy parameters (${data.scoringPolicy.version}) are defaults that Tally has not finalised.`] : []),
     '',
     '### Deals',
     ...(data.deals.length ? [
@@ -345,7 +346,7 @@ export function renderProfile(data: ProfileView): string {
       ...data.deals.map((deal) => `| ${deal.label} with \`${deal.counterpartyId}\` | ${deal.role} | ${money(deal.amount)} | ${result(deal)} |`),
     ] : ['No Tally deals yet.']),
     '',
-    'Tally does not set contract terms from scores yet. A contract can still add protection: a holdback, an inspector, or smaller milestones.',
+    'Tally sets platform fees and deal limits from scores, but not escrow terms. A contract can still add protection: a holdback, an inspector, or smaller milestones.',
     '',
     '**Next step:** Ask Tally Deal Desk to draft a contract with the protections you want.',
     '',

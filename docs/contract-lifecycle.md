@@ -216,9 +216,9 @@ A late ruling compliance instruction remains permitted and receives the existing
 2. **Cooldowns are not modelled.** Masumi V2 makes a party wait about 7 minutes between its own actions. A seller refund right after a dispute can fail until the cooldown ends.
 3. **Seller payout stays on the platform selling wallet.** `CONTRACT_SELLER_PAYOUT=seller_return_address` is untested with MPS.
 4. **The Blockfrost check reads ADA only.** A net USDM receipt check needs asset parsing.
-5. **Party registration is open.** Anyone can register a key for an entity id that has none. KYC is on main (pull request #8). Link key registration to a verified KYC entity, and let a template require a KYC tier.
-6. **Scoring and fees are still stubs** (`policies.ts`). Scores accumulate (pull request #15). The math lane owns value weighting and pair decay.
-7. **Platform fees are not in the escrow amount.** Lane B owns fees.
+5. **Key registration checks KYC, not the caller.** A key binds only to a KYC-verified entity, and a template can raise the tier with `minimumKycTier`. The route does not authenticate who sends the request.
+6. **Scores and fees use default parameters** (`policies.ts`). Contract creation checks both parties' exposure limits and records a fee charge for each milestone. Read [Marketplace rules and writes](marketplace.md).
+7. **Platform fees are not in the escrow amount.** The fee charge is a paper ledger record. Lane B owns fees.
 8. **A person holds the mediator key.** The Tally Mediator Coworker drafts the ruling and returns the exact bytes to sign. The Task worker is not built yet. Read [Tally Coworkers](../services/reliability/coworkers/README.md).
 9. **Evidence lives in SQLite.** Production needs object storage.
 10. **The UI shows contracts read-only.** Parties and the mediator sign their actions outside the UI. Before real data, add sign-in and show each party only its own deals.

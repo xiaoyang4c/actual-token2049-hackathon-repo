@@ -19,34 +19,35 @@ See [Open decisions](#open-decisions).
 | Item | Status | Owner |
 | --- | --- | --- |
 | Good UI | Tally UI implemented: My deals, Mediation desk, Companies, and Operator; hosted as a read-only public demo | Lane C |
-| KYC verification | mock verification merged on main in pull request #8 | Lane A |
-| Score change scaled by transaction value | not started | Math lane |
+| KYC verification | mock verification; enforced before sales, invoices, contracts, and key registration | Lane A |
+| Score change scaled by transaction value | done with default value scales | Math lane |
 | Separate buyer score and seller score | done on main | Math lane |
-| Platform fee on the buyer side and the seller side | stub rate offers; no fee collection | Lane B |
-| Diminishing returns for the same pair | not started | Math lane |
+| Platform fee on the buyer side and the seller side | fee curve and accepted charges; paper collection | Lane B |
+| Diminishing returns for the same pair | done with default decay rate | Math lane |
+| Listings and offers | listing writes and the offer flow | Lane D |
+| Invoice and delivery evidence | invoice terms hash and payment check; delivery terms check | Lane D |
 
 Lane C builds the Tally UI against `GET /reliability/*`. It shows contracts and their next actions, disputes with their case files, company records, transactions, receipts, separate buyer and seller scores, mock KYC, and listings. Read [UI instructions](../ui/README.md). The UI sends no orders, edits no policy, and signs nothing.
 
 Pull request #8 adds mock KYC on main. Lane A owns mock KYC. Read [mock KYC](kyc.md). `KYC_TIER_RULES` contains the default tier rules. The product owner has not decided the final KYC bar.
 
-The target score weight is $w = \ln(1 + v / v_0)$. $v$ is the transaction value. $v_0$ is the value scale. `packages/reliability/src/scoring.ts` is a stub. The stub adds one to alpha on success and one to beta on failure.
+The score weight is $W = a \cdot \ln(1 + v / v_0) \cdot D(n)$. $v$ is the transaction value. $v_0$ is the value scale. $D(n)$ is the repeat-pair factor. `BetaScoringPolicy` in `packages/reliability/src/scoring.ts` implements it with default parameters.
 
 Each entity has a buyer score and a seller score on main.
-The score numbers come from the scoring stub.
 A new failed outcome emits a failure event for the at-fault role.
 An outcome reversal replaces active events and rebuilds the affected scores.
 The service preserves old events in an archive.
+The score ledger records each event weight and pair position (migration `007`).
 Read [Implementation status](implementation-status.md) for the known limits.
 
-Lane B owns fees and terms in `packages/reliability/src/fees-policy.ts`.
-That file is a stub.
-The stub returns buyer and seller fee rate offers for one entity.
-A higher lower bound gives a lower offered rate.
-The lifecycle does not collect these fees or enforce the offered terms.
+Lane B owns fees and terms in `packages/reliability/src/fees-policy.ts` and `packages/reliability/src/fee-charges.ts`.
+`CurveFeeTermsPolicy` maps a lower bound to fees and terms.
+A higher lower bound gives a lower fee.
+Each sale records one accepted charge with the buyer fee and the seller fee.
 Lane B reads the lower bound from the math lane.
-The agreed fee curve is not implemented.
+Read [Marketplace rules and writes](marketplace.md).
 
-The math lane owns `packages/reliability/src/pair-decay.ts`. That file is a stub. Repeat transactions between the same pair must give diminishing returns. That limit reduces repeated score gains from the same pair. The event flow calls the decay stub. The score change stays one. The agreed decay curve is not started.
+The math lane owns `packages/reliability/src/pair-decay.ts`. Repeat transactions between the same pair give diminishing returns. `HyperbolicPairDecay` applies $D(n) = 1 / (1 + \lambda n)$ to each event.
 
 ## Lanes
 
@@ -72,7 +73,11 @@ Keep migration `009` for lane D.
 Migration `013` stores paper omnibus deposits and deal allocations.
 Read [Paper omnibus funding](omnibus-funding.md).
 Migration `014` stores lifecycle commands, event revisions, score baselines, and listings.
-The next free migration number is `015`.
+Migration `007` stores event weights and pair positions.
+Migration `009` stores invoice payment observations.
+Migration `016` stores offers and accepted fee charges.
+Migration `015` stores settlement anchors.
+The next free migration number is `017`.
 
 Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tiers, and demo routes.
 
@@ -142,7 +147,8 @@ Take the next free migration number.
 
 Paper omnibus funding uses `013`.
 Lifecycle command and projection storage uses `014`.
-The next free number is `015`.
+The math lane uses `007`. Lane D uses `009`. Settlement anchors use `015`. Offers and fee charges use `016`.
+The next free number is `017`.
 
 ## Shared files
 

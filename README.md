@@ -33,15 +33,16 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Coworkers | Registered on the Masumi registry and approved in the TOKEN2049 workspace. The Task worker runs on the server. Paid Tasks complete with Masumi escrow on preprod, and the first collection is confirmed |
 | Settlement anchors | Built. Fingerprints of settled records, chained per company, for Cardano preprod. Posting waits for the team's go-ahead. Read [Settlement anchors](docs/settlement-anchors.md) |
 | Tally UI | Hosted publicly with six showcase contracts and Ask a Coworker (a free preview) |
-| Scoring, pair decay, fees | Stubs. Read [Implementation status](docs/implementation-status.md) |
-| KYC | Mock provider |
+| Scoring, pair decay, fees | Built with default parameters: weighted Beta scores, repeat-pair decay, and buyer and seller fee charges. Read [Reliability math](docs/reliability-math.md) |
+| Listings, offers, invoices | Built for paper orders. Read [Marketplace rules and writes](docs/marketplace.md) |
+| KYC | Mock provider. Enforced before sales, invoices, contracts, and key registration |
 | Sign-in | Not built. Role views in the UI are lenses, not access control |
 
 Read [Implementation status](docs/implementation-status.md) for every feature and known gap.
 Read [PLAN.md](PLAN.md) for the product scope and work order.
 Read [lane ownership](docs/reliability-lanes.md) before you change a module.
 
-## Target rules
+## Rules
 
 - Scale each score change with transaction value: $w = \ln(1 + v / v_0)$.
   $v$ is the transaction value. $v_0$ is the value scale.
@@ -51,8 +52,8 @@ Read [lane ownership](docs/reliability-lanes.md) before you change a module.
 - Use KYC checks and agreed terms to control participation.
 - Keep delivery evidence, dispute decisions, and payment evidence separate.
 
-These rules describe the target.
-Scoring, pair decay, fees, and invoice evidence currently use stubs.
+The code applies these rules with default parameters.
+The product owner has not selected the parameters.
 KYC currently uses a mock provider.
 
 ## Layout
@@ -157,9 +158,19 @@ Listing and offer write routes still need implementation.
 | `GET` | `/reliability/contracts/ruling-payload` | Return the exact bytes that the mediator signs |
 | `GET` | `/reliability/profile` | Read a company record |
 | `GET` | `/reliability/profile/search` | Find companies by name or id |
+| `POST` | `/reliability/listings` | Create a listing |
+| `POST` | `/reliability/offers` | Make, then `/accept`, `/decline`, or `/withdraw` an offer |
+| `GET` | `/reliability/offers` | Read offers |
+| `POST` | `/reliability/invoices` | Issue an invoice, then `/settle` or `/review` it |
+| `GET` | `/reliability/invoices` | Read an invoice by `id` |
+| `GET` | `/reliability/fees` | Read the accepted fee charge for a transaction |
+| `GET` | `/reliability/fees/quote` | Preview the checks and fees for a sale |
+| `GET` | `/reliability/scores/explain` | Explain each score change |
 
 Every party action carries an Ed25519 signature.
 The read views use the Coworker tools, so the UI and the Coworkers show the same engine numbers.
+A sale, an invoice, and a contract open only after KYC and limit checks.
+Read [Marketplace rules and writes](docs/marketplace.md) for the checks, fees, listings, offers, and invoices.
 
 Read [Transaction lifecycle](docs/reliability-lifecycle.md) for v1 actions and evidence rules.
 Read [Contract lifecycle](docs/contract-lifecycle.md) for templates, tiered disputes, signed party actions, and live Masumi escrow.
@@ -182,10 +193,11 @@ Paper stages remain simulations.
 Commands use durable identities and saved responses for safe retries.
 Read [chain evidence](docs/reliability-lifecycle.md#chain-evidence) before you use these stages.
 
-The fee stub returns buyer and seller rate offers for one entity.
-The lifecycle does not collect platform fees or enforce those offers.
-The scoring stub uses unit event weights.
-It does not apply value weighting or repeat-pair decay.
+Scores use the weighted Beta model with value weights, repeat-pair decay, and the fifth-percentile lower bound.
+Each sale records an accepted buyer fee and seller fee. The paper ledger collects, waives, or refunds them.
+The parameters are defaults until the product owner selects them.
+Run `bun run scores:rebuild` after a policy change.
+Read [Reliability math](docs/reliability-math.md).
 
 Run `bun run funding:demo` for the paper pool ledger.
 Read [paper omnibus funding](docs/omnibus-funding.md) for allocation rules and live custody requirements.

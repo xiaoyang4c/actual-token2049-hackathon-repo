@@ -29,6 +29,11 @@ import type {
 } from '../../reliability/src/contract-lifecycle/types';
 import * as reliabilityRecords from './reliability';
 import * as omnibusFunding from './omnibus-funding';
+import * as scoreWeights from './score-weights';
+import * as marketplaceRecords from './marketplace-records';
+import type {FeeCharge} from '../../reliability/src/fee-charges';
+import type {Offer} from '../../reliability/src/offers';
+import type {EventWeightRecord} from '../../reliability/src/event-weights';
 import type {
   DealFundingRequest, OmnibusBalance, PaperDealFundingRecord,
   PaperOmnibusPool, PaperPoolDeposit,
@@ -440,6 +445,82 @@ export class AgentStore {
     return this.db.query<{listingJson: string}, []>(
       'SELECT listing_json AS listingJson FROM reliability_listings ORDER BY id',
     ).all().map((row) => JSON.parse(row.listingJson) as Listing);
+  }
+
+  /** Inserts or replaces the recorded weight of one event (migration 007). */
+  saveEventWeight(record: EventWeightRecord): void {
+    scoreWeights.saveEventWeight(this.db, record);
+  }
+
+  getEventWeight(eventId: string): EventWeightRecord|undefined {
+    return scoreWeights.getEventWeight(this.db, eventId);
+  }
+
+  listEventWeightsForTransaction(transactionId: string): EventWeightRecord[] {
+    return scoreWeights.listEventWeightsForTransaction(this.db, transactionId);
+  }
+
+  getPairPosition(pairKey: string, transactionId: string): number|undefined {
+    return scoreWeights.getPairPosition(this.db, pairKey, transactionId);
+  }
+
+  /** Adds an eligible transaction to a pair. Repeated calls return the first position. */
+  addPairTransaction(pairKey: string, transactionId: string, at: string): number {
+    return scoreWeights.addPairTransaction(this.db, pairKey, transactionId, at);
+  }
+
+  /** Removes a transaction from its pairs. Returns transactions that moved down. */
+  removePairTransaction(transactionId: string): string[] {
+    return scoreWeights.removePairTransaction(this.db, transactionId);
+  }
+
+  /** Deletes every weight and pair row before a full score rebuild. */
+  clearScoreWeights(): void {
+    scoreWeights.clearScoreWeights(this.db);
+  }
+
+  insertOffer(offer: Offer): void {
+    marketplaceRecords.insertOffer(this.db, offer);
+  }
+
+  /** Replaces an offer while it is still open. False when another writer decided it. */
+  updateOpenOffer(offer: Offer, at: string): boolean {
+    return marketplaceRecords.updateOpenOffer(this.db, offer, at);
+  }
+
+  getOffer(id: string): Offer|undefined {
+    return marketplaceRecords.getOffer(this.db, id);
+  }
+
+  listOffers(filter: {listingId?: string; buyerId?: string; sellerId?: string} = {}): Offer[] {
+    return marketplaceRecords.listOffers(this.db, filter);
+  }
+
+  /** Inserts the accepted buyer and seller fees for one sale (migration 016). */
+  insertFeeCharge(charge: FeeCharge): void {
+    marketplaceRecords.insertFeeCharge(this.db, charge);
+  }
+
+  /** Moves a charge from `fromStatus`. False when another writer moved it first. */
+  settleFeeCharge(charge: FeeCharge, fromStatus: FeeCharge['status']): boolean {
+    return marketplaceRecords.settleFeeChargeRow(this.db, charge, fromStatus);
+  }
+
+  getFeeCharge(transactionId: string): FeeCharge|undefined {
+    return marketplaceRecords.getFeeCharge(this.db, transactionId);
+  }
+
+  /** Payment observation for one invoice (migration 009). */
+  saveInvoiceSettlement(record: marketplaceRecords.InvoiceSettlementRecord): void {
+    marketplaceRecords.saveInvoiceSettlement(this.db, record);
+  }
+
+  getInvoiceSettlement(transactionId: string): marketplaceRecords.InvoiceSettlementRecord|undefined {
+    return marketplaceRecords.getInvoiceSettlement(this.db, transactionId);
+  }
+
+  invoiceForSettlementReference(reference: string): string|undefined {
+    return marketplaceRecords.invoiceForSettlementReference(this.db, reference);
   }
 
   /** Archives and replaces the active events after an outcome correction. */

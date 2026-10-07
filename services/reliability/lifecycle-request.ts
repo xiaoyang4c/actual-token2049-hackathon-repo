@@ -6,6 +6,7 @@
 import {
   LifecycleError, type EscrowTransactionLifecycle, type LifecycleTransition,
 } from '../../packages/reliability/src/lifecycle';
+import {checkDeliveryAgainstTerms} from '../../packages/reliability/src/evidence-delivery';
 import type {JsonValue, TransactionType} from '../../packages/reliability/src/types';
 
 function isRecord(value: unknown): value is {[key: string]: unknown} {
@@ -87,6 +88,20 @@ export async function readBody(request: Request): Promise<{[key: string]: unknow
   }
 }
 
+/** Checks delivery evidence against the agreed terms and adds the check result. */
+function checkedDelivery(
+  lifecycle: EscrowTransactionLifecycle,
+  transactionId: string,
+  at: string,
+  evidence: LifecycleTransition['evidence'],
+): LifecycleTransition['evidence'] {
+  const check = checkDeliveryAgainstTerms(lifecycle.getTransaction(transactionId), evidence, at);
+  if (!check.passed) {
+    throw new LifecycleError(check.violations.map((violation) => violation.message).join('; '));
+  }
+  return {...evidence, ...check.evidence};
+}
+
 export async function runAction(
   lifecycle: EscrowTransactionLifecycle,
   action: string,
@@ -112,15 +127,18 @@ export async function runAction(
     return lifecycle.confirmDelivery({
       transactionId,
       at,
-      evidence: evidenceField(body.evidence),
+      evidence: checkedDelivery(lifecycle, transactionId, at, evidenceField(body.evidence)),
     });
   }
   if (action === 'release') {
+    const evidence = body.evidence === undefined ? undefined : evidenceField(body.evidence);
     return lifecycle.release({
       transactionId,
       commandId: optionalText(body, 'commandId'),
       at,
-      evidence: body.evidence === undefined ? undefined : evidenceField(body.evidence),
+      // Silent release from a funded sale is a delivery. Check it like one.
+      evidence: evidence?.deliveryTier === undefined ? evidence :
+        checkedDelivery(lifecycle, transactionId, at, evidence),
     });
   }
   if (action === 'refund') {

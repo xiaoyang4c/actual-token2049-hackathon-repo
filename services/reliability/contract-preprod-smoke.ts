@@ -115,6 +115,14 @@ async function waitFor(contractId: string, states: MilestoneState[]): Promise<Mi
 log(`custody: ${service.config.settings.custodyModel} (platform-managed preprod test wallets)`);
 for (const [id, key] of [[buyerId, buyerKey], [sellerId, sellerKey]] as const) {
   const address = process.env[id === buyerId ? 'CONTRACT_SMOKE_BUYER_ADDRESS' : 'CONTRACT_SMOKE_SELLER_ADDRESS'] ?? `addr_test1_synthetic_${id}`;
+  // Key registration needs a KYC-verified entity. The smoke parties are
+  // platform test wallets, so the run records them as verified (mock KYC).
+  if (!store.getEntity(id)) {
+    store.insertEntity({
+      id, displayName: id, wallets: [], roles: ['buyer', 'seller'],
+      kycStatus: 'verified', kycTier: 'basic', createdAt: new Date().toISOString(),
+    });
+  }
   service.registerParty({entityId: id, publicKeyHex: publicHex(key), cardanoAddress: address});
 }
 
