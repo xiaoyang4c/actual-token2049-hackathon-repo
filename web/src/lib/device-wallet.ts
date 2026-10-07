@@ -33,6 +33,16 @@ export function deviceWallet(): DeviceWallet | null {
   }
 }
 
+/**
+ * The receive address (addr_test1…) of this device's wallet, when that wallet
+ * signed in with `signInAddress`. The sign-in address is a stake address, and
+ * a stake address cannot receive funds.
+ */
+export function receiveAddressFor(signInAddress: string): string | null {
+  const saved = deviceWallet()
+  return saved && saved.rewardAddress === signInAddress ? saved.address : null
+}
+
 /** Saves the phrase encrypted. Returns false when this browser has no storage. */
 export async function saveDeviceWallet(phrase: string, password: string, addresses: {address: string; rewardAddress: string}): Promise<boolean> {
   const salt = crypto.getRandomValues(new Uint8Array(16))
