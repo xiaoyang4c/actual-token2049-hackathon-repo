@@ -1,6 +1,6 @@
 /**
  * @fileoverview Plumbing read routes for the UI lane (lane C). These
- * routes serve seed fixtures now. Lane C builds against them today.
+ * routes merge stored records over seed fixtures by record ID.
  * Lane D owns the fixtures. Scoring and fees use the shared policy
  * composition seam so later implementations do not change handlers.
  */
@@ -26,7 +26,7 @@ import type {ReliabilityRoute} from './route';
 // Keep the existing lane import path available.
 export type {ReliabilityRoute} from './route';
 
-/** Creates fixture handlers with the same policy seams as lifecycle handlers. */
+/** Creates read handlers with the same policy seams as lifecycle handlers. */
 export function createPlumbingRoutes(
   policies: ReliabilityPolicies = DEFAULT_RELIABILITY_POLICIES,
 ): ReliabilityRoute[] {
@@ -60,7 +60,16 @@ export function createPlumbingRoutes(
     );
   }
 
-  function receiptFor(transactionId: string): Receipt|undefined {
+  function receiptFor(transactionId: string, store?: AgentStore): Receipt|undefined {
+    const stored = store?.getTransaction(transactionId);
+    if (stored && store) {
+      const outcome = store.getOutcome(transactionId);
+      const events = store.listReliabilityEventsForTransaction(transactionId);
+      const seller = stored.participants.find((party) => party.role === 'seller');
+      const category = stored.type === 'goods' ? 'delivery' : stored.type === 'invoice' ? 'payment' : 'fulfillment';
+      const decisions = seller ? store.listTermsDecisions(seller.entityId, category) : [];
+      return {transaction: stored, outcome, events, termsDecision: decisions[decisions.length - 1]};
+    }
     const transaction = FIXTURE_TRANSACTIONS.find(
       (entry) => entry.id === transactionId,
     );
@@ -84,14 +93,16 @@ export function createPlumbingRoutes(
     {
       method: 'GET',
       path: '/reliability/entities',
-      handler: (request, url) => {
+      handler: (request, url, store) => {
+        const entities = new Map(FIXTURE_ENTITIES.map((entry) => [entry.id, entry]));
+        for (const entity of store?.listEntities() ?? []) entities.set(entity.id, entity);
         const id = url.searchParams.get('id');
         if (id) {
-          const entity = FIXTURE_ENTITIES.find((entry) => entry.id === id);
+          const entity = entities.get(id);
           if (!entity) return json({error: 'unknown entity'}, 404);
           return json(entity);
         }
-        return json(FIXTURE_ENTITIES);
+        return json([...entities.values()]);
       },
     },
     {
@@ -104,40 +115,42 @@ export function createPlumbingRoutes(
     {
       method: 'GET',
       path: '/reliability/listings',
-      handler: (request, url) => {
+      handler: (request, url, store) => {
+        const listings = new Map(FIXTURE_LISTINGS.map((entry) => [entry.id, entry]));
+        for (const listing of store?.listListings() ?? []) listings.set(listing.id, listing);
         const id = url.searchParams.get('id');
         if (id) {
-          const listing = FIXTURE_LISTINGS.find((entry) => entry.id === id);
+          const listing = listings.get(id);
           if (!listing) return json({error: 'unknown listing'}, 404);
           return json(listing);
         }
-        return json(FIXTURE_LISTINGS);
+        return json([...listings.values()]);
       },
     },
     {
       method: 'GET',
       path: '/reliability/transactions',
-      handler: (request, url) => {
+      handler: (request, url, store) => {
+        const transactions = new Map(FIXTURE_TRANSACTIONS.map((entry) => [entry.id, entry]));
+        for (const transaction of store?.listTransactions() ?? []) transactions.set(transaction.id, transaction);
         const id = url.searchParams.get('id');
         if (id) {
-          const transaction = FIXTURE_TRANSACTIONS.find(
-            (entry) => entry.id === id,
-          );
+          const transaction = transactions.get(id);
           if (!transaction) return json({error: 'unknown transaction'}, 404);
           return json(transaction);
         }
-        return json(FIXTURE_TRANSACTIONS);
+        return json([...transactions.values()]);
       },
     },
     {
       method: 'GET',
       path: '/reliability/receipts',
-      handler: (request, url) => {
+      handler: (request, url, store) => {
         const transactionId = url.searchParams.get('transactionId');
         if (!transactionId) {
           return json({error: 'transactionId is required'}, 400);
         }
-        const receipt = receiptFor(transactionId);
+        const receipt = receiptFor(transactionId, store);
         if (!receipt) return json({error: 'unknown transaction'}, 404);
         return json(receipt);
       },
@@ -145,5 +158,5 @@ export function createPlumbingRoutes(
   ];
 }
 
-/** Default fixture routes. Existing registry imports remain available. */
+/** Default read routes. Existing registry imports remain available. */
 export const plumbingRoutes: ReliabilityRoute[] = createPlumbingRoutes();

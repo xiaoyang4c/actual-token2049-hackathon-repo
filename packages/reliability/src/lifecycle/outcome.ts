@@ -43,8 +43,12 @@ function buildOutcome(
   const base = {
     transactionId,
     evidence,
-    decidedAt: options.now,
+    decidedAt: history[history.length - 1]?.at ?? options.now,
   };
+  if ((stage === 'payment_settled' || stage === 'refunded') &&
+      evidence.mode === 'live' && evidence.settlementVerified !== true) {
+    return {...base, state: 'pending', verificationMethod: 'unverified'};
+  }
   if (stage === 'payment_settled') {
     return settledOutcome(history, base);
   }
@@ -142,6 +146,7 @@ function disputedOutcome(
     throw new LifecycleError('the dispute deadline is already set');
   }
   if (parseTime(options.now, 'now') > parseTime(dispute.resolveBy, 'resolveBy')) {
+    base.decidedAt = dispute.resolveBy;
     base.evidence.timeoutResult = 'unresolved';
     base.evidence.escrowDisposition = 'held';
     return {

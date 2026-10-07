@@ -22,7 +22,7 @@ Read [lane ownership](docs/reliability-lanes.md) for module owners and reserved 
 10. Show the outcome, evidence, and fees.
 
 This flow is the target.
-Main has fixture reads, mock KYC, a stored lifecycle, and a local operator display.
+The implementation has stored collection reads, mock KYC, a stored lifecycle, and a local operator display.
 It does not implement the complete buyer and seller flow.
 
 ## Reliability rules
@@ -65,19 +65,19 @@ Live preprod testing needs assigned key owners.
 
 | Priority | Work | Completion condition |
 | --- | --- | --- |
-| 1 | Correct lifecycle outcomes and payment completion | Confirm funds locks, payouts, and refunds. Correct score events after disputes. |
-| 1 | Add safe action retries and time checks | Persist command identity before external calls. Use server time. Recover after restart. |
+| 1 | Validate lifecycle payment completion | Chain checks and score corrections are implemented. Reconcile legacy records and test actual preprod settlement. |
+| 1 | Complete external-action recovery | Durable commands and time checks are implemented. Add an operator flow for lost external responses. |
 | 1 | Authenticate callers and authorize actions | Check participant ownership, resolver authority, and consent. |
 | 2 | Implement the reliability model | Apply value and pair weights. Calculate the Beta lower bound. Explain each score change. |
 | 2 | Apply fees, terms, and KYC restrictions | Store accepted charges. Enforce transaction limits and required verification. |
-| 2 | Add marketplace writes and stored reads | Create listings and offers. Discover stored deals and receipts. |
+| 2 | Add marketplace writes | Stored reads are implemented. Add listing creation and buyer/seller offer acceptance. |
 | 2 | Complete B2B and B2C evidence flows | Verify invoice payment, service acceptance, and goods delivery against agreed terms. |
-| 3 | Improve the operator display | Add pagination, bounded polling, stored deal discovery, and clear evidence sources. |
+| 3 | Improve the operator display | Add pagination, bounded polling, and clear evidence sources. |
 | 3 | Connect pooled funding to escrow | Reconcile allocations, payouts, refunds, cancellations, and available balances. |
 
-Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) proposes contract templates and a contract lifecycle.
-It is not merged into main.
-Review its changes against these requirements before merge.
+Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) adds contract templates and a signed contract lifecycle.
+It is merged into main.
+Read [Contract lifecycle](docs/contract-lifecycle.md) for its implemented flows and remaining limits.
 
 ## Payment boundary
 
@@ -88,7 +88,7 @@ Queued requests and fixture responses do not prove settlement.
 Actual preprod settlement has not been tested.
 
 The shared Cardano adapters and settlement observer provide useful payment components.
-The marketplace lifecycle still needs their confirmation checks.
+The live marketplace lifecycle uses their settlement verification checks.
 The paper funding pool is a separate ledger.
 It does not fund lifecycle escrow or return allocated credit after a refund.
 

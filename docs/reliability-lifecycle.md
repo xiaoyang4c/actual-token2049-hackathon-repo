@@ -43,7 +43,9 @@ Use the next stage from this list.
 The lifecycle accepts a voluntary refund from `escrow_funded`.
 
 Direct calls to `advance` reject those three stages.
-The async escrow methods record them after the adapter call.
+The async methods record paper stages after the adapter call.
+Live stages also require confirmed chain evidence.
+A pending action keeps the prior stage.
 
 An invalid transition throws `LifecycleError`.
 
@@ -112,7 +114,9 @@ Name `resolver` and `resolveBy` when you open a dispute.
 Before the deadline, the outcome is `disputed`.
 
 The resolver can uphold the seller.
-That queues a Masumi result submission and records `payment_settled`.
+That submits a Masumi result.
+A paper action records `payment_settled`.
+A live action waits for a verified seller payout before recording that stage.
 
 The outcome is `successful`.
 
@@ -128,12 +132,14 @@ The outcome is `failed`.
 
 `Outcome.fault` is `seller`.
 
-A direct domain refund with `fault: buyer` produces `failed`.
+A refund with `fault: buyer` produces `failed`.
 
 `Outcome.fault` is `buyer`.
 
-The demo HTTP refund action does not forward `fault`.
-A voluntary refund through that route records `fault: none` and produces `cancelled`.
+The HTTP action validates and forwards this fault.
+It rejects other supplied fault values.
+Without a fault, a voluntary refund produces `cancelled` with `fault: none`.
+A live refund needs confirmed buyer payment before the final outcome.
 
 After the deadline, the outcome is `unresolved`.
 
@@ -147,9 +153,10 @@ The lifecycle does not release it.
 
 The lifecycle does not refund it.
 
-A resolve with `at` after the deadline throws `the dispute deadline has passed; the result is unresolved`.
-The current code uses the supplied `at` for this check.
-It does not reject a backdated request after a timeout read.
+A resolve after the deadline throws `the dispute deadline has passed; the result is unresolved`.
+HTTP actions check both `at` and the current server time.
+A stored timeout cannot become disputed again after a backdated read.
+A backdated request cannot bypass that timeout.
 
 ## Terms
 
@@ -165,8 +172,9 @@ Call `amendTerms` to change terms.
 
 A terminal stage freezes terms.
 
-`amendTerms` rejects an amendment with `at` after the dispute deadline.
-The current code does not enforce timestamp order across requests.
+`amendTerms` rejects an amendment after the dispute deadline.
+Transitions and amendments cannot precede the latest transition or terms version.
+A pending escrow command blocks other mutations and terms changes.
 
 Set `contractEnds` on `open` or in the terms object.
 
@@ -188,8 +196,9 @@ The lifecycle records both consents, both timestamps, `contractStart`, and `cont
 
 A funded transaction calls `mutualTerminate` on the escrow port.
 
-That call uses the Masumi refund request today.
-It does not prove that the buyer received a refund.
+That call uses the Masumi refund request.
+A paper result is simulated.
+A live result waits for a verified buyer refund before recording `refunded`.
 
 The consent record is the seam for a later on-chain check.
 
@@ -207,15 +216,27 @@ A one-sided `cancel` does not record both consents.
 
 Each escrow step records `txHash`, `escrowState`, and `blockTime` when the chain has a block time.
 
-These fields are observations from the adapter.
-The lifecycle does not require confirmed funds locking before recording `escrow_funded`.
-It records `payment_settled` after the adapter accepts result submission.
-It records `refunded` after the adapter accepts a refund request.
-These stage names do not prove a completed payout or refund.
+Live money stages require `settlementVerified: true`.
+The adapter uses the shared Cardano settlement verifier.
+It binds the proof to the original escrow terms and deposit transaction.
+It checks the buyer and seller addresses, result hash, and payout amounts.
 
-The shared payment runtime has separate confirmation and settlement checks.
-Those checks do not govern this marketplace lifecycle.
-Read [settlement reconciliation](masumi-settlement.md) for that separate runtime.
+`escrow_funded` needs a confirmed `FundsLocked` state.
+`payment_settled` needs a verified seller withdrawal.
+`refunded` needs a verified buyer refund.
+A queued action or a Masumi status string alone is not proof.
+
+An action without proof returns HTTP 202.
+The command keeps its saved external response and its prior stage.
+Retry that command to check proof again.
+The retry does not submit the external action again.
+
+An old live terminal record without proof projects as `pending` and `unverified`.
+It emits no score event.
+Those old records need a separate reconciliation process.
+Paper stages record `settlementVerified: false`.
+They do not prove a real payout or refund.
+Read [settlement reconciliation](masumi-settlement.md) for the shared verifier.
 
 `mode` is `paper` for a simulated order.
 
@@ -233,7 +254,11 @@ Keep `CARDANO_ALLOW_NETWORK` at `false` for a dry run.
 
 A dry run does not call Masumi or Blockfrost.
 
-Set both gates to send a live preprod order:
+These gates are required for live adapters.
+They do not bypass the v1 live funding guard.
+Use the [contract setup](contract-lifecycle.md#run) for a live contract.
+
+Set the adapter gates as follows:
 
 1. Set `CARDANO_MODE` to `preprod`.
 2. Set `CARDANO_ALLOW_NETWORK` to `true`.
@@ -292,13 +317,15 @@ Send `at` as a UTC timestamp such as `2026-10-06T00:00:00.000Z`.
 
 `open` accepts `contractEnds`.
 
-Add `now` on the GET when you want the dispute deadline checked at a later time.
-Without `now`, the route uses the last transition time.
-It does not use the current server time.
+Without `now`, a GET uses the current server time.
+An explicit `now` supports paper test scenarios.
+It cannot reverse a stored timeout.
+The HTTP mutation deadline still uses the server clock.
 
 The lifecycle read saves the projected outcome.
-It uses the supplied `now` as `decidedAt`, including for a completed outcome.
-A later read can therefore change the returned decision and event timestamps.
+`decidedAt` is the transition time.
+For a timeout, it is the dispute deadline.
+Later reads keep the decision and event timestamps.
 
 The GET runs the outcome through `outcomeToEvents` and the current terms policy.
 
@@ -318,22 +345,55 @@ The response shows terms recalculated from the current cumulative scores. Persis
 
 The math lane can replace the policies through the shared policy composition seam.
 
-Existing stored scores remain the starting point. A missing score is rebuilt from its recorded events under the active scoring policy. The service commits that score and its current terms together. This change does not rebuild older scores that were overwritten by the earlier per-outcome flow.
+The service saves a baseline for each entity, category, and role.
+It keeps imported score history in that baseline.
+For existing unit-weight history, it recovers the baseline by subtracting recorded contributions.
+An inconsistent legacy baseline requires repair before a rebuild.
+A missing score can be rebuilt from its event history.
+Older overwritten history cannot be recovered from absent records.
 
-An applied event keeps its transaction and role id. Reversing an applied outcome or replaying it under a new policy needs a separate history rebuild.
+When an outcome changes, the service archives its old events.
+It replaces the active transaction events.
+It rebuilds each affected score from its baseline and all active events.
+Replay orders events by decision time and event ID.
+The archive, events, scores, and terms commit in one SQLite transaction.
 
-For example, a success can credit the seller before a later dispute finds seller fault.
-The failure event then has the same id as the applied success event.
-The current projection skips that failure event.
-It does not remove the earlier success credit.
+For example, seller fault replaces an earlier seller success with a failure.
+It also removes that transaction's buyer success.
+Repeated reads do not apply the correction again.
+Changing the scoring policy still requires a separate controlled rebuild.
 
-Lifecycle mutation routes do not have the shared payment runtime's durable retry records.
-A retry after funding succeeds fails the stage check.
-Concurrent requests can both call the escrow adapter before one fails the stage check.
+## Command retries
+
+`fund`, `release`, `refund`, `terminate`, and `resolve` accept an optional `commandId`.
+The default identity uses the transaction and action.
+For resolution, it also includes the dispute generation.
+Use the same identity for a retry.
+A changed action or payload with the same identity returns HTTP 409.
+The first request fixes `at`.
+A retry with a later `at` keeps that original time.
+A completed command returns its saved transition.
+
+The journal permits one pending command per transaction.
+It saves a checkpoint before an external call.
+It saves the response before checking chain proof.
+SQL locks do not span network calls.
+Separate database writers cannot submit the same recorded call twice.
+
+If a call starts but its response is lost, a retry returns HTTP 409.
+The error requires reconciliation before another submission.
+The current API has no operator reconciliation action.
+Do not delete that checkpoint and resubmit without checking the external action.
+
+A saved response can resume after a restart.
+A pending chain check returns HTTP 202 until proof is available.
+The final stage, outcome, and command result commit together.
 
 The scoring projection uses local records only. It does not call Cardano, Masumi, or Chainlink. Tests use explicit simulated escrow.
 
-Schema for the stage history is `packages/db/migrations/011_lane_a_lifecycle.sql`.
+Stage history uses `packages/db/migrations/011_lane_a_lifecycle.sql`.
+Migration `014_lifecycle_commands.sql` adds the command journal, event archive,
+score baselines, and stored listings.
 
 KYC uses migration `008`.
 

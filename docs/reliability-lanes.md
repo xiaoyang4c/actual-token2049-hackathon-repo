@@ -34,7 +34,8 @@ The target score weight is $w = \ln(1 + v / v_0)$. $v$ is the transaction value.
 Each entity has a buyer score and a seller score on main.
 The score numbers come from the scoring stub.
 A new failed outcome emits a failure event for the at-fault role.
-An outcome reversal does not correct an event that was already applied.
+An outcome reversal replaces active events and rebuilds the affected scores.
+The service preserves old events in an archive.
 Read [Implementation status](implementation-status.md) for the known limits.
 
 Lane B owns fees and terms in `packages/reliability/src/fees-policy.ts`.
@@ -52,7 +53,7 @@ The math lane owns `packages/reliability/src/pair-decay.ts`. That file is a stub
 - Math lane owns `packages/reliability/src/scoring.ts` and `packages/reliability/src/pair-decay.ts`. Migration `007` is reserved for the math lane.
 - Lane B owns fees and terms in `packages/reliability/src/fees-policy.ts`. Lane B reads the lower bound from the math lane.
 - Lane A (agents) owns the generic transaction lifecycle, the escrow state machine, and mock KYC. Files: `packages/reliability/src/lifecycle.ts`, `packages/reliability/src/kyc.ts`. See [Lane A lifecycle](#lane-a-lifecycle). Read [Mock KYC](kyc.md) for the mock KYC contract.
-- Lane C owns the UI. It builds against `GET /reliability/*` and the fixtures.
+- Lane C owns the UI. It builds against `GET /reliability/*`, stored records, and fixtures.
 - Lane D owns B2B payment evidence and demo fixtures. Files: `packages/reliability/src/evidence-payment.ts`, `packages/reliability/src/fixtures/`. Migration `009` is reserved for lane D.
 
 ### Lane A lifecycle
@@ -70,7 +71,8 @@ Keep migration `009` for lane D.
 
 Migration `013` stores paper omnibus deposits and deal allocations.
 Read [Paper omnibus funding](omnibus-funding.md).
-The next free migration number is `014`.
+Migration `014` stores lifecycle commands, event revisions, score baselines, and listings.
+The next free migration number is `015`.
 
 Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tiers, and demo routes.
 
@@ -84,8 +86,9 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for states, evidence tier
 - Pull request #16 adds the reliability marketplace operator display.
 - Pull request #18 adds the [paper omnibus funding](omnibus-funding.md) ledger.
 
-Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) proposes the contract lifecycle.
-Its templates, tiered disputes, and contract routes are not on main.
+Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) adds the contract lifecycle.
+Its templates, tiered disputes, and signed contract routes are now on main.
+Read [Contract lifecycle](contract-lifecycle.md).
 
 ## Open decisions
 
@@ -138,7 +141,8 @@ Lane A contract lifecycle uses `012_contract_lifecycle.sql`.
 Take the next free migration number.
 
 Paper omnibus funding uses `013`.
-The next free number is `014`.
+Lifecycle command and projection storage uses `014`.
+The next free number is `015`.
 
 ## Shared files
 
