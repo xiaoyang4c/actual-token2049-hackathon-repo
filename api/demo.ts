@@ -1,7 +1,8 @@
 /**
  * @fileoverview The public read-only demo of the Tally web app on Vercel
- * (Bun runtime). It serves the control API's reliability and contract read
- * routes from a paper database with the six showcase contracts and their
+ * (Bun runtime). It reads the public preprod demo so the website and the
+ * Coworker see the same contract ids. When preprod is offline, it serves
+ * read routes from a paper database with six showcase contracts and their
  * settlement fingerprints. The build seeds it once (api/_seed.ts), so every
  * instance serves the same ids; a cold start copies it to /tmp, the only
  * writable path. Nothing is sent to a chain. The web app sends the Coworker chat to the
@@ -17,6 +18,7 @@ import {join} from 'node:path';
 import {AgentStore} from '../packages/db/src/index';
 import {AskService} from '../services/reliability/coworker-ask';
 import {CoworkerTools} from '../services/reliability/coworker-tools';
+import {readHostedDemo} from '../services/reliability/coworker-demo';
 import {contractServiceFor} from '../services/reliability/contract-service';
 import {reliabilityRoutes} from '../services/reliability/index';
 
@@ -49,6 +51,11 @@ export default {
       url.searchParams.delete('__path');
     }
     try {
+      const route = request.method === 'GET' ? routes.get(url.pathname) : undefined;
+      if (route) {
+        const hosted = await readHostedDemo(url, process.env.COWORKER_DEMO_URL ?? 'https://13-210-42-0.sslip.io');
+        if (hosted) return hosted;
+      }
       ready ??= open();
       const {store, ask} = await ready;
       if (url.pathname === '/coworkers/ask' && request.method === 'POST') {
@@ -62,7 +69,6 @@ export default {
       }
       if (url.pathname === '/coworkers/ask') return json({error: 'This answer is no longer available.'}, 404);
       // Read-only: GET routes only, like the hosted UI server.
-      const route = request.method === 'GET' ? routes.get(url.pathname) : undefined;
       if (!route) return json({error: 'not found'}, 404);
       return await route.handler(request, url, store);
     } catch (error) {

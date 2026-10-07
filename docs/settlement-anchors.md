@@ -42,6 +42,8 @@ Anchors write to the chain, so they follow the payment rules.
 - Sending the same signed transaction again is safe. The chain includes one transaction id at most once.
 - One batch at a time, so two batches never spend the same wallet outputs.
 - Nothing is sent unless the worker runs with `ANCHOR_SUBMIT=on`.
+- With submission off, the worker still checks existing batches for confirmation or expiry.
+- Each send starts a new five-minute wait before the worker can resend the same transaction.
 
 ## Limits
 

@@ -253,6 +253,55 @@ describe('Coworker worker: the paid Task flow', () => {
     expect(env.core.posted.filter((item) => item.body.status === 'COMPLETED')).toHaveLength(1);
     env.close();
   });
+
+  test('a restart before input validation does not charge an unreadable request', async () => {
+    const env = setup();
+    try {
+      env.core.addTask('restart-input', 'Can you help with a deal?');
+      await env.make().runOnce();
+      const entry = env.journal.read('restart-input')!;
+      // The initial journal write survives, but validation did not run.
+      env.journal.save({...entry, stage: 'starting', answer: null}, T0);
+      await env.make().runOnce();
+      expect(env.journal.read('restart-input')?.stage).toBe('input_requested');
+      expect(env.mps.creates).toBe(0);
+    } finally {
+      env.close();
+    }
+  });
+
+  test('a restart after Core completes does not post the answer again', async () => {
+    const env = setup();
+    try {
+      env.core.addTask('restart-completed', REQUEST);
+      await env.make().runOnce();
+      env.mps.lock('bi-restart-completed');
+      await env.make().runOnce();
+      const entry = env.journal.read('restart-completed')!;
+      // Core accepted COMPLETED, but the process stopped before saving collecting.
+      env.journal.save({...entry, stage: 'completing'}, T0);
+      await env.make().runOnce();
+      expect(env.journal.read('restart-completed')?.stage).toBe('collecting');
+      expect(env.core.posted.filter((item) => item.body.status === 'COMPLETED')).toHaveLength(1);
+    } finally {
+      env.close();
+    }
+  });
+
+  test('an event feed outage does not stop an already funded Task', async () => {
+    const env = setup();
+    try {
+      env.core.addTask('feed-down', REQUEST);
+      await env.make().runOnce();
+      env.mps.lock('bi-feed-down');
+      env.core.events = async () => { throw new CoreError('feed unavailable', 503, false); };
+      await env.make().runOnce();
+      expect(env.journal.read('feed-down')?.stage).toBe('collecting');
+      expect(env.mps.submits).toBe(1);
+    } finally {
+      env.close();
+    }
+  });
 });
 
 class ScriptedProvider implements ModelProvider {

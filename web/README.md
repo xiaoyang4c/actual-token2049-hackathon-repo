@@ -52,10 +52,16 @@ for the white-to-gray theme. Type: Unbounded, Sora, JetBrains Mono.
 
 <https://tally-origins.vercel.app> is built from this repository. [`vercel.json`](../vercel.json) builds
 `web/` and routes `/reliability/*` and `/coworkers/ask` to [`api/demo.ts`](../api/demo.ts), a Vercel
-function on the Bun runtime. The build runs [`api/_seed.ts`](../api/_seed.ts), which seeds one paper
-database with the six showcase contracts and their settlement fingerprints (`submit: false`, nothing goes
-to the chain), so every function instance serves the same ids. The function the control API's GET routes only. Ask a Coworker runs without a model and answers in the same
-request, so the fill-in format works and plain English gets the fill-in instructions.
+function on the Bun runtime. The function forwards allowlisted GET routes to the public EC2 demo.
+The website and its hosted Coworker therefore use the same contract IDs.
+`COWORKER_DEMO_URL` sets the read server. Its default matches the hosted chat address in `vercel.json`.
+The proxy uses [Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) with a five-second timeout.
+
+The build runs [`api/_seed.ts`](../api/_seed.ts) to create a paper database for offline reads.
+It contains six showcase contracts and their settlement fingerprints. The build sends nothing to the chain.
+Each function instance uses the same fallback IDs.
+When the hosted Coworker is offline, Ask a Coworker answers without a model in the same request.
+The fallback accepts the fill-in format. Plain English gets the fill-in instructions.
 
 ```sh
 bunx vercel link --project tally-origins   # once

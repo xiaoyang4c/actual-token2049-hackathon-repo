@@ -75,7 +75,7 @@ describe("operator ui server", () => {
       expect(favicon.headers.get("content-type")).toContain("svg")
 
       for (const name of ["entities", "scores", "listings", "transactions", "receipts", "lifecycle", "kyc", "kyc/fixtures",
-        "contracts", "contracts/list", "contracts/templates", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload",
+        "contracts", "contracts/list", "contracts/templates", "contracts/audit", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload",
         "profile", "profile/search", "anchors/contract", "anchors/company"]) {
         const path = `/reliability/${name}`
         const query = new URLSearchParams({transactionId: "a/b & c", entityId: "entity-new", now: "2026-10-06T12:00:00Z"})

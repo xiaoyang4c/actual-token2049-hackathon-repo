@@ -129,7 +129,7 @@ export function createAnchorBatch(db: Database, batch: Omit<AnchorBatchRow, 'sta
 }
 
 export function markAnchorBatchSubmitted(db: Database, id: string, at: number, note: string|null): void {
-  db.query(`UPDATE reliability_anchor_batches SET status = 'submitted', submitted_at = COALESCE(submitted_at, ?), note = ?
+  db.query(`UPDATE reliability_anchor_batches SET status = 'submitted', submitted_at = ?, note = ?
     WHERE id = ? AND status IN ('prepared', 'submitted')`).run(at, note, id);
 }
 

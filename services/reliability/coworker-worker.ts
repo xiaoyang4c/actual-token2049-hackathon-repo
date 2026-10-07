@@ -140,14 +140,13 @@ export class CoworkerWorker {
   /** One pass over every Coworker: new Tasks, then every open journal entry. */
   async runOnce(): Promise<void> {
     for (const coworker of this.deps.coworkers) {
-      let taskIds: Set<string>;
+      const taskIds = new Set(this.deps.journal.open()
+        .filter((entry) => entry.coworkerId === coworker.coworkerId).map((entry) => entry.taskId));
       try {
-        taskIds = await this.discover(coworker);
+        for (const taskId of await this.discover(coworker)) taskIds.add(taskId);
       } catch (error) {
         this.deps.log({coworker: coworker.slug, event: 'discover_failed', error: (error as Error).message});
-        continue;
       }
-      for (const entry of this.deps.journal.open()) if (entry.coworkerId === coworker.coworkerId) taskIds.add(entry.taskId);
       for (const taskId of taskIds) {
         try {
           await this.step(coworker, taskId);
@@ -198,8 +197,6 @@ export class CoworkerWorker {
         text: [task.name, task.description].filter(Boolean).join('\n\n'), handledCommentIds: [], answer: null, plan: null,
         blockchainIdentifier: null, resultHash: null, collectionTxHash: null, note: null, updatedAt: '',
       }, this.deps.now());
-      entry = await this.prepare(coworker, entry, task);
-      if (entry.stage === 'input_requested' || TERMINAL.has(entry.stage)) return entry;
     }
 
     if (entry.stage === 'input_requested') {
@@ -209,11 +206,14 @@ export class CoworkerWorker {
         text: [entry.text, ...comments.map((event) => event.comment as string)].join('\n\n'),
         handledCommentIds: [...entry.handledCommentIds, ...comments.map((event) => event.id)],
       });
-      entry = await this.prepare(coworker, entry, task);
-      if (entry.stage === 'input_requested' || TERMINAL.has(entry.stage)) return entry;
     }
 
-    if (entry.stage === 'starting') entry = await this.start(coworker, entry, task);
+    if (entry.stage === 'starting') {
+      // A restart can leave only the initial journal write. Validate before charging.
+      if (!entry.answer) entry = await this.prepare(coworker, entry, task);
+      if (entry.stage === 'input_requested' || TERMINAL.has(entry.stage)) return entry;
+      entry = await this.start(coworker, entry, task);
+    }
     if (entry.stage === 'running' || entry.stage === 'answer_ready') entry = await this.requestPayment(coworker, entry);
     if (entry.stage === 'payment_requesting') return this.stop(entry, 'the payment request may have reached MPS without a saved reply; inspect MPS before a retry');
     if (entry.stage === 'payment_requested') entry = await this.postPaymentEvent(coworker, entry);
@@ -334,6 +334,8 @@ export class CoworkerWorker {
   }
 
   private async complete(coworker: WorkerCoworker, entry: JournalEntry): Promise<JournalEntry> {
+    // Core may have accepted the event before the collecting stage reached disk.
+    if ((await coworker.core.task(entry.taskId)).status === 'COMPLETED') return this.save(entry, 'collecting');
     try {
       await coworker.core.postEvent(entry.taskId, {status: 'COMPLETED', comment: (entry.answer as {text: string}).text});
     } catch (error) {

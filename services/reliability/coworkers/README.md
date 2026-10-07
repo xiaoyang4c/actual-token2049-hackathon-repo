@@ -67,7 +67,12 @@ For each Task assigned to a Coworker, it does these steps in order:
 6. Follow the escrow until the payment service collects for the seller. Record the collection transaction.
 
 The journal (`COWORKER_STATE_DIR`, one file per Task) records each stage before every external write.
-After a crash, a write whose outcome is unknown is not sent again. The Task stops at stage `inspect` for a person.
+After a restart, the worker validates requests before payment.
+The worker checks Core before it repeats a completion event.
+An event feed outage does not stop Tasks already in the journal.
+An uncertain payment request or payment event stops at stage `inspect` for a person.
+Timeout responses, server errors, and malformed success responses can leave writes uncertain.
+The clients follow the [HTTP status definitions](https://www.rfc-editor.org/rfc/rfc9110.html#section-15).
 If the funds do not lock before the result deadline, or the model fails, the Task is marked `FAILED` and no result is submitted, so the escrow refunds the buyer.
 
 ### Choose the model

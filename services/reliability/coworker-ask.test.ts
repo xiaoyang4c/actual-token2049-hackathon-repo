@@ -108,6 +108,15 @@ describe('Ask a Coworker on the website', () => {
     await service.idle();
   });
 
+  test('the default visitor limit is five requests every ten minutes', async () => {
+    const {service, advance} = setup(null);
+    for (let i = 0; i < 5; i++) await ask(service, 'deal-desk', REQUEST);
+    expect(service.submit('deal-desk', REQUEST, 'v1')).toMatchObject({ok: false, status: 429});
+    advance(10 * 60_000);
+    expect(service.submit('deal-desk', REQUEST, 'v1').ok).toBe(true);
+    await service.idle();
+  });
+
   test('bad input is refused before it is queued', () => {
     const {service} = setup(null, {maxTextChars: 50});
     expect(service.submit('accountant', REQUEST, 'v1')).toMatchObject({ok: false, status: 400});

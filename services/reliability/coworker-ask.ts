@@ -44,7 +44,7 @@ export const DEFAULT_ASK_LIMITS: AskLimits = {
   maxTextChars: 4000,
   maxHistoryMessages: 12,
   maxHistoryChars: 6000,
-  perVisitor: 20,
+  perVisitor: 5,
   visitorWindowMs: 10 * 60_000,
   modelAnswersPerDay: 10,
   modelAnswersPerVisitorPerDay: 5,
