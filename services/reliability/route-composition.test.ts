@@ -144,6 +144,7 @@ describe('reliability route composition', () => {
     const other = AgentStore.open();
     const options = {
       escrowForStore: createSimulatedMasumiEscrow,
+      clock: () => NOW,
     };
     try {
       const routes = createLaneARoutes(options);
