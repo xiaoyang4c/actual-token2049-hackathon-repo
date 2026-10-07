@@ -76,7 +76,7 @@ export function CoworkersPage() {
       <section className="py-10 sm:py-16">
         <p className="eyebrow mb-6 flex items-center gap-2"><span className="h-px w-6 bg-ink/40" aria-hidden />The rule</p>
         <ScrollReveal baseOpacity={0.08} enableBlur baseRotation={2} blurStrength={6} textClassName="display max-w-[22ch] text-[clamp(1.9rem,4.6vw,3.6rem)] leading-[1.12] text-ink">
-          Every number comes from Tally's code. The model reads the request, calls the tools and explains the result. It never calculates.
+          Every number comes from Tally's code. Never from the model.
         </ScrollReveal>
       </section>
 
@@ -99,8 +99,8 @@ export function CoworkersPage() {
         <div className="space-y-6">
           <Section title="The rule">
             <div className="space-y-4 text-[13.5px] leading-relaxed text-ink-2">
-              <p className="flex gap-3"><Cpu className="mt-0.5 size-4 shrink-0 text-ink" /><span><span className="font-semibold text-ink">Deterministic tools.</span> Amounts are exact <span className="mono">bigint</span> values. Simulations run the real engine on an in-memory copy and never write to the store.</span></p>
-              <p className="flex gap-3"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-ink" /><span><span className="font-semibold text-ink">Model outage, not a numbers outage.</span> A structured task can be answered with no model at all. The model only turns free text into tool inputs and writes the explanation.</span></p>
+              <p className="flex gap-3"><Cpu className="mt-0.5 size-4 shrink-0 text-ink" /><span><span className="font-semibold text-ink">Exact tools.</span> The real engine computes every amount and never writes.</span></p>
+              <p className="flex gap-3"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-ink" /><span><span className="font-semibold text-ink">No model needed.</span> The fill-in format works without one.</span></p>
             </div>
           </Section>
           <Section title="Registrations" bodyClassName="p-0">
