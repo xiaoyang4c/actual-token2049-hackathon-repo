@@ -54,7 +54,9 @@ export default {
       const route = request.method === 'GET' ? routes.get(url.pathname) : undefined;
       if (route) {
         const hosted = await readHostedDemo(url, process.env.COWORKER_DEMO_URL ?? 'https://13-210-42-0.sslip.io');
-        if (hosted) return hosted;
+        // A 404 can mean the hosted server runs older code without this route
+        // (the Deal Desk draft routes, for example); the repository's engine answers instead.
+        if (hosted && hosted.status !== 404) return hosted;
       }
       ready ??= open();
       const {store, ask} = await ready;
