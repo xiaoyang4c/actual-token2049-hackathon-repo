@@ -75,7 +75,8 @@ export function outcomeToEvents(
 /**
  * Applies events to per-role states through the scoring and pair-decay
  * seams. Missing states start from the scoring policy initial state.
- * `pairCounts` maps "entityId:counterpartyId" to the repeat count.
+ * `pairCounts` maps "entityId:counterpartyId" to the count of earlier
+ * eligible transactions for that pair.
  */
 export function applyEventsToStates(
   states: ReliabilityState[],
@@ -97,9 +98,10 @@ export function applyEventsToStates(
     const counterparty = counterpartyByEvent.get(event.id) ?? '';
     const pairKey = `${event.entityId}:${counterparty}`;
     const pairCount = pairCounts.get(pairKey) ?? 0;
-    // The stub weight stays one. Lane 1 owns value scaling and decay use.
-    void decays.effectiveWeight(1, pairCount);
-    const next = scoring.applyEvent(current, event, now);
+    // W = a * w * D(n). A store-backed scoring policy can replace W with
+    // the weight it recorded for this event (services/reliability/score-ledger.ts).
+    const weight = decays.effectiveWeight(scoring.baseWeight(event).weight, pairCount);
+    const next = scoring.applyEvent(current, event, now, weight);
     byKey.set(key, next);
     updated.push(next);
   }

@@ -131,6 +131,43 @@ describe("operator ui server", () => {
     }
   })
 
+  test("forwards the account routes with the session token, the visitor, and the allowed origin only", async () => {
+    const seen: Array<{ method: string; path: string; auth: string | null; visitor: string | null; cookie: string | null }> = []
+    const control = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url)
+        seen.push({ method: req.method, path: url.pathname, auth: req.headers.get("authorization"), visitor: req.headers.get("x-tally-visitor"), cookie: req.headers.get("cookie") })
+        return Response.json({ ok: true })
+      },
+    })
+    const app = "https://tally-origins.vercel.app"
+    const ui = startUi({ port: 0, controlApiUrl: `http://127.0.0.1:${control.port}`, askUrl: "http://127.0.0.1:9", askOrigins: [app] })
+    try {
+      const base = `http://127.0.0.1:${ui.port}`
+      const token = "Bearer " + "a".repeat(43)
+      const read = await fetch(`${base}/reliability/account`, { headers: { authorization: token, origin: app, cookie: "x=1", "x-forwarded-for": "198.51.100.7" } })
+      expect(read.status).toBe(200)
+      expect(read.headers.get("access-control-allow-origin")).toBe(app)
+      expect(seen[0]).toEqual({ method: "GET", path: "/reliability/account", auth: token, visitor: "198.51.100.7", cookie: null })
+      // A malformed token is dropped, not forwarded.
+      await fetch(`${base}/reliability/wallets/challenge`, { method: "POST", headers: { authorization: "Bearer x y" }, body: "{}" })
+      expect(seen[1]).toMatchObject({ path: "/reliability/wallets/challenge", auth: null })
+      const preflight = await fetch(`${base}/reliability/account/kyc`, { method: "OPTIONS", headers: { origin: app } })
+      expect(preflight.status).toBe(204)
+      expect(preflight.headers.get("access-control-allow-headers")).toBe("content-type, authorization")
+      expect((await fetch(`${base}/reliability/account/kyc`, { method: "OPTIONS", headers: { origin: "https://evil.example" } })).status).toBe(403)
+      // Only the listed methods: no GET on a POST route, no other account path.
+      expect((await fetch(`${base}/reliability/account/kyc`)).status).toBe(404)
+      expect((await fetch(`${base}/reliability/account/delete`, { method: "POST", body: "{}" })).status).toBe(405)
+      expect((await fetch(`${base}/reliability/account/deposits/build`, { method: "POST", body: "x".repeat(300_000) })).status).toBe(413)
+      expect(seen).toHaveLength(2)
+    } finally {
+      ui.stop(true)
+      control.stop(true)
+    }
+  })
+
   test("lets only the listed web app origins call the chat from the browser", async () => {
     const ask = Bun.serve({ port: 0, fetch: () => Response.json({ job: { id: "j1" } }, { status: 202 }) })
     const app = "https://tally-origins.vercel.app"
@@ -174,5 +211,63 @@ describe("operator ui server", () => {
       const body = await res.json()
       expect(body.error).toBe("control api unreachable")
     }, "http://127.0.0.1:9")
+  })
+})
+
+describe("app edition gate", () => {
+  test("forwards only app methods and public reads, with Bearer and CORS", async () => {
+    const seen: Array<{method: string; path: string; auth: string | null; cookie: string | null; privateHeader: string | null}> = []
+    const control = Bun.serve({port: 0, fetch(req) {
+      const url = new URL(req.url)
+      seen.push({method: req.method, path: url.pathname + url.search, auth: req.headers.get("authorization"), cookie: req.headers.get("cookie"), privateHeader: req.headers.get("x-private")})
+      return Response.json({ok: true})
+    }})
+    const app = "https://app.example"
+    const ui = startUi({port: 0, edition: "app", controlApiUrl: `http://127.0.0.1:${control.port}`, askOrigins: [app]})
+    try {
+      const origin = `http://127.0.0.1:${ui.port}`
+      const token = "Bearer " + "a".repeat(43)
+      const read = await fetch(`${origin}/reliability/app/contract?id=deal%2F1`, {headers: {authorization: token, origin: app, cookie: "secret=1", "x-private": "secret"}})
+      expect(read.status).toBe(200)
+      expect(read.headers.get("access-control-allow-origin")).toBe(app)
+      expect(seen[0]).toEqual({method: "GET", path: "/reliability/app/contract?id=deal%2F1", auth: token, cookie: null, privateHeader: null})
+      const preflight = await fetch(`${origin}/reliability/app/action`, {method: "OPTIONS", headers: {origin: app}})
+      expect(preflight.status).toBe(204)
+      expect(preflight.headers.get("access-control-allow-headers")).toBe("content-type, authorization")
+      expect((await fetch(`${origin}/reliability/app/action`, {method: "OPTIONS", headers: {origin: "https://other.example"}})).status).toBe(403)
+      await fetch(`${origin}/reliability/app/action`, {method: "POST", headers: {authorization: "Bearer invalid token"}, body: "{}"})
+      expect(seen[1]?.auth).toBeNull()
+      for (const route of ["profile/search", "profile", "anchors/company", "contracts/templates", "contracts/draft-templates", "contracts/draft"]) {
+        const res = await fetch(`${origin}/reliability/${route}?q=company`, {headers: {origin: app}})
+        expect(res.status).toBe(200)
+        expect(res.headers.get("access-control-allow-origin")).toBe(app)
+      }
+      const forwarded = seen.length
+      for (const path of ["/", "/index.html", "/app.js", "/tally.js", "/tally-views.js"]) expect((await fetch(origin + path)).status).toBe(404)
+      for (const path of ["/agent/state", "/audit", ...["contracts/list", "contracts", "contracts/terms", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload", "contracts/audit", "anchors/contract", "transactions", "receipts", "entities", "scores", "listings", "lifecycle", "kyc", "kyc/fixtures"].map((route) => `/reliability/${route}`)]) {
+        expect((await fetch(origin + path)).status).toBe(404)
+        expect((await fetch(origin + path, {method: "HEAD"})).status).toBe(404)
+      }
+      for (const path of ["tick", "ruling", "agree", "terminate", "operator", "mediation"]) {
+        expect((await fetch(`${origin}/reliability/app/${path}`, {method: "POST", body: "{}"})).status).toBe(405)
+      }
+      expect((await fetch(`${origin}/reliability/app/action`)).status).toBe(404)
+      expect((await fetch(`${origin}/reliability/app/contracts`, {method: "DELETE"})).status).toBe(405)
+      expect((await fetch(`${origin}/reliability/app/action`, {method: "POST", body: "x".repeat(1_500_001)})).status).toBe(413)
+      expect(seen).toHaveLength(forwarded)
+      expect((await fetch(`${origin}/reliability/account`, {headers: {authorization: token}})).status).toBe(200)
+    } finally {
+      ui.stop(true)
+      control.stop(true)
+    }
+  })
+
+  test("demo blocks the new app routes", async () => {
+    const ui = startUi({port: 0, edition: "demo", controlApiUrl: "http://127.0.0.1:9"})
+    try {
+      const origin = `http://127.0.0.1:${ui.port}`
+      expect((await fetch(`${origin}/reliability/app/me`)).status).toBe(404)
+      expect((await fetch(`${origin}/reliability/app/action`, {method: "POST", body: "{}"})).status).toBe(405)
+    } finally { ui.stop(true) }
   })
 })

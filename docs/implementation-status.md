@@ -1,8 +1,8 @@
 # Implementation status
 
-This page describes the marketplace after the lifecycle correctness fixes.
+This page describes the marketplace and the signed-in app edition.
 The review date is 2026-10-07.
-The fixes build on main at commit `05790d6`.
+The app edition builds on the existing wallet accounts and signed contract engine.
 Update this page when a change removes a listed limit.
 
 The product is Tally: a B2B and B2C marketplace with escrowed contracts and a reliability checker.
@@ -28,34 +28,34 @@ Read [Contract lifecycle](contract-lifecycle.md).
 
 | Feature | Current implementation | Remaining work |
 | --- | --- | --- |
-| Buyer and seller scores | Separate stored scores by category and role; outcome corrections rebuild affected scores | Controlled policy changes and complete history repair |
-| Scoring model | Unit event weights and a placeholder lower bound | Value weighting and a Beta credible bound |
-| Repeat-pair control | A decay interface; the event flow discards its weight | Stored pair counts and applied decay |
-| Fees and terms | Buyer and seller rate offers from a stub | Agreed fee curves, fee collection, and term enforcement |
-| KYC | Mock checks, tiers, history, expiry actions, and re-registration flags | A verified provider and enforced restrictions |
-| Invoice evidence | A stub compares supplied payment and due dates | Agreed terms hashes and verified settlement times |
-| Listings | Stored reads with fixture fallback | Listing writes and a buyer/seller offer flow |
-| Contract lifecycle | Signed terms, milestones, dispute tiers, remedies, durable escrow recovery, and audit history | Verified key registration, actual preprod testing, and token receipt checks |
-| Tally UI | Read-only areas: My deals, Mediation desk, Companies, and Operator (transactions, attention, participants, listings, and contracts). Ask a Coworker gives a free preview. A public demo with paper data | Sign-in, per-party visibility, pagination, and clear source labels |
-| Coworkers | Three Sokosumi Coworkers on the Masumi registry, with engine-backed tools and instructions. The Task worker takes paid Tasks through Masumi escrow, with Gemini or the fill-in format. The first paid Task was collected on preprod | Bedrock with the instance role, and the Mediator signing flow back into Tally |
+| Buyer and seller scores | Separate stored scores by category and role; outcome corrections rebuild affected scores; `bun run scores:rebuild` rebuilds every score | Selected parameters and a paper/live history split |
+| Scoring model | Weighted Beta model: $W = a \cdot \ln(1 + v / v_0) \cdot D(n)$, the fifth-percentile lower bound, recorded weights, and `GET /reliability/scores/explain` | Selected value scales and display scale; calibration |
+| Repeat-pair control | Stored pair positions per buyer, seller, and category; hyperbolic decay applied to each event | Selected decay rate and pair direction; a contribution cap |
+| Fees and terms | Fee curve on both sides; accepted charges snapshot before a sale; collected, waived, or refunded from the outcome; exposure limits and invoice payment days enforced | Selected fee bounds and term scales; fees inside the escrow amount |
+| KYC | Mock checks, tiers, history, expiry, and re-registration flags; enforced before a sale, an invoice, a contract, and key registration | A verified provider |
+| Invoice evidence | Canonical terms hash at issue; payment checked for hash, currency, amount, and due date plus grace; overdue review | Live settlement source with the USDM receipt check |
+| Delivery evidence | Goods delivery and service acceptance checked against `terms.delivery` and `terms.service` | Carrier and inspector identity checks |
+| Listings | Listing writes, buyer offers, seller acceptance or decline, buyer withdrawal, and expiry | Caller authentication |
+| Contract lifecycle | Signed terms, milestones, dispute tiers, remedies, durable escrow recovery, audit history, KYC-gated key registration, and fee charges per milestone | Actual preprod testing, token receipt checks, and score-based escrow terms |
+| Tally UI | Public paper demo plus a signed-in app edition. App deals, terms, evidence, audit, and anchors need a party session. Users create deals and sign terms and actions in the browser. Mediation and Operator stay outside the app | Pagination; offers and invoices; Tier 1 two-sided agreement, mutual termination, and inspector templates in the app |
+| Coworkers | Three Coworkers on the Masumi registry, with engine-backed tools and instructions. People chat with them on the Tally website, free. The Task worker takes paid Tasks from other agents through Sokosumi and Masumi escrow, with Gemini or the fill-in format. The first paid Task was collected on preprod | Bedrock with the instance role, and the Mediator signing flow back into Tally |
 | Settlement anchors | Fingerprints of settled records, chained per company, posted to Cardano preprod as CIP-20 messages, with confirm-or-expire batch rules. The website shows anchor status | The first live batch (waits for the go-ahead), and a signed chain head for lenders |
 | Chainlink payment evidence | Hosted at [/evidence](https://13-210-42-0.sslip.io/evidence). Checks a preprod transaction, recipient, net test USDM amount, and three confirmations. Uses the official CRE simulator and Blockfrost. Reads only | Authorized DON deployment, Vault secrets, and signed report verification. Read [Payment evidence](chainlink-evidence.md) |
 | Hosted demo | A preprod server with the payment service, the control API, the UI, and six showcase contracts | A live escrow run and a running contract worker |
 | Pooled funding | Paper deposits and deal allocations | Escrow integration, return credits, and reconciliation |
+| Wallet accounts | Wallet sign-in (connected or created in the browser), self-service mock KYC, and live preprod deposits credited from proven wallets. Live contracts need deposits. Read [Wallet accounts](wallets.md) | A first live deposit on preprod, persistent rate limits, wallet removal, and an operator view for unattributed deposits |
 
-The target value weight is $w = \ln(1 + v / v_0)$.
-The score stub does not use this weight or repeat-pair decay.
-Read [Reliability math](reliability-math.md) for the target equations.
-The lifecycle fixes implement unit-weight corrections only.
-The fee stub returns offers for one entity.
-Those offers are not charged totals for both participants.
-
+Read [Reliability math](reliability-math.md) for the equations.
+Read [Marketplace rules and writes](marketplace.md) for the checks, fees, listings, offers, and invoices.
 Read [scoring](../packages/reliability/src/scoring.ts),
-[event flow](../packages/reliability/src/event-flow.ts), and
-[fee policy](../packages/reliability/src/fees-policy.ts) for the implementations.
+[score ledger](../services/reliability/score-ledger.ts),
+[fee policy](../packages/reliability/src/fees-policy.ts), and
+[marketplace gate](../services/reliability/marketplace-gate.ts) for the implementations.
 
-The product owner must decide fee bounds, pair decay, and the KYC bar.
+Every parameter is a default.
+The product owner must decide fee bounds, value scales, pair decay, the KYC bar, and KYC caps.
 Delivery evidence, dispute policy, and preprod key ownership also need decisions.
+Run `bun run scores:rebuild` after a parameter change.
 
 ## Logic gaps
 
@@ -77,13 +77,12 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for stage and evidence ru
 
 | Area | Remaining work |
 | --- | --- |
-| Caller identity | Authenticate v1 participants and resolvers. Bind contract key registration to verified identity and KYC. |
+| Caller identity | App contract routes now authenticate and authorize the session entity. Legacy marketplace writes and resolver actions still need caller authentication. |
 | External recovery | Add an operator reconciliation flow for a call that started but lost its response. Automatic resubmission stays blocked. |
 | Legacy records | Reconcile old live stages that lack proof. Repair score history when a valid baseline cannot be recovered. |
-| Policy history | Store value, pair weight, and policy inputs. Add controlled policy migrations and rebuilds. |
-| Agreement history | Store accepted charges separately from later score recommendations. |
+| Policy history | Version the selected parameters. Keep a paper score history apart from live evidence. |
 | Operator freshness | Add pagination, bounded reads, and clear source labels. |
-| Marketplace startup | Remove the legacy trading runtime and market-feed startup dependencies. Preserve shared storage and payment functions. |
+| Source retirement | Marketplace startup and store ownership are separate from the retired trading demo. Refactor the shared core payment types before deleting legacy source files. |
 
 ## Payment boundaries
 
@@ -104,16 +103,24 @@ Cancellation and refund actions do not return its allocated credit.
 Live custody requires a separate implementation.
 
 Actual preprod settlement has not been tested.
-The v1 demo routes do not authenticate callers.
-Contract actions check signatures, but initial key registration is open.
+The v1 demo routes and the marketplace write routes do not authenticate callers.
+Contract actions check signatures. App key registration also checks the session entity and proven payout address.
+The app server uses its own database, contract worker, and deposit worker.
+Read [Two Amplify editions](amplify.md) for deployment.
+Tier 1 two-sided agreement, mutual termination, and inspector templates are not in the app yet.
+Invoice payments are paper. They record `settlementVerified: false`.
 
 ## Validation
 
-All 570 local tests pass under `packages`, `services`, and `ui`.
+The required checks cover `packages`, `services`, `ui`, and both web editions.
+App HTTP tests cover session expiry, party isolation, spoofed actions, rejected clocks, and a signed paper deal through settlement.
+Client tests compare canonical signing bytes with the engine and verify signatures with the server verifier.
 One intermittent failure appeared once in 13 full runs on 2026-10-07. It did not reproduce, and its test is not identified yet.
 The control and payment TypeScript checks pass.
 Lint passes.
 Regression tests cover all seven gaps, restart behavior, and two database writers.
+Startup tests cover direct store ownership, existing paper book reads, and damaged legacy books.
+Score tests reproduce the worked example in the math page.
 Escrow checks use injected ports and offline adapter tests.
 They make no live chain calls.
 Existing PR CI also runs the workflow tests and workflow TypeScript check.

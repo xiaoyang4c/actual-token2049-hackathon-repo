@@ -103,6 +103,15 @@ export function createKit(options: KitOptions = {}): Kit {
   const service = new ContractService(store, {config, clock, masumiTransport: options.masumiTransport, resolveCredential: options.resolveCredential});
   const ids = options.ids ?? {buyer: 'buyer-acme', seller: 'seller-globex'};
   if (!options.reuseParties) {
+    // Key registration needs KYC-verified entities. Synthetic parties are
+    // verified directly in the store, as the mock KYC flow would record them.
+    for (const id of [ids.buyer, ids.seller]) {
+      if (store.getEntity(id)) continue;
+      store.insertEntity({
+        id, displayName: id, wallets: [], roles: ['buyer', 'seller'],
+        kycStatus: 'verified', kycTier: 'basic', createdAt: new Date(clock.now()).toISOString(),
+      });
+    }
     // Synthetic parties. The addresses are placeholders, not wallets.
     service.registerParty({entityId: ids.buyer, publicKeyHex: keys.buyer.publicKeyHex, cardanoAddress: `addr_test1_synthetic_${ids.buyer}`});
     service.registerParty({entityId: ids.seller, publicKeyHex: keys.seller.publicKeyHex, cardanoAddress: `addr_test1_synthetic_${ids.seller}`});

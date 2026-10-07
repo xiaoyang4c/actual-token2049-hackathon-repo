@@ -1,3 +1,7 @@
+import {AppGate, AppSessionProvider} from '@/lib/app-session'
+import {APP_EDITION} from '@/lib/edition'
+import {AppContractPage} from '@/pages/AppContract'
+import {NewDealPage} from '@/pages/NewDeal'
 import {useEffect} from 'react'
 import {BrowserRouter, Navigate, Route, Routes, useLocation} from 'react-router-dom'
 import {AnimatePresence} from 'motion/react'
@@ -7,6 +11,9 @@ import {LensProvider} from '@/components/kit'
 import {Shell} from '@/components/Shell'
 import {Toaster} from '@/components/ui/sonner'
 import {TooltipProvider} from '@/components/ui/tooltip'
+import {EvidencePage} from '@/pages/Evidence'
+import {TutorialPage} from '@/pages/Tutorial'
+import {AccountPage} from '@/pages/Account'
 import {AskPage} from '@/pages/Ask'
 import {CompaniesPage} from '@/pages/Companies'
 import {ContractPage} from '@/pages/Contract'
@@ -15,7 +22,6 @@ import {DealDeskPage} from '@/pages/DealDesk'
 import {DealsPage} from '@/pages/Deals'
 import {MediationPage} from '@/pages/Mediation'
 import {OperatorPage} from '@/pages/Operator'
-import {EvidencePage} from '@/pages/Evidence'
 
 function ScrollReset() {
   const {pathname} = useLocation()
@@ -29,15 +35,19 @@ function AnimatedRoutes() {
     <AnimatePresence mode="wait">
       <PageIn key={location.pathname}>
         <Routes location={location}>
-          <Route path="/" element={<DealsPage />} />
-          <Route path="/contracts/:id" element={<ContractPage />} />
-          <Route path="/mediation" element={<MediationPage />} />
+          <Route path="/" element={APP_EDITION ? <AppGate><DealsPage /></AppGate> : <DealsPage />} />
+          {APP_EDITION ? <Route path="/deals/new" element={<AppGate><NewDealPage /></AppGate>} /> : null}
+          {APP_EDITION ? <Route path="/deals/:id" element={<AppGate><AppContractPage /></AppGate>} /> : null}
+          {!APP_EDITION ? <Route path="/contracts/:id" element={<ContractPage />} /> : null}
+          {!APP_EDITION ? <Route path="/mediation" element={<MediationPage />} /> : null}
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/deal-desk" element={<DealDeskPage />} />
           <Route path="/ask" element={<AskPage />} />
-          <Route path="/coworkers" element={<CoworkersPage />} />
-          <Route path="/operator" element={<OperatorPage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="/evidence" element={<EvidencePage />} />
+          <Route path="/tutorial" element={<TutorialPage />} />
+          <Route path="/coworkers" element={<CoworkersPage />} />
+          {!APP_EDITION ? <Route path="/operator" element={<OperatorPage />} /> : null}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </PageIn>
@@ -49,7 +59,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <TooltipProvider delay={150}>
-        <LensProvider>
+        <AppSessionProvider><LensProvider>
           <ScrollReset />
           <Backdrop />
           <ScrollProgress />
@@ -57,7 +67,7 @@ export default function App() {
             <AnimatedRoutes />
           </Shell>
           <Toaster />
-        </LensProvider>
+        </LensProvider></AppSessionProvider>
       </TooltipProvider>
     </BrowserRouter>
   )

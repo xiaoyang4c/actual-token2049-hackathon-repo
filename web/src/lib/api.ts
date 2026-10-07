@@ -1,3 +1,5 @@
+import {APP_EDITION} from './edition'
+import {serverUrl} from './server-url'
 import type {EvidenceInfo, EvidenceResult} from '../../../packages/evidence/src/protocol'
 
 /*
@@ -71,7 +73,7 @@ export interface ContractView {
     buyerId: string
     sellerId: string
     createdAt: number
-    termsSha256: string
+    termsSha256: string | null
     signatures: Record<string, string>
     terms: {
       network: string
@@ -94,7 +96,7 @@ export interface ContractView {
     state: string
     outcome: string | null
     pending: unknown
-    deadlines: {payByTime?: string; submitResultTime?: string; unlockTime?: string; externalDisputeUnlockTime?: string}
+    deadlines: {payByTime?: string; submitResultTime?: string; unlockTime?: string; externalDisputeUnlockTime?: string} | null
     inspectionCutoffAt: string | null
     tierDeadline: string | null
     obligations: Obligation[]
@@ -143,7 +145,7 @@ export interface DisputeCase {
     deliverable: Record<string, unknown>
     state: string
     escrows: Array<{role: string; amount: Money; onChainState: string}>
-    deadlines: Record<string, Moment>
+    deadlines: Record<string, Moment> | null
     deliveredOnTime: boolean | null
     dispute: {tierReached: number; tierDeadline: Moment | null; timeLeftInTier: Span | null} | null
   }
@@ -349,7 +351,8 @@ export interface CompanyAnchors {
 export class ApiError extends Error {}
 
 async function read<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init)
+  const base = APP_EDITION && path.startsWith('/reliability/') ? serverUrl(import.meta.env.VITE_TALLY_SERVER_URL) : ''
+  const response = await fetch(`${base}${path}`, init)
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new ApiError((body as {error?: string}).error ?? `${response.status} ${response.statusText}`)
   return body as T
@@ -372,7 +375,7 @@ export type AskTicket = AskJob & {base: string}
  * The Coworker worker's public address (the preprod server). Empty means the same origin:
  * the Vite proxy in development, or ui/server.ts on the preprod server.
  */
-const ASK_BASE = (import.meta.env.VITE_COWORKER_ASK_URL ?? '').replace(/\/$/, '')
+const ASK_BASE = serverUrl(import.meta.env.VITE_COWORKER_ASK_URL)
 
 async function ask(coworker: CoworkerSlug | 'auto', text: string, history: ChatEntry[]): Promise<{job: AskTicket}> {
   const send = async (base: string) => {
@@ -393,7 +396,7 @@ async function ask(coworker: CoworkerSlug | 'auto', text: string, history: ChatE
 
 export const api = {
   evidenceInfo: () => read<EvidenceInfo>('/reliability/evidence/info', {cache: 'no-store'}),
-  checkEvidence: (input: {txHash: string; recipient: string; amount: string}, signal?: AbortSignal) =>
+  checkEvidence: (input: {txHash: string; recipient: string; amount: string}, signal: AbortSignal) =>
     read<EvidenceResult>(`/reliability/evidence/check?${q(input)}`, {cache: 'no-store', signal}),
   contracts: (filter: {partyId?: string; disputes?: boolean} = {}) =>
     read<ContractSummary[]>(`/reliability/contracts/list?${q({partyId: filter.partyId, disputes: filter.disputes ? 1 : undefined})}`),
@@ -411,7 +414,7 @@ export const api = {
 
   // The Coworker chat: free, answered by the Coworker worker.
   ask,
-  askStatus: (job: AskTicket) => read<{job: AskJob}>(`${job.base}/coworkers/ask?${q({id: job.id})}`, {cache: 'no-store'}),
+  askStatus: (job: AskTicket) => read<{job: AskJob}>(`${serverUrl(job.base)}/coworkers/ask?${q({id: job.id})}`, {cache: 'no-store'}),
 
   // Settlement anchors: fingerprints of final records on Cardano preprod.
   contractAnchors: (id: string) => read<ContractAnchors>(`/reliability/anchors/contract?${q({id})}`),

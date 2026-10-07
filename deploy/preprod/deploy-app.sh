@@ -6,12 +6,12 @@
 #
 # Usage: deploy/preprod/deploy-app.sh [git ref]   (default: HEAD)
 # Settings: TALLY_HOST (default ubuntu@13.210.42.0), TALLY_SSH_KEY (default ~/.ssh/tally-aws.pem),
-#           TALLY_PUBLIC_URL (default https://13-210-42-0.sslip.io)
+#           TALLY_PUBLIC_URL (default https://13.210.42.0)
 set -euo pipefail
 ref="${1:-HEAD}"
 host="${TALLY_HOST:-ubuntu@13.210.42.0}"
 key="${TALLY_SSH_KEY:-$HOME/.ssh/tally-aws.pem}"
-url="${TALLY_PUBLIC_URL:-https://13-210-42-0.sslip.io}"
+url="${TALLY_PUBLIC_URL:-https://13.210.42.0}"
 sha="$(git rev-parse --short "$ref")"
 remote=(ssh -i "$key" -o BatchMode=yes -o ServerAliveInterval=15 "$host")
 

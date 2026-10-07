@@ -46,7 +46,7 @@ Run `bun run dev` from `web`. Open `http://localhost:5190/evidence`.
 
 ## Hosted demo
 
-The checker is active at [Tally evidence checker](https://13-210-42-0.sslip.io/evidence).
+The checker is active at [Tally evidence checker](https://13.210.42.0/evidence).
 The hosted browser checks passed on 2026-10-07.
 They covered the receipt, wrong amount, missing transaction, report download, and desktop and mobile layouts.
 

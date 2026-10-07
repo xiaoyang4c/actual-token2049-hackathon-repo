@@ -1,7 +1,7 @@
 /**
  * @fileoverview The public read-only demo of the Tally web app on Vercel
- * (Bun runtime). It reads the public preprod demo so the website and the
- * Coworker see the same contract ids. When preprod is offline, it serves
+ * (Bun runtime). COWORKER_DEMO_URL selects the public preprod demo.
+ * The default uses the AWS HTTPS endpoint. When preprod is offline, it serves
  * read routes from a paper database with six showcase contracts and their
  * settlement fingerprints. The build seeds it once (api/_seed.ts), so every
  * instance serves the same ids; a cold start copies it to /tmp, the only
@@ -30,7 +30,7 @@ const SEED = join(process.cwd(), '.demo-data/demo.sqlite');
 const DATABASE = '/tmp/tally-demo.sqlite';
 const json = (body: unknown, status = 200) => Response.json(body, {status, headers: {'cache-control': 'no-store'}});
 // The evidence reads use their dedicated EC2 service.
-const evidenceRoutes = new Map(createEvidenceProxyRoutes(process.env.CHAINLINK_EVIDENCE_URL ?? 'https://13-210-42-0.sslip.io').map((route) => [route.path, route]));
+const evidenceRoutes = new Map(createEvidenceProxyRoutes(process.env.CHAINLINK_EVIDENCE_URL ?? 'https://13.210.42.0').map((route) => [route.path, route]));
 const routes = new Map(reliabilityRoutes.filter((route) => route.method === 'GET' && !evidenceRoutes.has(route.path)).map((route) => [route.path, route]));
 
 function open() {
@@ -58,7 +58,7 @@ export default {
       if (evidenceRoute) return await evidenceRoute.handler(request, url);
       const route = request.method === 'GET' ? routes.get(url.pathname) : undefined;
       if (route) {
-        const hosted = await readHostedDemo(url, process.env.COWORKER_DEMO_URL ?? 'https://13-210-42-0.sslip.io');
+        const hosted = await readHostedDemo(url, process.env.COWORKER_DEMO_URL ?? 'https://13.210.42.0');
         if (hosted) return hosted;
       }
       ready ??= open();

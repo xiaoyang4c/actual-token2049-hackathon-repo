@@ -22,7 +22,7 @@
     "token2049"
   ],
   "name": "Tally Deal Desk",
-  "apiBaseUrl": "https://13-210-42-0.sslip.io/deal-desk",
+  "apiBaseUrl": "https://13.210.42.0/deal-desk",
   "description": "Turns a plain-English B2B deal into a ready-to-sign escrow contract: template, milestones, USDM amount, evidence rule, inspection window, remedy, dispute tiers, fees and maximum lock time. Preprod demo, test USDM only.",
   "Capability": {
     "name": "tally-deal-desk",

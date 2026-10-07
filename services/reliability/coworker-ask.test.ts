@@ -208,6 +208,16 @@ describe('the Coworker chat on the website', () => {
     expect(fillInText('deal-desk', 'amount: 4000', [{role: 'user', text: partial}, {role: 'assistant', text: 'x', coworker: 'trust-check'}])).toBe('amount: 4000');
   });
 
+  test('a follow-up takes milestone lines from the newest message only', () => {
+    const earlier = `${REQUEST.replace('amount: 4000\n', '')}\nmilestone: Lot 2 | 2500`;
+    const history: ChatEntry[] = [{role: 'user', text: earlier}, {role: 'assistant', text: 'missing amount', coworker: 'deal-desk'}];
+    const merged = fillInText('deal-desk', 'amount: 4000\nmilestone: Lot 3 | 1000', history);
+    expect(merged.match(/milestone:/g)).toHaveLength(1);
+    expect(merged).toContain('Lot 3 | 1000');
+    // Without new milestone lines, the earlier ones still count.
+    expect(fillInText('deal-desk', 'amount: 4000', history)).toContain('milestone: Lot 2 | 2500');
+  });
+
   test('one visitor cannot spend the whole daily model budget', async () => {
     const provider = new FakeProvider(async () => ({text: 'model text', calls: []}));
     const {service} = setup(provider, {modelAnswersPerDay: 5, modelAnswersPerVisitorPerDay: 2});

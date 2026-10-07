@@ -116,10 +116,10 @@ export function AskPage() {
   const pinned = COWORKERS.find((c) => c.slug === params.get('coworker'))?.slug
   const [target, setTarget] = useState<Target>(pinned ?? 'auto')
   const [messages, setMessages] = useState<Message[]>(loadChat)
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() => params.get('prompt')?.slice(0, 4000) ?? '')
   const busy = messages.some((m) => m.status === 'queued' || m.status === 'running')
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>())
-  const end = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
   const disputes = useAsync(() => api.contracts({disputes: true}), 'disputes')
 
   useEffect(() => {
@@ -127,7 +127,8 @@ export function AskPage() {
     return () => { for (const timer of pending) clearTimeout(timer) }
   }, [])
   useEffect(() => { saveChat(messages) }, [messages])
-  useEffect(() => { end.current?.scrollIntoView({behavior: 'smooth', block: 'end'}) }, [messages.length, busy])
+  // The messages scroll inside the panel, so the message box stays in view.
+  useEffect(() => { list.current?.scrollTo({top: list.current.scrollHeight, behavior: 'smooth'}) }, [messages.length, busy])
 
   // The Mediator's example names a real dispute from the contract list.
   const example = (slug: CoworkerSlug) => {
@@ -196,8 +197,8 @@ export function AskPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <Reveal>
-          <section className="surface flex min-h-[560px] flex-col rounded-[14px]" aria-label="Chat">
-            <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6" aria-live="polite">
+          <section className="surface flex h-[min(78dvh,860px)] min-h-[520px] flex-col rounded-[14px]" aria-label="Chat">
+            <div ref={list} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-6" aria-live="polite">
               {!messages.length ? (
                 <div className="grid min-h-[340px] place-items-center text-center">
                   <div>
@@ -214,7 +215,6 @@ export function AskPage() {
                   </div>
                 </div>
               ) : messages.map((m) => <Bubble key={m.id} message={m} />)}
-              <div ref={end} />
             </div>
 
             <div className="border-t border-border p-4 sm:p-5">

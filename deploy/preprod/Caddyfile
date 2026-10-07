@@ -1,5 +1,18 @@
-# Public entry point for Tally. The payment service is NOT exposed here (it listens on 127.0.0.1:3001 only).
-13-210-42-0.sslip.io {
+# Use the AWS Elastic IP when a client does not send a TLS server name.
+{
+	default_sni 13.210.42.0
+}
+
+# Amplify serves the frontend. Caddy exposes the two backend UI gates.
+# Keep payment and control API ports private.
+https://13.210.42.0 {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+			disable_http_challenge
+		}
+	}
 	encode gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"
@@ -9,6 +22,10 @@
 	handle_path /brand/* {
 		root * /srv/tally/brand
 		file_server
+	}
+	# Strip the app prefix before the authenticated app gate receives it.
+	handle_path /app-api/* {
+		reverse_proxy 127.0.0.1:8798
 	}
 	# Read-only evidence API. Its process listens on loopback only.
 	@evidenceApi {

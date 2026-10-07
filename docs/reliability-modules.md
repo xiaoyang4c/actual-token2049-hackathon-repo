@@ -34,6 +34,18 @@ Read [Contract lifecycle](contract-lifecycle.md).
 The frozen domain types stay in `packages/reliability/src/types.ts`.
 The scoring, pair-decay, fee, and KYC interfaces stay in their lane files.
 
+| Module under `packages/reliability/src/` | Responsibility |
+| --- | --- |
+| `scoring.ts` and `beta-math.ts` | Weighted Beta model, value weight, and the fifth-percentile lower bound |
+| `pair-decay.ts` | Repeat-pair decay and the pair key |
+| `event-weights.ts` | Event weight records with every input and policy version |
+| `fees-policy.ts` | Fee curve, deposit, premium, payment days, verification, and exposure limit |
+| `fee-charges.ts` | Accepted buyer and seller fees for one sale, in minor units |
+| `kyc-gate.ts` | KYC restrictions for marketplace actions |
+| `offers.ts` | Offer records and status moves |
+| `evidence-payment.ts` | Invoice terms hash and payment outcome |
+| `evidence-delivery.ts` | Goods delivery and service acceptance against agreed terms |
+
 ## Service modules
 
 | Module under `services/reliability/` | Responsibility |
@@ -51,6 +63,12 @@ The scoring, pair-decay, fee, and KYC interfaces stay in their lane files.
 | `contract-masumi-escrow.ts` | Live Masumi V2 escrow on the shared payment client. |
 | `routes-lane-a-contracts.ts` | Map signed contract requests and errors to HTTP responses. |
 | `coworker-tools.ts` | Deterministic tools for the Tally Coworkers. Read [Tally Coworkers](../services/reliability/coworkers/README.md). |
+| `score-ledger.ts` | Record event weights and pair positions. Rebuild and explain scores. |
+| `marketplace-gate.ts` | Check KYC, exposure limits, invoice due dates, and listing minimums. Record and settle fee charges. |
+| `marketplace-service.ts` | Listings and offers. Acceptance opens the sale. |
+| `invoice-service.ts` | Issue, settle, and review invoices. |
+| `routes-marketplace.ts` | Listing, offer, invoice, and fee routes. |
+| `routes-scoring.ts` | The score explanation route. |
 
 `createLaneARoutes` accepts policies, a clock, and an escrow factory for each store.
 It keeps a separate service cache for each route table and store.
@@ -88,16 +106,16 @@ It commits a completed money stage and command result together.
 An unknown external response requires reconciliation.
 The API does not yet provide that operator flow.
 
-The scoring policy still uses unit weights.
-Value weighting and cumulative pair history are not implemented.
-The event flow calls the decay stub without using the returned weight.
-The math lane must implement those rules and pair-history persistence together.
-Read [Reliability math](reliability-math.md) for the target model and proposed policy curves.
+`withRecordedWeights` wraps the policy bundle for each store.
+Every applied event then uses its recorded weight, so reads and rebuilds agree.
+`STUB_RELIABILITY_POLICIES` keeps unit weights for tests of cumulative mechanics.
+Read [Reliability math](reliability-math.md) for the model and the default parameters.
 Fee limits, the decay rate, and the KYC bar still require product decisions.
 
-The fee policy returns rate offers.
-The lifecycle does not collect fees or enforce the offered terms.
-Read [Implementation status](implementation-status.md) for the remaining work and logic gaps.
+The lifecycle, invoice, and contract services run the marketplace gate before a sale opens.
+They record accepted fee charges and settle them from the outcome.
+Read [Marketplace rules and writes](marketplace.md) and
+[Implementation status](implementation-status.md) for the remaining work.
 
 Read [lane ownership](reliability-lanes.md) before changing a lane.
 Read [transaction lifecycle](reliability-lifecycle.md) for state and escrow rules.

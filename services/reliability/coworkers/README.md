@@ -1,6 +1,7 @@
 # Tally Coworkers
 
-Three Sokosumi Coworkers sell Tally's contract features as paid Tasks.
+Three Coworkers give Tally's contract features to people and agents.
+People chat with them on the Tally website, free. Other agents hire them as paid Tasks on Sokosumi, with Masumi escrow.
 They share one rule: **every number comes from Tally's code.**
 The language model reads the request, calls tools, and explains the results. It never calculates.
 
@@ -52,7 +53,7 @@ A model outage therefore stops explanations, not the numbers.
 Vendor: Tally (`01a11310-03a7-760a-a31a-f6ba1872959c`).
 All three Coworkers have access to the TOKEN2049 Origins workspace.
 Read [the preprod server](../../../deploy/preprod/README.md) to rebuild the payment service and the registrations.
-Each Masumi agent uses `apiBaseUrl` `https://13-210-42-0.sslip.io/<deal-desk|mediator|trust-check>`.
+Each Masumi agent uses `apiBaseUrl` `https://13.210.42.0/<deal-desk|mediator|trust-check>`.
 
 ## The Task worker
 
@@ -96,15 +97,21 @@ While every model is out of quota or overloaded, the worker answers in the fill-
 
 ### On the Tally website
 
-The Ask a Coworker area of the Tally website sends requests to the same Coworkers.
+The chat on the Tally website sends messages to the same Coworkers. Users do not need Sokosumi or a wallet.
 The worker answers them when `COWORKER_ASK_PORT` is set, on `127.0.0.1` only. The website forwards two routes to it.
-These answers are a free preview: no Masumi payment, no Sokosumi Task, and nothing is stored. Every tool only reads, and a draft uses a sandbox.
+The chat is free: no Masumi payment, no Sokosumi Task, and nothing is stored. Every tool only reads, and a draft uses a sandbox.
+
+- One chat serves all three Coworkers. A message with `coworker: "auto"` goes to the Coworker that its words point to. A message with no clear words stays with the Coworker that answered last.
+- The browser sends the earlier messages with each new message (`history`). The server keeps no conversation. It reads at most 12 earlier messages and cuts each one to 6,000 characters.
+- The model reads the earlier messages. Its prompt tells it to call the tool again for every number.
+- Without the model, a follow-up can send only the missing fill-in fields. The worker adds the user's earlier messages to the same Coworker.
 
 [`../coworker-ask.ts`](../coworker-ask.ts) keeps the website from using the model quota that paid Tasks need:
 
 - A request in the fill-in format never uses the model.
 - At most 10 website answers a day use the model (`COWORKER_ASK_MODEL_PER_DAY`). After that, a plain-English request gets the fill-in format.
-- Each visitor can ask 5 times every 10 minutes.
+- One visitor gets at most 5 of those model answers a day (`COWORKER_ASK_MODEL_PER_VISITOR`).
+- Each visitor can send 20 messages every 10 minutes.
 - One answer runs at a time, and at most 5 wait.
 - An answer stays readable for 30 minutes. The worker keeps jobs in memory, so a restart forgets them.
 
@@ -121,6 +128,9 @@ description: Green arabica, washed
 quantity: 1200
 unit: kg
 ```
+
+`item` and `amount` are milestone 1. Add a `milestone: <title> | <amount>` line only for each further lot.
+A milestone line that repeats the item gets a question back, not a second lot.
 
 Mediator: `contract: <contract id>` and `milestone: 0`. Trust Check: `company: <name or Tally id>`.
 

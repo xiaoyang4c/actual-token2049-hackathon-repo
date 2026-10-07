@@ -31,19 +31,68 @@ export type {
   VerificationMethod,
 } from './types';
 export {
+  BETA_SCORING_VERSION,
+  BetaScoringPolicy,
+  DEFAULT_BETA_SCORING_PARAMS,
   STUB_SCORING_VERSION,
   stubInitialState,
   StubScoringPolicy,
+  type BaseEventWeight,
+  type BetaScoringParams,
   type ScoringPolicy,
+  type WeightReason,
 } from './scoring';
+export {betaCdf, betaQuantile, logGamma} from './beta-math';
 export {
+  checkKyc,
+  KYC_GATE_VERSION,
+  type KycGateCode,
+  type KycGateResult,
+  type KycGateSubject,
+} from './kyc-gate';
+export {
+  basisPointsOf,
+  FEE_CHARGE_VERSION,
+  quoteFeeCharge,
+  settleFeeCharge,
+  toMinorUnits,
+  type FeeCharge,
+  type FeeChargeSide,
+  type FeeChargeStatus,
+} from './fee-charges';
+export {
+  decideOffer,
+  effectiveOfferStatus,
+  OFFER_STATUSES,
+  OfferError,
+  type Offer,
+  type OfferStatus,
+} from './offers';
+export {
+  composeEventWeight,
+  weightInputsKey,
+  type EventWeightRecord,
+} from './event-weights';
+export {
+  DEFAULT_PAIR_DECAY_PARAMS,
+  HYPERBOLIC_PAIR_DECAY_VERSION,
+  HyperbolicPairDecay,
+  pairKeyFor,
   STUB_PAIR_DECAY_VERSION,
   StubPairDecay,
+  type HyperbolicPairDecayParams,
   type PairDecay,
+  type PairDirection,
 } from './pair-decay';
 export {
+  CURVE_FEE_TERMS_VERSION,
+  CurveFeeTermsPolicy,
+  DEFAULT_CURVE_FEE_TERMS_PARAMS,
+  feeBpsFor,
   STUB_FEE_TERMS_VERSION,
   StubFeeTermsPolicy,
+  type CurveFeeTermsParams,
+  type FeeCurveSide,
   type FeeTermsPolicy,
   type TermsPolicyInput,
 } from './fees-policy';
@@ -93,12 +142,27 @@ export type {
   PaperPoolTransfer,
 } from './omnibus-funding';
 export {
+  INVOICE_EVIDENCE_VERSION,
+  INVOICE_TERMS_SCHEMA,
+  InvoiceEvidenceError,
+  invoiceDeadline,
+  invoiceOutcome,
+  invoiceTermsHash,
   STUB_PAYMENT_EVIDENCE_VERSION,
   hashInvoiceTerms,
   StubPaymentEvidenceProducer,
+  validateInvoiceTerms,
+  type InvoiceSettlement,
+  type InvoiceTerms,
   type PaymentEvidenceProducer,
   type PaymentVerificationInput,
 } from './evidence-payment';
+export {
+  checkDeliveryAgainstTerms,
+  DELIVERY_TERMS_CHECK_VERSION,
+  type DeliveryTermsCheck,
+  type DeliveryTermsViolation,
+} from './evidence-delivery';
 export {
   DEMO_KYC_SCRIPTS,
   KYC_BADGES,

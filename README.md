@@ -10,8 +10,10 @@ Every finished deal updates a reliability record for both sides.
 Tally was built for the TOKEN2049 Origins hackathon.
 It runs on Cardano **preprod** with **test USDM**. Nothing has real value.
 
-**Live demo:** <https://13-210-42-0.sslip.io>.
-The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
+**Live demo:** <https://main.d23gra1a9ugqjs.amplifyapp.com>.
+The demo shows paper contracts, labelled SIMULATED.
+The signed-in app edition uses a separate database and shows each user only their own deals.
+Read [Two Amplify editions](docs/amplify.md) for both website and server setups.
 
 ## What Tally does
 
@@ -21,8 +23,8 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Disputes in tiers | Tier 1: the parties agree one fixed outcome. Tier 2: the named judge (code or an inspector) decides. Tier 3: a mediator names a winner. The remedy was fixed before funding. | [Contract lifecycle](docs/contract-lifecycle.md#disputes) |
 | Reliability record | Separate buyer and seller scores per category, terms decisions, and mock KYC. Ignored rulings count against a party. | [Reliability math](docs/reliability-math.md) |
 | Coworkers on Sokosumi | Tally Deal Desk drafts contracts. Tally Mediator drafts rulings for a human mediator. Tally Trust Check explains a company's record. Every number comes from Tally's code. | [Tally Coworkers](services/reliability/coworkers/README.md) |
-| Tally UI | My deals, Mediation desk, Companies, and Operator views. Read-only. | [UI instructions](ui/README.md) |
-| Chainlink evidence checker | Checks a payment recipient, net test USDM amount, and confirmations in the UI. Runs the real CRE workflow in simulation against live preprod data. | [Payment evidence](docs/chainlink-evidence.md) |
+| Tally UI | Demo views and a signed-in app edition with My deals, New deal, and signed party actions. | [UI instructions](ui/README.md) |
+| Wallet accounts | Sign in with a Cardano wallet (connected or created in the browser), pass KYC, and deposit test funds for live deals. Tally never holds wallet keys. | [Wallet accounts](docs/wallets.md) |
 
 ## Status
 
@@ -33,17 +35,19 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Masumi payment service | Running on the preprod server with funded wallets |
 | Coworkers | Registered on the Masumi registry and approved in the TOKEN2049 workspace. The Task worker runs on the server. Paid Tasks complete with Masumi escrow on preprod, and the first collection is confirmed |
 | Settlement anchors | Built. Fingerprints of settled records, chained per company, for Cardano preprod. Posting waits for the team's go-ahead. Read [Settlement anchors](docs/settlement-anchors.md) |
-| Tally UI | Hosted publicly with six showcase contracts and Ask a Coworker (a free preview) |
-| Chainlink payment evidence | Running at [the evidence checker](https://13-210-42-0.sslip.io/evidence). Read-only CRE simulation with live preprod data. No DON signature |
-| Scoring, pair decay, fees | Stubs. Read [Implementation status](docs/implementation-status.md) |
-| KYC | Mock provider |
-| Sign-in | Not built. Role views in the UI are lenses, not access control |
+| Tally UI | Hosted publicly with six showcase contracts and a free chat with the three Coworkers |
+| Scoring, pair decay, fees | Built with default parameters: weighted Beta scores, repeat-pair decay, and buyer and seller fee charges. Read [Reliability math](docs/reliability-math.md) |
+| Listings, offers, invoices | Built for paper orders. Read [Marketplace rules and writes](docs/marketplace.md) |
+| KYC | Mock provider. Enforced before sales, invoices, contracts, and key registration. Self-service through the Account page |
+| Sign-in | Wallet sign-in with 24-hour sessions gates deals in the app edition. The demo keeps its public role lenses |
+| App deal actions | Wallet-derived deal keys, signed terms, delivery, acceptance, disputes, returns, redo, and ruling compliance. Tier 1 two-sided agreement, mutual termination, and inspector templates are not in the app yet |
+| Deposits | Live preprod deposits from proven wallets, credited after 3 confirmations. Needs the deposit address and the deposit worker. Read [Wallet accounts](docs/wallets.md) |
 
 Read [Implementation status](docs/implementation-status.md) for every feature and known gap.
 Read [PLAN.md](PLAN.md) for the product scope and work order.
 Read [lane ownership](docs/reliability-lanes.md) before you change a module.
 
-## Target rules
+## Rules
 
 - Scale each score change with transaction value: $w = \ln(1 + v / v_0)$.
   $v$ is the transaction value. $v_0$ is the value scale.
@@ -53,8 +57,8 @@ Read [lane ownership](docs/reliability-lanes.md) before you change a module.
 - Use KYC checks and agreed terms to control participation.
 - Keep delivery evidence, dispute decisions, and payment evidence separate.
 
-These rules describe the target.
-Scoring, pair decay, fees, and invoice evidence currently use stubs.
+The code applies these rules with default parameters.
+The product owner has not selected the parameters.
 KYC currently uses a mock provider.
 
 ## Layout
@@ -73,9 +77,10 @@ KYC currently uses a mock provider.
 | `docs/brand` | The Tally mark, logo, and Coworker avatars |
 
 Some source code still supports the retired trading runtime.
-The control API obtains its shared store through that runtime.
+The marketplace control API opens its shared store directly.
+The contract worker and paper trading demo use the same database setup.
 Cardano payment code also uses shared core types.
-Remove these dependencies through a separate refactor.
+Refactor those types before removing their source files.
 
 ## Run locally
 
@@ -92,10 +97,13 @@ bun run ui/server.ts
 Open <http://localhost:8791>.
 Open an area directly with `/?view=deals`, `/?view=mediation`, `/?view=companies`, or `/?view=operator`.
 
-The shared launcher starts the control API on port 8787.
-It also starts payment services on ports 8788 and 8789.
-It still starts the legacy market feed on port 8790.
-Separate marketplace startup from that feed in the runtime refactor.
+The marketplace launcher starts the control API on port 8787 and the shared payment service on port 8788.
+It does not create a trading book or start venue polling.
+`GET /agent/state` reads an existing paper book without changing it. It returns 404 when no book exists.
+`GET /audit` and the audit demo write remain available.
+Run `bun run services:legacy` for the retired paper trading demo, its score provider on port 8789, and its market feed on port 8790.
+Use one launcher at a time. Both launchers use the same control and payment ports.
+Read [Bun scripts](https://bun.sh/docs/runtime#run-a-packagejson-script) for script commands.
 
 Other demos:
 
@@ -135,7 +143,7 @@ Receipt reads require `transactionId`.
 Lifecycle reads require `transactionId` and accept an optional `now` query.
 Collections include stored records. A stored record takes precedence over a fixture with the same ID.
 Use the lifecycle read for stage history and current terms recommendations.
-Listing and offer write routes still need implementation.
+Listing and offer write routes are listed below.
 
 ### Contracts
 
@@ -159,9 +167,19 @@ Listing and offer write routes still need implementation.
 | `GET` | `/reliability/contracts/ruling-payload` | Return the exact bytes that the mediator signs |
 | `GET` | `/reliability/profile` | Read a company record |
 | `GET` | `/reliability/profile/search` | Find companies by name or id |
+| `POST` | `/reliability/listings` | Create a listing |
+| `POST` | `/reliability/offers` | Make, then `/accept`, `/decline`, or `/withdraw` an offer |
+| `GET` | `/reliability/offers` | Read offers |
+| `POST` | `/reliability/invoices` | Issue an invoice, then `/settle` or `/review` it |
+| `GET` | `/reliability/invoices` | Read an invoice by `id` |
+| `GET` | `/reliability/fees` | Read the accepted fee charge for a transaction |
+| `GET` | `/reliability/fees/quote` | Preview the checks and fees for a sale |
+| `GET` | `/reliability/scores/explain` | Explain each score change |
 
 Every party action carries an Ed25519 signature.
 The read views use the Coworker tools, so the UI and the Coworkers show the same engine numbers.
+A sale, an invoice, and a contract open only after KYC and limit checks.
+Read [Marketplace rules and writes](docs/marketplace.md) for the checks, fees, listings, offers, and invoices.
 
 Read [Transaction lifecycle](docs/reliability-lifecycle.md) for v1 actions and evidence rules.
 Read [Contract lifecycle](docs/contract-lifecycle.md) for templates, tiered disputes, signed party actions, and live Masumi escrow.
@@ -184,10 +202,11 @@ Paper stages remain simulations.
 Commands use durable identities and saved responses for safe retries.
 Read [chain evidence](docs/reliability-lifecycle.md#chain-evidence) before you use these stages.
 
-The fee stub returns buyer and seller rate offers for one entity.
-The lifecycle does not collect platform fees or enforce those offers.
-The scoring stub uses unit event weights.
-It does not apply value weighting or repeat-pair decay.
+Scores use the weighted Beta model with value weights, repeat-pair decay, and the fifth-percentile lower bound.
+Each sale records an accepted buyer fee and seller fee. The paper ledger collects, waives, or refunds them.
+The parameters are defaults until the product owner selects them.
+Run `bun run scores:rebuild` after a policy change.
+Read [Reliability math](docs/reliability-math.md).
 
 Run `bun run funding:demo` for the paper pool ledger.
 Read [paper omnibus funding](docs/omnibus-funding.md) for allocation rules and live custody requirements.
@@ -209,3 +228,5 @@ bun run lint
 
 These checks cover shared code, marketplace code, contracts, the Coworker tools, and the UI.
 No CRE installation is required for these checks.
+
+Read [Chainlink evidence checker](docs/chainlink-evidence.md) for the read-only preprod payment checker.

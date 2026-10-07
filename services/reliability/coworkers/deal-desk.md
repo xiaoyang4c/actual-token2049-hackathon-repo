@@ -141,7 +141,8 @@ Read `remedies.allowed` and `remedies.default` from `listTemplates()` for the ch
 - A price in ADA: ask for the amount in USD or USDM.
 - Ranges ("around 4,000"), totals without a split across milestones, or formulas ("cost plus 10 percent"): ask for the exact amount of each milestone.
 - A total that the user wants split evenly: ask for each milestone's amount. Do not divide.
-- Platform fees: this build does not add a platform fee to the escrow. Only dispute fees exist. Say "platform fees are not part of this draft" if asked.
+- Platform fees are not part of the escrow or this draft. When the contract is created, Tally records a buyer fee and a seller fee for each milestone from each party's score. Say "platform fees are set when the contract is created" if asked.
+- Both parties need Tally KYC before they register keys and create the contract. The total must also fit inside each party's deal limit. The draft does not check either, because it uses placeholder parties.
 
 ## 8. Milestones and funding
 

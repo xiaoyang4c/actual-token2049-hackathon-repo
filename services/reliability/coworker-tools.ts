@@ -38,7 +38,7 @@ import {
 import type {JsonValue, ReliabilityCategory} from '../../packages/reliability/src/types';
 import {loadContractConfig, MPS_AUTO_WITHDRAW_DELAY_MS, type ContractConfig} from './contract-config';
 import {ContractService} from './contract-service';
-import {DEFAULT_RELIABILITY_POLICIES, type ReliabilityPolicies} from './policies';
+import {DEFAULT_RELIABILITY_POLICIES, POLICY_PARAMETERS_SELECTED, type ReliabilityPolicies} from './policies';
 
 // ---------------------------------------------------------------------------
 // Value types. Every number carries its exact source value and a display form.
@@ -199,6 +199,8 @@ export interface DraftResult {
   defaultsApplied: string[];
   placeholders: Array<{milestoneIndex: number|null; field: string}>;
   normalized: string[];
+  /** The sum of every milestone price. */
+  total: Money;
   milestones: DraftMilestone[];
   evidence: {delivery: string[]; buyerDispute: string[]};
   judge: {type: string; inspector: string|null; inspectors: string[]};
@@ -524,7 +526,12 @@ export class CoworkerTools {
       ...this.config,
       settings: {...this.config.settings, mode: 'paper', mediator: {id: 'sandbox-mediator', publicKeyHex: mediatorKey.publicKeyHex}},
     };
-    const service = new ContractService(store, {config, clock: new FixedClock(at), templates: this.templates, policies: this.policies});
+    // The sandbox uses placeholder parties. KYC, limits, and fees apply when
+    // the parties create the real contract, so the sandbox skips them.
+    const service = new ContractService(store, {
+      config, clock: new FixedClock(at), templates: this.templates, policies: this.policies,
+      enforceMarketplaceRules: false,
+    });
     return {store, service, mediatorKey};
   }
 
@@ -648,6 +655,7 @@ export class CoworkerTools {
         defaultsApplied,
         placeholders,
         normalized,
+        total: this.money(contract.milestones.reduce((sum, milestone) => sum + BigInt(milestone.amountAtomic), 0n)),
         milestones: contract.milestones.map((milestone) => this.draftMilestone(milestone, remedy, terms.dispute.tiers)),
         evidence: {delivery: terms.delivery.requiredEvidence.map(describeRule), buyerDispute: terms.dispute.buyerEvidence.map(describeRule)},
         judge: {type: describeJudge(terms.judge), inspector: terms.judgeInspectorId, inspectors: terms.inspectorWhitelist.map((item) => item.id)},
@@ -937,8 +945,10 @@ export class CoworkerTools {
         score: view.value,
         lowerBound: view.lowerBound,
         confidence: view.confidence,
+        // `weighted` counts the events that changed the score. Unverified
+        // events and events without a value carry no weight.
         events: {total: events.length, success: events.filter((item) => item.outcome === 'success').length,
-          failure: events.filter((item) => item.outcome === 'failure').length},
+          failure: events.filter((item) => item.outcome === 'failure').length, weighted: view.eventCount},
         updatedAt: state.updatedAt,
       };
     });
@@ -997,7 +1007,10 @@ export class CoworkerTools {
     };
     return {
       entity: {id: entity.id, displayName: entity.displayName, kycStatus: entity.kycStatus, kycTier: entity.kycTier, createdAt: entity.createdAt},
-      scoringPolicy: {version: scoring.version, provisional: scoring.version.includes('stub')},
+      scoringPolicy: {
+        version: scoring.version, provisional: scoring.version.includes('stub'),
+        parametersSelected: POLICY_PARAMETERS_SELECTED,
+      },
       scores,
       termsDecisions: [...latestTerms.values()].map((decision) => ({
         category: decision.category, terms: decision.terms, buyerFeeBps: decision.buyerFeeBps, sellerFeeBps: decision.sellerFeeBps,

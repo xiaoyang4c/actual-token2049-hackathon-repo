@@ -1,3 +1,6 @@
+import {APP_EDITION} from '@/lib/edition'
+import {useAppSession} from '@/lib/app-session'
+import {deals} from '@/lib/deals'
 import {useEffect, useMemo, useState} from 'react'
 import {Link, useSearchParams} from 'react-router-dom'
 import {ArrowUpRight, Building2, Search} from 'lucide-react'
@@ -21,7 +24,8 @@ const COUNTS: Array<[keyof RecordCounts, string]> = [
 function Finder({onPick}: {onPick: (id: string) => void}) {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<EntityHit[]>([])
-  const known = useAsync(() => api.contracts(), 'contracts-all')
+  const {session} = useAppSession()
+  const known = useAsync(() => APP_EDITION ? (session ? deals.contracts(session) : Promise.resolve([])) : api.contracts(), APP_EDITION ? `companies-deals-${session?.token}` : 'contracts-all')
   const parties = useMemo(() => {
     const seen = new Map<string, string>()
     for (const c of known.data ?? []) { seen.set(c.buyer.id, c.buyer.displayName); seen.set(c.seller.id, c.seller.displayName) }
@@ -66,6 +70,7 @@ function Finder({onPick}: {onPick: (id: string) => void}) {
 }
 
 function Record({p, names}: {p: Profile; names: Map<string, string>}) {
+  const {me} = useAppSession()
   const anchors = useAsync(() => api.companyAnchors(p.entity.id), `company-anchors-${p.entity.id}`)
   return (
     <div className="space-y-6">
@@ -154,7 +159,7 @@ function Record({p, names}: {p: Profile; names: Map<string, string>}) {
                 <TableCell className="text-right"><Amount display={d.amount.display} /></TableCell>
                 <TableCell><StateTag state={d.state} /></TableCell>
                 <TableCell className="hidden text-[12.5px] text-ink-2 md:table-cell">{d.disputed ? `Tier ${d.disputeTierReached}${d.disputeWinner ? `, ${d.disputeWinner} won` : ', open'}` : '—'}</TableCell>
-                <TableCell className="pr-5 text-right"><Link to={`/contracts/${d.contractId}`} aria-label="Open contract" className="inline-flex rounded-[6px] p-1.5 text-ink-3 hover:bg-black/[0.05] hover:text-ink"><ArrowUpRight className="size-4" /></Link></TableCell>
+                <TableCell className="pr-5 text-right">{(!APP_EDITION || me?.entityId === d.counterpartyId || me?.entityId === p.entity.id) ? <Link to={`${APP_EDITION ? '/deals' : '/contracts'}/${d.contractId}`} aria-label="Open contract" className="inline-flex rounded-[6px] p-1.5 text-ink-3 hover:bg-black/[0.05] hover:text-ink"><ArrowUpRight className="size-4" /></Link> : null}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -168,7 +173,8 @@ export function CompaniesPage() {
   const [params, setParams] = useSearchParams()
   const id = params.get('id')
   const profile = useAsync(() => (id ? api.profile(id) : Promise.resolve(null)), `profile-${id}`)
-  const all = useAsync(() => api.contracts(), 'contracts-all')
+  const {session} = useAppSession()
+  const all = useAsync(() => APP_EDITION ? (session ? deals.contracts(session) : Promise.resolve([])) : api.contracts(), APP_EDITION ? `companies-deals-${session?.token}` : 'contracts-all')
   const names = useMemo(() => new Map((all.data ?? []).flatMap((c) => [[c.buyer.id, c.buyer.displayName], [c.seller.id, c.seller.displayName]] as [string, string][])), [all.data])
 
   return (
