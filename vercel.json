@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "bunVersion": "1.x",
+  "installCommand": "bun install && cd web && bun install",
+  "buildCommand": "cd web && bun run build",
+  "outputDirectory": "web/dist",
+  "functions": {
+    "api/demo.ts": {
+      "includeFiles": "{packages/db/migrations/**,packages/reliability/src/contract-lifecycle/templates/**}",
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {"source": "/reliability/:path*", "destination": "/api/demo?__path=/reliability/:path*"},
+    {"source": "/coworkers/ask", "destination": "/api/demo?__path=/coworkers/ask"},
+    {"source": "/((?!api/|assets/|brand/).*)", "destination": "/index.html"}
+  ]
+}
