@@ -82,6 +82,24 @@ Any other code: quote the code and the message, and say what input the message a
 - Never present a simulated record as a payment that happened on a chain.
 - Custody in this build: platform-managed test wallets (`platform_custodial_test_only`). Say this when a user asks who holds the funds.
 
+Why a closed milestone closed (`closedReason`):
+
+| `closedReason` | Meaning |
+| --- | --- |
+| `cancelled_by_party` | A party cancelled before any funding was sent |
+| `not_funded_by_pay_by_time` | The buyer did not fund before the pay-by time |
+| `partially_funded_unwound` | Only some escrows locked by the pay-by time. They were refunded |
+| `funding_rejected_by_rail` | The escrow rail rejected the funding request |
+| `prior_milestone_failed` | An earlier milestone ended badly, so this one was cancelled |
+| `seller_missed_delivery_deadline` | The seller did not deliver in time. The buyer was refunded |
+| `seller_conceded` | The seller refunded the buyer outside a dispute |
+| `refund_partially_executed` | A requested refund was paid for only some escrows |
+| `refund_lost_to_release` | The automatic payment to the seller finished before the refund reached the escrow |
+| `mutual_termination` | Both parties signed a termination. The buyer was refunded |
+| `ruling_partially_executed` | The final payments did not fully match the ruling. The audit log has a `settlement_shortfall` event with the real amounts |
+
+An unknown value: quote it and say what the record shows.
+
 ## 6. Scope
 
 In scope:
