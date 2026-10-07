@@ -20,6 +20,7 @@ import * as lifecycleCommands from './lifecycle-commands';
 import type {LifecycleCommandRecord} from '../../reliability/src/lifecycle/commands';
 import * as contractRecords from './contract-records';
 import * as anchorRecords from './anchor-records';
+import * as walletRecords from './wallet-records';
 import type {AnchorBatchRow, AnchoredEntryView, AnchorEntryRow, FinalPublication} from './anchor-records';
 import type {
   ContractAuditRow, ContractCommit, EscrowOperation, ProcessedAction, ReliabilityPublication,
@@ -751,6 +752,78 @@ export class AgentStore {
 
   anchorCounts(): ReturnType<typeof anchorRecords.anchorCounts> {
     return anchorRecords.anchorCounts(this.db);
+  }
+
+  // ---- Wallet accounts (migration 017) ----
+
+  insertWalletChallenge(row: Parameters<typeof walletRecords.insertWalletChallenge>[1]): void {
+    walletRecords.insertWalletChallenge(this.db, row);
+  }
+
+  getWalletChallenge(id: string): walletRecords.WalletChallengeRow|undefined {
+    return walletRecords.getWalletChallenge(this.db, id);
+  }
+
+  /** Marks a challenge used. Returns false when it was already used. */
+  useWalletChallenge(id: string, at: number): boolean {
+    return walletRecords.useWalletChallenge(this.db, id, at);
+  }
+
+  /** Deletes expired challenges and returns the count of open ones. */
+  pruneWalletChallenges(now: number): number {
+    return walletRecords.pruneWalletChallenges(this.db, now);
+  }
+
+  insertWalletProof(row: walletRecords.WalletProofRow): void {
+    walletRecords.insertWalletProof(this.db, row);
+  }
+
+  getWalletProofByCredential(credentialHash: string): walletRecords.WalletProofRow|undefined {
+    return walletRecords.getWalletProofByCredential(this.db, credentialHash);
+  }
+
+  listWalletProofs(entityId: string): walletRecords.WalletProofRow[] {
+    return walletRecords.listWalletProofs(this.db, entityId);
+  }
+
+  listAllWalletProofs(): walletRecords.WalletProofRow[] {
+    return walletRecords.listAllWalletProofs(this.db);
+  }
+
+  insertSession(row: Parameters<typeof walletRecords.insertSession>[1]): void {
+    walletRecords.insertSession(this.db, row);
+  }
+
+  getSession(tokenHash: string): walletRecords.SessionRow|undefined {
+    return walletRecords.getSession(this.db, tokenHash);
+  }
+
+  revokeSession(tokenHash: string, at: number): void {
+    walletRecords.revokeSession(this.db, tokenHash, at);
+  }
+
+  upsertLiveDeposit(row: walletRecords.LiveDepositRow): void {
+    walletRecords.upsertLiveDeposit(this.db, row);
+  }
+
+  listLiveDepositsForTx(txHash: string): walletRecords.LiveDepositRow[] {
+    return walletRecords.listLiveDepositsForTx(this.db, txHash);
+  }
+
+  listLiveDeposits(filter: Parameters<typeof walletRecords.listLiveDeposits>[1] = {}): walletRecords.LiveDepositRow[] {
+    return walletRecords.listLiveDeposits(this.db, filter);
+  }
+
+  confirmedDepositTotals(entityId: string): Array<{unit: string; quantity: string}> {
+    return walletRecords.confirmedDepositTotals(this.db, entityId);
+  }
+
+  insertDepositSubmission(row: walletRecords.DepositSubmissionRow): void {
+    walletRecords.insertDepositSubmission(this.db, row);
+  }
+
+  listDepositSubmissions(entityId: string, limit?: number): walletRecords.DepositSubmissionRow[] {
+    return walletRecords.listDepositSubmissions(this.db, entityId, limit);
   }
 
   getPaperEscrow(ref: string): string|undefined {

@@ -18,6 +18,8 @@
     "anchors:wallet": "bun run services/reliability/anchor-worker.ts wallet",
     "anchors:status": "bun run services/reliability/anchor-worker.ts status",
     "anchors:worker": "bun run services/reliability/anchor-worker.ts worker",
+    "deposits:status": "bun run services/reliability/deposit-worker.ts status",
+    "deposits:worker": "bun run services/reliability/deposit-worker.ts worker",
     "scores:rebuild": "bun run services/reliability/scores-rebuild.ts",
     "test": "bun test packages services ui && cd cre/agent-loop && bun test",
     "typecheck:workflow": "cd cre/agent-loop && bun run typecheck",

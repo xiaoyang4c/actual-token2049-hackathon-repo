@@ -8,6 +8,8 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/tally-app/current
 Environment=UI_PORT=8791
 Environment=CONTROL_API_URL=http://127.0.0.1:8787
+# The web app on Vercel calls the Coworker chat and the account routes from the browser. Comma-separated.
+Environment=TALLY_WEB_ORIGINS=https://tally-origins.vercel.app
 ExecStart=/home/ubuntu/.bun/bin/bun run ui/server.ts
 Restart=always
 RestartSec=5

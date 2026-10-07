@@ -12,8 +12,15 @@
 // One exception: the Coworker chat. POST /coworkers/ask and GET /coworkers/ask?id=
 // go to the Coworker worker (COWORKER_ASK_URL, default http://127.0.0.1:8792).
 // The chat is free: its tools only read, and nothing is paid or stored.
-// The Tally web app on another origin (COWORKER_ASK_ORIGINS, comma-separated)
-// may call these two routes from the browser. No other route allows another origin.
+//
+// Second exception: wallet sign-in and the signed-in account (ACCOUNT_ROUTES).
+// They go to the control API with the caller's Bearer session token. The control
+// API checks the wallet signature and the session, and limits each visitor.
+// Read docs/wallets.md.
+//
+// The Tally web app on another origin (TALLY_WEB_ORIGINS or COWORKER_ASK_ORIGINS,
+// comma-separated) may call the chat and account routes from the browser.
+// No other route allows another origin.
 
 const FILES: Record<string, string> = {
   "/": "index.html",
@@ -45,6 +52,17 @@ const PROXY_PATHS = new Set([
   // Deal Desk: templates and a sandboxed draft. Both GET, neither writes.
   "/reliability/contracts/draft-templates", "/reliability/contracts/draft",
 ])
+
+/** Wallet sign-in and account routes, as "METHOD /path". */
+const ACCOUNT_ROUTES = new Set([
+  "POST /reliability/wallets/challenge", "POST /reliability/wallets/verify",
+  "GET /reliability/account", "POST /reliability/account/kyc", "POST /reliability/account/sign-out",
+  "POST /reliability/account/deposits/build", "POST /reliability/account/deposits/submit",
+])
+const ACCOUNT_PATHS = new Set([...ACCOUNT_ROUTES].map((route) => route.split(" ")[1]))
+/** A deposit build carries the wallet's UTxOs, at most 300 of them. */
+const ACCOUNT_BODY_LIMIT = 262_144
+const BEARER = /^Bearer [A-Za-z0-9_-]{20,100}$/
 
 const ASK_PATH = "/coworkers/ask"
 /** A message is at most 4,000 characters. The chat sends at most 12 earlier messages of 6,000 characters. */
@@ -92,6 +110,37 @@ const proxyAsk = async (askUrl: string, req: Request, visitor: string, search: s
   }
 }
 
+const proxyAccount = async (controlApiUrl: string, req: Request, visitor: string, path: string) => {
+  let body: string | undefined
+  if (req.method === "POST") {
+    body = await req.text()
+    if (new TextEncoder().encode(body).length > ACCOUNT_BODY_LIMIT) {
+      return Response.json({ error: "The request is too long." }, { status: 413 })
+    }
+  }
+  // Only a well-formed session token is passed on. No cookie or other header is.
+  const authorization = req.headers.get("authorization")
+  try {
+    const upstream = await fetch(`${controlApiUrl}${path}`, {
+      method: req.method,
+      headers: {
+        "content-type": "application/json", "x-tally-visitor": visitor,
+        ...(authorization && BEARER.test(authorization) ? { authorization } : {}),
+      },
+      body,
+      cache: "no-store",
+      // A deposit reads the chain, so allow more time than a page read.
+      signal: AbortSignal.timeout(30_000),
+    })
+    return new Response(await upstream.text(), {
+      status: upstream.status,
+      headers: { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" },
+    })
+  } catch {
+    return Response.json({ error: "Tally is unreachable right now. Try again later." }, { status: 502 })
+  }
+}
+
 const proxyGet = async (controlApiUrl: string, path: string) => {
   try {
     const upstream = await fetch(`${controlApiUrl}${path}`, {
@@ -115,7 +164,7 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string; askUr
   const port = options?.port ?? Number(process.env.UI_PORT ?? 8791)
   const controlApiUrl = (options?.controlApiUrl ?? process.env.CONTROL_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "")
   const askUrl = (options?.askUrl ?? process.env.COWORKER_ASK_URL ?? "http://127.0.0.1:8792").replace(/\/$/, "")
-  const askOrigins = new Set((options?.askOrigins ?? (process.env.COWORKER_ASK_ORIGINS ?? "").split(","))
+  const askOrigins = new Set((options?.askOrigins ?? `${process.env.TALLY_WEB_ORIGINS ?? ""},${process.env.COWORKER_ASK_ORIGINS ?? ""}`.split(","))
     .map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean))
 
   return Bun.serve({
@@ -124,7 +173,14 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string; askUr
     async fetch(req, server) {
       const url = new URL(req.url)
       let res: Response
-      if (url.pathname === ASK_PATH && req.method === "OPTIONS") {
+      if (ACCOUNT_PATHS.has(url.pathname) && req.method === "OPTIONS") {
+        const cors = corsFor(req, askOrigins)
+        res = cors["access-control-allow-origin"]
+          ? new Response(null, { status: 204, headers: { ...cors, "access-control-allow-methods": "GET, POST", "access-control-allow-headers": "content-type, authorization", "access-control-max-age": "600" } })
+          : new Response("origin not allowed", { status: 403 })
+      } else if (ACCOUNT_ROUTES.has(`${req.method} ${url.pathname}`)) {
+        res = withHeaders(await proxyAccount(controlApiUrl, req, visitorOf(req, server.requestIP(req)?.address), url.pathname), corsFor(req, askOrigins))
+      } else if (url.pathname === ASK_PATH && req.method === "OPTIONS") {
         // The browser asks first because the chat posts JSON from another origin.
         const cors = corsFor(req, askOrigins)
         res = cors["access-control-allow-origin"]

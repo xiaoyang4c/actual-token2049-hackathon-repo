@@ -1,7 +1,9 @@
 /**
  * @fileoverview Marketplace rules that apply before a sale opens.
  *
- * The gate checks both parties against KYC, the deal value against each
+ * The gate checks both parties against KYC and, when MARKETPLACE_REQUIRE_WALLET
+ * is on, a proven wallet. A live contract also needs the buyer's confirmed
+ * deposits to cover it. The gate checks the deal value against each
  * party's exposure limit, invoice due dates against the buyer's payment
  * days, and listing minimum reliabilities. Limits and payment days come
  * from the fee and terms policy, which reads each party's score snapshot.
@@ -20,6 +22,7 @@ import type {
   TermsDecision, TransactionType,
 } from '../../packages/reliability/src/types';
 import type {ReliabilityPolicies} from './policies';
+import {addressKeyHashes} from './deposit-chain';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -36,12 +39,21 @@ export interface DealViolation {
   message: string;
 }
 
-/** One party's KYC, score snapshot, and terms. */
+/** Whether a party has proven control of a wallet. Read docs/wallets.md. */
+export interface WalletGateResult {
+  passed: boolean;
+  required: boolean;
+  wallets: number;
+  message: string;
+}
+
+/** One party's KYC, wallet, score snapshot, and terms. */
 export interface PartyCheck {
   entityId: string;
   role: EntityRole;
   category: ReliabilityCategory;
   kyc: KycGateResult;
+  wallet: WalletGateResult;
   score: ScoreView;
   decision: TermsDecision;
   /** Exposure limit in the accounting currency. Zero without KYC. */
@@ -71,6 +83,8 @@ export interface DealInput {
   listing?: Listing;
   /** Raises the required KYC tier, for example from a contract template. */
   requiredKycTier?: KycTier;
+  /** A live contract: the buyer's available deposits must cover this amount. */
+  liveDeposit?: {unit: string; quantity: bigint};
   now: string;
 }
 
@@ -84,10 +98,48 @@ export class MarketplaceRuleError extends Error {
 
 /** Gate checks on one store. Policies must be the plain (unwrapped) bundle or a wrapper. */
 export class MarketplaceGate {
+  readonly requireWallet: boolean;
+
   constructor(
     private readonly store: AgentStore,
     private readonly policies: ReliabilityPolicies,
-  ) {}
+    options: {requireWallet?: boolean} = {},
+  ) {
+    this.requireWallet = options.requireWallet ?? process.env.MARKETPLACE_REQUIRE_WALLET === 'on';
+  }
+
+  /** A proven wallet. Required only when requireWallet is on. */
+  wallet(entityId: string): WalletGateResult {
+    const wallets = this.store.listWalletProofs(entityId).length;
+    const passed = wallets > 0 || !this.requireWallet;
+    return {
+      passed, required: this.requireWallet, wallets,
+      message: wallets ? `${entityId} has ${wallets} proven wallet${wallets === 1 ? '' : 's'}` :
+        `${entityId} has no proven wallet; sign in with a wallet first`,
+    };
+  }
+
+  /** True when one of the entity's wallet proofs covers this address. */
+  ownsAddress(entityId: string, address: string): boolean {
+    const keys = addressKeyHashes(address);
+    return this.store.listWalletProofs(entityId).some((proof) =>
+      proof.credentialHash === (proof.credentialKind === 'stake' ? keys.stake : keys.payment));
+  }
+
+  /**
+   * Confirmed live deposits of one asset, less the amounts of the entity's
+   * open live contracts as buyer. Read docs/wallets.md.
+   */
+  availableDeposit(entityId: string, unit: string): {deposited: bigint; reserved: bigint; available: bigint} {
+    const deposited = BigInt(this.store.confirmedDepositTotals(entityId).find((total) => total.unit === unit)?.quantity ?? '0');
+    let reserved = 0n;
+    for (const id of this.store.listContractIds({openOnly: true})) {
+      const contract = this.store.getContract(id);
+      if (contract?.mode !== 'live' || contract.buyerId !== entityId || contract.terms.assetUnit !== unit) continue;
+      for (const milestone of contract.milestones) reserved += BigInt(milestone.amountAtomic);
+    }
+    return {deposited, reserved, available: deposited - reserved};
+  }
 
   /** KYC only. Contract key registration uses it. */
   kyc(entityId: string, now: string, requiredTier?: KycTier): KycGateResult {
@@ -114,7 +166,7 @@ export class MarketplaceGate {
       inputs: {eventCount: state.eventCount, purpose: 'deal_check'},
       now,
     });
-    return {entityId, role, category, kyc, score, decision, limit: decision.terms.limit};
+    return {entityId, role, category, kyc, wallet: this.wallet(entityId), score, decision, limit: decision.terms.limit};
   }
 
   /** Checks every rule and returns all violations. */
@@ -142,10 +194,21 @@ export class MarketplaceGate {
     for (const party of [buyer, seller]) {
       if (!party.kyc.passed) {
         violations.push({code: party.kyc.code ?? 'kyc_not_verified', party: party.role, message: party.kyc.message});
+      } else if (!party.wallet.passed) {
+        violations.push({code: 'wallet_required', party: party.role, message: party.wallet.message});
       } else if (knownValue && value > party.limit) {
         violations.push({
           code: 'exposure_limit', party: party.role,
           message: `${party.entityId} has a ${party.role} limit of ${party.limit} ${currency} in ${category}; the sale is ${value}`,
+        });
+      }
+    }
+    if (input.liveDeposit && buyer.kyc.passed) {
+      const funds = this.availableDeposit(input.buyerId, input.liveDeposit.unit);
+      if (funds.available < input.liveDeposit.quantity) {
+        violations.push({
+          code: 'deposit_required', party: 'buyer',
+          message: `${input.buyerId} has ${funds.available} available of ${input.liveDeposit.unit} (deposited ${funds.deposited}, reserved ${funds.reserved}); the contract needs ${input.liveDeposit.quantity}`,
         });
       }
     }

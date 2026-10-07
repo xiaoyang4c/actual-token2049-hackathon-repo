@@ -101,6 +101,9 @@ Keep the reliability rows of the earlier entity. Leave the new entity with no re
 
 A wallet that is already registered is refused. That refusal is not a KYC pass.
 
+A wallet attached through these routes has no proof of control.
+A wallet signed in through the Account page has a proof. Read [Wallet accounts](wallets.md).
+
 ## Store
 
 The provider writes through `AgentStore` accessors.
@@ -175,6 +178,8 @@ These POST routes exist so a demo can move an entity through the cases:
 - `POST /reliability/kyc/expire`
 
 Send `"force": true` on the expire route to show the expired badge before the config TTL.
+
+A signed-in account uses `POST /reliability/account/kyc` instead. It submits and resolves the mock check for its own entity only.
 
 The route file is `services/reliability/routes-lane-a-kyc.ts`.
 

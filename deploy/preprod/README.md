@@ -132,6 +132,19 @@ Read its log with `journalctl -u tally-coworkers -f`. The journal of each Task i
 
 Fund the address with test ADA, check `bun run anchors:status`, then install the unit like the others. It starts with submission off.
 
+## Wallet accounts and deposits
+
+Read [Wallet accounts](../../docs/wallets.md). Sign-in and KYC need no setup. Live deposits need three steps:
+
+1. Read the purchasing wallet address of the payment service (`GET /api/v1/wallet/list`). Deposits go there, so they can fund Masumi escrow.
+2. Set `TALLY_DEPOSIT_ADDRESS` to that address in [`tally-services.service`](tally-services.service) and [`tally-deposits.service`](tally-deposits.service). Both read `blockfrost_preprod` from `~/tally-secrets`.
+3. Copy both units to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, restart `tally-services`, and run `sudo systemctl enable --now tally-deposits`.
+
+Check with `bun run deposits:status`. Read the log with `journalctl -u tally-deposits -f`.
+
+[`tally-services.service`](tally-services.service) sets `MARKETPLACE_REQUIRE_WALLET=on`: every sale and contract needs a proven wallet.
+[`tally-ui.service`](tally-ui.service) lists the web app in `TALLY_WEB_ORIGINS`, so the browser can call the account routes.
+
 ## Register the Coworkers
 
 ### Masumi registry (on-chain)

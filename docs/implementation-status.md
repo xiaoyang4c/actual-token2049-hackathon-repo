@@ -42,6 +42,7 @@ Read [Contract lifecycle](contract-lifecycle.md).
 | Settlement anchors | Fingerprints of settled records, chained per company, posted to Cardano preprod as CIP-20 messages, with confirm-or-expire batch rules. The website shows anchor status | The first live batch (waits for the go-ahead), and a signed chain head for lenders |
 | Hosted demo | A preprod server with the payment service, the control API, the UI, and six showcase contracts | A live escrow run and a running contract worker |
 | Pooled funding | Paper deposits and deal allocations | Escrow integration, return credits, and reconciliation |
+| Wallet accounts | Wallet sign-in (connected or created in the browser), self-service mock KYC, and live preprod deposits credited from proven wallets. Live contracts need deposits. Read [Wallet accounts](wallets.md) | A first live deposit on preprod, persistent rate limits, wallet removal, and an operator view for unattributed deposits |
 
 Read [Reliability math](reliability-math.md) for the equations.
 Read [Marketplace rules and writes](marketplace.md) for the checks, fees, listings, offers, and invoices.

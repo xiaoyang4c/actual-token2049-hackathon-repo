@@ -56,12 +56,14 @@ Do not edit `cre/agent-loop` unless the task names that path.
 
 Do not edit `services/market-feed.ts` unless the task names that path.
 
-The operator UI is display-only, with one exception: Ask a Coworker (`POST /coworkers/ask` and `GET /coworkers/ask?id=`).
-The UI server forwards it to the Coworker worker, which answers a free preview with read-only tools. It pays nothing and stores nothing.
+The operator UI is display-only, with two exceptions.
+
+1. Ask a Coworker (`POST /coworkers/ask` and `GET /coworkers/ask?id=`). The UI server forwards it to the Coworker worker, which answers a free preview with read-only tools. It pays nothing and stores nothing.
+2. Wallet accounts (`ACCOUNT_ROUTES` in `ui/server.ts`). A person signs in with a wallet signature, submits mock KYC, and sends live preprod deposits from their own wallet. Tally never holds a wallet key. Read `docs/wallets.md`.
 
 A hosted copy at `https://13-210-42-0.sslip.io` is a public, read-only demo with paper data. The team agreed to this for judging.
 Its Ask a Coworker area takes requests from anyone, within limits: 5 requests per visitor every 10 minutes, at most 10 AI answers a day for the website, and one answer at a time.
-Its role views are lenses, not access control. Before real data or a launch, add sign-in, and keep the Mediation desk private.
+Its role views are lenses, not access control. Wallet sign-in covers accounts only. Before real data or a launch, put the role views behind sign-in, and keep the Mediation desk private.
 
 The operator UI reads `GET /reliability/*`. Lane C builds the UI against these routes.
 

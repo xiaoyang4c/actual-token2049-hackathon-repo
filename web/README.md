@@ -2,7 +2,9 @@
 
 A front end for Tally: deals, contracts, the mediation desk, company records, the Deal Desk, Ask a
 Coworker, the Coworkers and the operator ledger. It reads the control API and never signs, funds or
-submits a contract action. Its one input is Ask a Coworker, a free preview that pays and stores nothing.
+submits a contract action. It has two inputs: Ask a Coworker, a free preview that pays and stores nothing, and the
+Account page. The Account page signs in with a wallet, sends mock KYC, and sends live preprod deposits that the
+user's own wallet signs. Tally never holds a wallet key. Read [Wallet accounts](../docs/wallets.md).
 
 ## Run
 
@@ -36,9 +38,11 @@ CI runs all three checks. Read the [Bun testing guide](https://bun.com/docs/test
 | Deal Desk | Four-step contract draft: escrows, payouts per outcome, Tier 1 options, timeline, fees | `contracts/draft-templates`, `contracts/draft` |
 | Ask a Coworker | Deal Desk, Mediator or Trust Check answers a request, fill-in format or plain English | `POST /coworkers/ask`, `GET /coworkers/ask?id=` |
 | Coworkers | The three Coworkers, their tools, the Masumi payment flow, registrations | static |
+| Account | Wallet sign-in (Lace, Eternl, or a wallet created in the browser), mock KYC, and live preprod deposits. Read [Wallet accounts](../docs/wallets.md) | `wallets/challenge`, `wallets/verify`, `account`, `account/kyc`, `account/deposits/*` |
 | Operator | Transactions with receipts, outcomes and KYC that need attention, participants and scores, listings | `transactions`, `receipts`, `entities`, `scores`, `listings` |
 
-All control API routes are under `/reliability/` and are GET. `contracts/draft` runs `createContract`
+All control API routes are under `/reliability/`. Every route is GET except the account routes, which need a wallet
+session. `contracts/draft` runs `createContract`
 in an in-memory sandbox through `CoworkerTools.draftContract` and stores nothing.
 
 Coworker answers are untrusted model text. The Ask view renders them as Markdown with raw HTML skipped
@@ -65,6 +69,12 @@ It contains six showcase contracts and their settlement fingerprints. The build 
 Each function instance uses the same fallback IDs.
 When the hosted Coworker is offline, Ask a Coworker answers without a model in the same request.
 The fallback accepts the fill-in format. Plain English gets the fill-in instructions.
+
+The build sets `VITE_TALLY_SERVER_URL` to the preprod server. The Account page calls the account routes there,
+with the wallet session token. The preprod UI server must list this site in `TALLY_WEB_ORIGINS`.
+`vercel.json` also sends security headers: a Content-Security-Policy that allows scripts from this site only
+and API calls to this site and the preprod server, `X-Frame-Options: DENY`, and `nosniff`.
+Add a new API host to `connect-src` before the web app calls it.
 
 Deploy production from `main`. Merge changes through a pull request.
 In the Vercel project, open **Settings > Environments > Production > Branch Tracking**.
