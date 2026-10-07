@@ -419,7 +419,7 @@ describe('providers and parsing', () => {
     expect(urls).toEqual(['model-a', 'model-b', 'model-b']);
     expect(waits).toEqual([]);
     expect(provider.available()).toBe(true);
-    await expect(provider.reply('rules', hi, [])).rejects.toThrow('every configured Gemini model has used up its quota');
+    await expect(provider.reply('rules', hi, [])).rejects.toThrow('Gemini model-b quota is used up for 60 minutes');
     expect(provider.available()).toBe(false);
     now += 3600_000;
     expect(provider.available()).toBe(true);
@@ -442,6 +442,24 @@ describe('providers and parsing', () => {
     expect(result).toEqual({text: 'Kopi has 4 deals.', toolCalls: 1});
     expect(urls).toEqual(['a', 'a', 'b', 'b']);
     expect(runs).toBe(2);
+  });
+
+  test('a model still overloaded after every try is skipped for 5 minutes, and the next model answers', async () => {
+    let now = T0;
+    const urls: string[] = [];
+    const fetcher = (async (url: string) => {
+      urls.push(url.includes('/models/model-a:') ? 'a' : 'b');
+      if (url.includes('/models/model-a:')) return new Response('{}', {status: 503});
+      return new Response(JSON.stringify({candidates: [{content: {role: 'model', parts: [{text: 'OK'}]}}]}));
+    }) as unknown as typeof fetch;
+    const provider = new GeminiProvider('k', 'model-a,model-b', {fetch: fetcher, now: () => now, sleep: async () => {}});
+    const hi: ChatTurn[] = [{role: 'user', text: 'hi'}];
+    expect((await provider.reply('rules', hi, [])).text).toBe('OK');
+    expect(await provider.reply('rules', hi, [])).toMatchObject({text: 'OK'});
+    expect(urls).toEqual(['a', 'a', 'a', 'a', 'b', 'b']);
+    now += 5 * 60_000;
+    await provider.reply('rules', hi, []);
+    expect(urls.slice(6)).toEqual(['a', 'a', 'a', 'a', 'b']);
   });
 
   test('a conversation stays on the model that started it', async () => {

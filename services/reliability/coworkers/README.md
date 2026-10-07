@@ -85,8 +85,9 @@ If a model call fails, a readable fill-in request still gets the fill-in answer.
 
 The Gemini free tier allows 20 requests a day for each model, and one answer takes 2 to 4 requests.
 Rate limits and overloaded servers are retried up to 4 times.
-A model whose daily quota is used up is skipped until it resets, and the next model in the list is used.
-While every model is used up, the worker answers in the fill-in format and checks the request before payment, as with `none`.
+A model whose daily quota is used up is skipped until it resets. A model still overloaded after 4 tries is skipped for 5 minutes.
+The next model in the list answers. If that happens in the middle of an answer, the answer starts again on the next model.
+While every model is out of quota or overloaded, the worker answers in the fill-in format and checks the request before payment, as with `none`.
 
 ### Fill-in format
 

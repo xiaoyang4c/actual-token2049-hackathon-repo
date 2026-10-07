@@ -18,6 +18,8 @@ const REQUEST_TIMEOUT_MS = 60_000;
 const RETRY_STATUSES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504]);
 export const MODEL_ATTEMPTS = 4;
 const RETRY_MAX_DELAY_MS = 30_000;
+/** A model still overloaded after every try is skipped for this long. */
+const BUSY_PAUSE_MS = 5 * 60_000;
 /** Each tool round trip is one step. A draft needs two or three. */
 export const MAX_TOOL_STEPS = 8;
 
@@ -58,7 +60,7 @@ export interface ModelReply {
 
 export interface ModelProvider {
   readonly name: 'gemini'|'bedrock';
-  /** False while every model has used up its quota. The worker then uses the fill-in path before payment. */
+  /** False while every model is out of quota or overloaded. The worker then uses the fill-in path before payment. */
   available(): boolean;
   reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply>;
 }
@@ -71,11 +73,14 @@ export class ModelError extends Error {
   }
 }
 
-/** The provider asked for a longer wait than a retry should take, such as a used-up daily quota. */
-export class QuotaError extends ModelError {
+/**
+ * The model cannot answer for a while: its daily quota is used up, or it is
+ * still overloaded after every try. Another model may answer now.
+ */
+export class ModelBusyError extends ModelError {
   constructor(message: string, readonly retryAfterMs: number) {
     super(message);
-    this.name = 'QuotaError';
+    this.name = 'ModelBusyError';
   }
 }
 
@@ -127,11 +132,13 @@ async function postJson(client: Http, url: string, headers: {[key: string]: stri
     const hinted = response ? retryDelayMs(await response.json().catch(() => null)) : null;
     // A daily quota asks for a wait of hours. Retrying would only spend more of the next quota.
     if (response?.status === 429 && hinted !== null && hinted > RETRY_MAX_DELAY_MS) {
-      throw new QuotaError(`${label} quota is used up for ${Math.ceil(hinted / 60_000)} minutes`, hinted);
+      throw new ModelBusyError(`${label} quota is used up for ${Math.ceil(hinted / 60_000)} minutes`, hinted);
     }
     const problem = response ? `returned ${response.status}` : 'got no response';
     if ((response && !RETRY_STATUSES.has(response.status)) || attempt >= MODEL_ATTEMPTS) {
-      throw new ModelError(`${label} ${problem}${attempt > 1 ? ` after ${attempt} tries` : ''}`);
+      const message = `${label} ${problem}${attempt > 1 ? ` after ${attempt} tries` : ''}`;
+      if (!response || RETRY_STATUSES.has(response.status)) throw new ModelBusyError(message, BUSY_PAUSE_MS);
+      throw new ModelError(message);
     }
     await client.sleep(Math.min(hinted ?? 2000 * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS));
   }
@@ -158,8 +165,8 @@ export class GeminiProvider implements ModelProvider {
   private readonly http: Http;
   private readonly now: () => number;
   private readonly models: string[];
-  /** The free tier counts requests per model per day, so a model with a used-up quota is skipped until it resets. */
-  private readonly usedUpUntil = new Map<string, number>();
+  /** A model that is out of quota or overloaded is skipped until then. The free tier counts requests per model per day. */
+  private readonly pausedUntil = new Map<string, number>();
 
   /** `models` is a list, in order of preference, as an array or comma-separated. */
   constructor(private readonly apiKey: string, models: string|string[], options: ProviderOptions = {}) {
@@ -172,23 +179,24 @@ export class GeminiProvider implements ModelProvider {
   }
 
   available(): boolean {
-    return this.models.some((model) => (this.usedUpUntil.get(model) ?? 0) <= this.now());
+    return this.models.some((model) => (this.pausedUntil.get(model) ?? 0) <= this.now());
   }
 
   async reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {
     // A conversation stays on the model that started it: thought signatures belong to that model.
     const started = turns.map((turn) => (turn.role === 'assistant' ? record(turn.raw)?.model : null)).find((model) => typeof model === 'string');
-    const choices = typeof started === 'string' ? [started] : this.models.filter((model) => (this.usedUpUntil.get(model) ?? 0) <= this.now());
+    const choices = typeof started === 'string' ? [started] : this.models.filter((model) => (this.pausedUntil.get(model) ?? 0) <= this.now());
+    let busy: ModelBusyError|null = null;
     for (const model of choices) {
       try {
         return await this.call(model, system, turns, tools);
       } catch (error) {
-        if (!(error instanceof QuotaError)) throw error;
-        this.usedUpUntil.set(model, this.now() + error.retryAfterMs);
-        if (typeof started === 'string') throw error;
+        if (!(error instanceof ModelBusyError)) throw error;
+        this.pausedUntil.set(model, this.now() + error.retryAfterMs);
+        busy = error;
       }
     }
-    throw new ModelError('every configured Gemini model has used up its quota');
+    throw busy ?? new ModelError('every configured Gemini model is out of quota or overloaded');
   }
 
   private async call(model: string, system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {
@@ -296,7 +304,8 @@ export interface RunnableTool extends ToolSpec {
 
 /**
  * Runs the model until it answers without a tool call. If a model runs out of
- * quota in the middle of an answer, the answer starts again on the next model.
+ * quota or stays overloaded in the middle of an answer, the answer starts
+ * again on the next model.
  * That is safe because every Coworker tool only reads (a draft uses a sandbox).
  */
 export async function runWithTools(
@@ -306,7 +315,7 @@ export async function runWithTools(
     try {
       return await converse(provider, system, userText, tools, maxSteps);
     } catch (error) {
-      if (!(error instanceof QuotaError) || restart >= 2 || !provider.available()) throw error;
+      if (!(error instanceof ModelBusyError) || restart >= 2 || !provider.available()) throw error;
     }
   }
 }
