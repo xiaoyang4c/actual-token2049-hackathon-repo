@@ -85,8 +85,29 @@ The model is one setting, `COWORKER_MODEL_PROVIDER`, in [`tally-coworkers.servic
 | `none` | No model. The Coworkers answer the fill-in format | none |
 | `gemini` | Google Gemini. `COWORKER_GEMINI_MODEL` is a comma-separated list, tried in order | `gemini_api_key` |
 | `bedrock` | Claude on Amazon Bedrock (`COWORKER_BEDROCK_MODEL_ID`, `COWORKER_BEDROCK_REGION`) with a Bedrock API key | `bedrock_api_key` |
+| `openai-compatible` | Any [OpenAI Chat Completions](https://platform.openai.com/docs/api-reference/chat/create) API with function tools (`COWORKER_OPENAI_BASE_URL`, `COWORKER_OPENAI_MODEL`). `COWORKER_OPENAI_MODEL` is a comma-separated list, tried in order | `openai_compatible_api_key` |
 
 To switch, edit the line, then run `sudo systemctl daemon-reload && sudo systemctl restart tally-coworkers`.
+
+#### A free model with no payment card
+
+The service file sets `openai-compatible` up for the [Mistral](https://docs.mistral.ai/deployment/ai-studio/tier) free Experiment plan.
+That plan needs a phone number but no payment card.
+It allows 1 request a second, 500,000 tokens a minute, and 1 billion tokens a month.
+Mistral can use the requests for training on that plan.
+Use paper data only.
+
+1. Create an API key at <https://console.mistral.ai>.
+2. On the server, run `tally-set-secret openai_compatible_api_key` and paste the key.
+3. Set `COWORKER_MODEL_PROVIDER=openai-compatible` in `tally-coworkers.service`.
+4. Run `sudo systemctl daemon-reload && sudo systemctl restart tally-coworkers`.
+
+Read the workspace limits at <https://admin.mistral.ai/plateforme/limits>.
+`COWORKER_OPENAI_MIN_INTERVAL_MS` is the shortest time between two requests. Set it from the requests-per-second limit.
+
+One Deal Desk request holds about 7,500 tokens of instructions before the user's message.
+In October 2026 the free plans of GitHub Models (8,000 input tokens a request) and Cerebras (8,192-token context) were too small for it.
+The Groq free plan (12,000 tokens a minute and 100,000 a day for Llama 3.3 70B) allowed only a few answers a day.
 If a model call fails, a readable fill-in request still gets the fill-in answer.
 
 The Gemini free tier allows 20 requests a day for each model, and one answer takes 2 to 4 requests.

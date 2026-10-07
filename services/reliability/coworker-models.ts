@@ -59,7 +59,7 @@ export interface ModelReply {
 }
 
 export interface ModelProvider {
-  readonly name: 'gemini'|'bedrock';
+  readonly name: 'gemini'|'bedrock'|'openai-compatible';
   /** False while every model is out of quota or overloaded. The worker then uses the fill-in path before payment. */
   available(): boolean;
   reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply>;
@@ -290,6 +290,112 @@ export class BedrockProvider implements ModelProvider {
       if (use && typeof use.name === 'string' && typeof use.toolUseId === 'string') calls.push({id: use.toolUseId, name: use.name, args: record(use.input) ?? {}});
     }
     if (!text && !calls.length) throw new ModelError('Bedrock returned an empty answer');
+    return {text, calls};
+  }
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI-compatible Chat Completions (Mistral, Groq, OpenRouter, and others)
+// ---------------------------------------------------------------------------
+
+/** Tool arguments arrive as a JSON string. Bad JSON becomes no arguments, and the tool reports what is missing. */
+function jsonArgs(value: unknown): {[key: string]: unknown} {
+  if (typeof value !== 'string') return record(value) ?? {};
+  try {
+    return record(JSON.parse(value)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+export interface OpenAiCompatibleOptions extends ProviderOptions {
+  /** The shortest time between two requests. A free plan can allow only a few requests a minute. */
+  minIntervalMs?: number;
+}
+
+/**
+ * Any service with the OpenAI Chat Completions API and function tools.
+ * Some have a free plan with no payment card, such as the Mistral Experiment
+ * plan. `models` is tried in order, as with Gemini.
+ * https://platform.openai.com/docs/api-reference/chat/create
+ */
+export class OpenAiCompatibleProvider implements ModelProvider {
+  readonly name = 'openai-compatible' as const;
+  private readonly http: Http;
+  private readonly now: () => number;
+  private readonly url: string;
+  private readonly models: string[];
+  private readonly minIntervalMs: number;
+  /** A model that is out of quota or overloaded is skipped until then. */
+  private readonly pausedUntil = new Map<string, number>();
+  private nextRequestAt = 0;
+
+  /** `baseUrl` is the API root, such as https://api.mistral.ai/v1. `models` is a list, as an array or comma-separated. */
+  constructor(private readonly apiKey: string, baseUrl: string, models: string|string[], options: OpenAiCompatibleOptions = {}) {
+    if (!apiKey.trim() || /\s/.test(apiKey)) throw new Error('missing or invalid API key for the OpenAI-compatible model');
+    if (!/^https:\/\/[^\s/?#]+(\/[^\s?#]*)?$/.test(baseUrl)) throw new Error(`the OpenAI-compatible base URL must be an https URL (got ${baseUrl})`);
+    this.url = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
+    this.models = (Array.isArray(models) ? models : models.split(',')).map((model) => model.trim()).filter(Boolean);
+    if (!this.models.length) throw new Error('no OpenAI-compatible model is configured');
+    for (const model of this.models) if (!/^[a-zA-Z0-9._:/-]+$/.test(model)) throw new Error(`invalid model name ${model}`);
+    this.minIntervalMs = Math.max(0, options.minIntervalMs ?? 0);
+    this.http = http(options);
+    this.now = options.now ?? Date.now;
+  }
+
+  available(): boolean {
+    return this.models.some((model) => (this.pausedUntil.get(model) ?? 0) <= this.now());
+  }
+
+  async reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {
+    let busy: ModelBusyError|null = null;
+    for (const model of this.models.filter((item) => (this.pausedUntil.get(item) ?? 0) <= this.now())) {
+      try {
+        return await this.call(model, system, turns, tools);
+      } catch (error) {
+        if (!(error instanceof ModelBusyError)) throw error;
+        this.pausedUntil.set(model, this.now() + error.retryAfterMs);
+        busy = error;
+      }
+    }
+    throw busy ?? new ModelError('every configured model is out of quota or overloaded');
+  }
+
+  /** Waits until `minIntervalMs` has passed since the last request. The slot is taken before the wait. */
+  private async waitForTurn(): Promise<void> {
+    const start = Math.max(this.now(), this.nextRequestAt);
+    this.nextRequestAt = start + this.minIntervalMs;
+    if (start > this.now()) await this.http.sleep(start - this.now());
+  }
+
+  private async call(model: string, system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {
+    const messages: Json[] = [{role: 'system', content: system}];
+    for (const turn of turns) {
+      if (turn.role === 'user') {
+        messages.push({role: 'user', content: turn.text});
+      } else if (turn.role === 'assistant') {
+        const calls = turn.calls.map((call) => ({id: call.id, type: 'function', function: {name: call.name, arguments: JSON.stringify(call.args)}}));
+        messages.push({role: 'assistant', content: turn.text, ...(calls.length ? {tool_calls: calls} : {})});
+      } else {
+        for (const result of turn.results) messages.push({role: 'tool', tool_call_id: result.callId, content: JSON.stringify(result.output)});
+      }
+    }
+    await this.waitForTurn();
+    const body = await postJson(this.http, this.url, {'authorization': `Bearer ${this.apiKey}`}, {
+      model,
+      messages,
+      ...(tools.length ? {tools: tools.map((tool) => ({type: 'function', function: {name: tool.name, description: tool.description, parameters: tool.parameters}}))} : {}),
+      temperature: 0.2,
+    }, `Model ${model}`);
+    const message = record(record(Array.isArray(body.choices) ? body.choices[0] : null)?.message);
+    if (!message) throw new ModelError(`Model ${model} returned no message`);
+    const text = typeof message.content === 'string' ? message.content : '';
+    const calls: ToolCall[] = [];
+    for (const call of (Array.isArray(message.tool_calls) ? message.tool_calls : []).map(record)) {
+      const fn = record(call?.function);
+      if (call && typeof call.id === 'string' && typeof fn?.name === 'string') calls.push({id: call.id, name: fn.name, args: jsonArgs(fn.arguments)});
+    }
+    if (!text && !calls.length) throw new ModelError(`Model ${model} returned an empty answer`);
     return {text, calls};
   }
 }
