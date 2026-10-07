@@ -3,6 +3,7 @@
  * These contracts do not depend on the state machine or its adapters.
  */
 
+import type {LifecycleCommandStore} from './commands';
 import type {
   JsonValue, MarketplaceTransaction, Outcome, TermsVersion,
   TransactionType, VerificationMethod,
@@ -82,7 +83,7 @@ export interface StoredLifecycleTransition {
  * Store seam for lifecycle state, terms versions, and outcomes.
  * `AgentStore` implements this shape. The lifecycle does not import it.
  */
-export interface LifecycleStore {
+export interface LifecycleStore extends Partial<LifecycleCommandStore> {
   insertTransaction(record: MarketplaceTransaction): MarketplaceTransaction;
   getTransaction(id: string): MarketplaceTransaction|undefined;
   insertTermsVersion(transactionId: string, version: TermsVersion): void;
@@ -93,6 +94,8 @@ export interface LifecycleStore {
   ): void;
   setTransactionCompletedAt(transactionId: string, completedAt: string): void;
   saveOutcome(record: Outcome): Outcome;
+  getOutcome?(transactionId: string): Outcome|undefined;
+  transaction?<T>(work: () => T): T;
   insertLifecycleTransition(record: StoredLifecycleTransition): void;
   listLifecycleTransitions(transactionId: string): StoredLifecycleTransition[];
 }
@@ -113,6 +116,7 @@ export interface OpenTransactionInput {
 
 /** Inputs for paper escrow funding. */
 export interface FundEscrowInput {
+  commandId?: string;
   transactionId: string;
   amountLovelace: number;
   sellerReturnAddress: string;
@@ -122,6 +126,7 @@ export interface FundEscrowInput {
 
 /** Inputs for paper escrow release. */
 export interface ReleaseEscrowInput {
+  commandId?: string;
   transactionId: string;
   at: string;
   /**
@@ -133,6 +138,7 @@ export interface ReleaseEscrowInput {
 
 /** Inputs for a paper refund request. */
 export interface RefundEscrowInput {
+  commandId?: string;
   transactionId: string;
   at: string;
   reason?: string;
@@ -151,6 +157,7 @@ export interface OpenDisputeInput {
 
 /** Inputs for a resolver decision. The money move follows in the same call. */
 export interface ResolveDisputeInput {
+  commandId?: string;
   transactionId: string;
   resolver: string;
   decision: DisputeDecision;

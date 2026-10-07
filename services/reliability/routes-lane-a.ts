@@ -6,6 +6,7 @@
 
 import type {AgentStore} from '../../packages/db/src/index';
 import type {EscrowPort} from '../../packages/reliability/src/escrow-port';
+import {LifecycleCommandError, LifecyclePendingError} from '../../packages/reliability/src/lifecycle/commands';
 import {LifecycleError} from '../../packages/reliability/src/lifecycle';
 import {json} from '../lib/http';
 import {
@@ -21,6 +22,8 @@ function requireStore(store: AgentStore|undefined): AgentStore {
 }
 
 function fail(error: unknown): Response {
+  if (error instanceof LifecyclePendingError) return json({pending: true, error: error.message}, 202);
+  if (error instanceof LifecycleCommandError) return json({error: error.message}, 409);
   if (error instanceof LifecycleError) {
     const status = error.message.startsWith('unknown transaction') ? 404 : 400;
     return json({error: error.message}, status);
@@ -31,6 +34,7 @@ function fail(error: unknown): Response {
 /** Dependencies shared by the lifecycle handlers in one route table. */
 export interface LifecycleRouteOptions {
   policies?: ReliabilityPolicies;
+  clock?: () => string;
   escrowForStore?: (store: AgentStore) => EscrowPort;
 }
 
@@ -44,6 +48,7 @@ export function createLaneARoutes(
     if (existing) return existing;
     const created = new LifecycleService(store, {
       policies: options.policies,
+      clock: options.clock ?? (() => new Date().toISOString()),
       escrow: options.escrowForStore?.(store),
     });
     services.set(store, created);
@@ -147,7 +152,7 @@ export function createLaneARoutes(
             return json({error: 'transactionId is required'}, 400);
           }
           const now = url.searchParams.get('now') ??
-            serviceFor(records).latestAt(transactionId);
+            (options.clock?.() ?? new Date().toISOString());
           return json(serviceFor(records).view(transactionId, now));
         } catch (error) {
           return fail(error);

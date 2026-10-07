@@ -90,15 +90,19 @@ describe('AgentStore', () => {
         'policy',
         'position_events',
         'reliability_entities',
+        'reliability_event_revisions',
         'reliability_events',
         'reliability_kyc_identifiers',
         'reliability_kyc_profiles',
         'reliability_kyc_status_records',
+        'reliability_lifecycle_commands',
         'reliability_lifecycle_transitions',
+        'reliability_listings',
         'reliability_omnibus_deal_funding',
         'reliability_omnibus_deposits',
         'reliability_omnibus_pools',
         'reliability_outcomes',
+        'reliability_score_baselines',
         'reliability_state',
         'reliability_terms_decisions',
         'reliability_terms_versions',
@@ -116,8 +120,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-006, 008, and 010-013. 007 and 009 are reserved.
-      expect(versions.versions).toBe(11);
+      // 001-006, 008, and 010-014. 007 and 009 are reserved.
+      expect(versions.versions).toBe(12);
     } finally {
       db.close();
     }

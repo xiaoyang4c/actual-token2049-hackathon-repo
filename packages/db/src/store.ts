@@ -16,6 +16,8 @@ import * as paymentReceipts from './payment-receipts';
 import * as paymentSettlements from './payment-settlements';
 import * as kycRecords from './kyc-records';
 import * as lifecycleRecords from './lifecycle-records';
+import * as lifecycleCommands from './lifecycle-commands';
+import type {LifecycleCommandRecord} from '../../reliability/src/lifecycle/commands';
 import * as contractRecords from './contract-records';
 import type {
   ContractAuditRow, ContractCommit, EscrowOperation, ProcessedAction, ReliabilityPublication,
@@ -34,7 +36,7 @@ import type {
 } from '../../reliability/src/kyc';
 import type {
   Entity, EntityRole, JsonValue, KycStatus, KycTier, MarketplaceTransaction,
-  Outcome,
+  Outcome, Listing,
   ReliabilityCategory, ReliabilityEvent, ReliabilityState, TermsDecision,
   TermsVersion,
 } from '../../reliability/src/types';
@@ -389,6 +391,64 @@ export class AgentStore {
     entityId: string, category: ReliabilityCategory,
   ): TermsDecision[] {
     return reliabilityRecords.listTermsDecisions(this.db, entityId, category);
+  }
+
+  getLifecycleCommand(id: string): LifecycleCommandRecord|undefined {
+    return lifecycleCommands.getLifecycleCommand(this.db, id);
+  }
+
+  getPendingLifecycleCommand(transactionId: string): LifecycleCommandRecord|undefined {
+    return lifecycleCommands.getPendingLifecycleCommand(this.db, transactionId);
+  }
+
+  saveLifecycleCommand(record: LifecycleCommandRecord): void {
+    lifecycleCommands.saveLifecycleCommand(this.db, record);
+  }
+
+  deleteLifecycleCommand(id: string): void {
+    lifecycleCommands.deleteLifecycleCommand(this.db, id);
+  }
+
+  getReliabilityBaseline(
+    entityId: string, category: ReliabilityCategory, role: EntityRole,
+  ): ReliabilityState|undefined {
+    const row = this.db.query<{stateJson: string}, [string, string, string]>(
+      `SELECT state_json AS stateJson FROM reliability_score_baselines
+       WHERE entity_id = ? AND category = ? AND role = ?`,
+    ).get(entityId, category, role);
+    return row ? JSON.parse(row.stateJson) as ReliabilityState : undefined;
+  }
+
+  saveReliabilityBaseline(state: ReliabilityState): void {
+    this.db.query(`INSERT INTO reliability_score_baselines
+      (entity_id, category, role, state_json) VALUES (?, ?, ?, ?)
+      ON CONFLICT(entity_id, category, role) DO NOTHING`).run(
+      state.entityId, state.category, state.role, JSON.stringify(state),
+    );
+  }
+
+  saveListing(listing: Listing): void {
+    this.db.query(`INSERT INTO reliability_listings(id, listing_json) VALUES (?, ?)
+      ON CONFLICT(id) DO UPDATE SET listing_json = excluded.listing_json`).run(
+      listing.id, JSON.stringify(listing),
+    );
+  }
+
+  listListings(): Listing[] {
+    return this.db.query<{listingJson: string}, []>(
+      'SELECT listing_json AS listingJson FROM reliability_listings ORDER BY id',
+    ).all().map((row) => JSON.parse(row.listingJson) as Listing);
+  }
+
+  /** Archives and replaces the active events after an outcome correction. */
+  replaceReliabilityEvents(transactionId: string, events: ReliabilityEvent[], at: string): void {
+    const previous = this.listReliabilityEventsForTransaction(transactionId);
+    this.db.query(`INSERT INTO reliability_event_revisions
+      (transaction_id, events_json, revised_at) VALUES (?, ?, ?)`).run(
+      transactionId, JSON.stringify(previous), at,
+    );
+    this.db.query('DELETE FROM reliability_events WHERE transaction_id = ?').run(transactionId);
+    for (const event of events) this.insertReliabilityEvent(event);
   }
 
   /**

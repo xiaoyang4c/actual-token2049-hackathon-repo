@@ -271,8 +271,24 @@ If eligibility or pair membership changes, rebuild later affected pair weights t
 Store the evidence reference, normalized value, pair count, weight, and policy version.
 Keep observation time separate from outcome decision time.
 A read must not alter a weight, pair count, or decision timestamp.
-The current lifecycle does not yet satisfy all these rules.
-Read [logic gaps](implementation-status.md#logic-gaps).
+The lifecycle now implements stable decision times and active-event corrections.
+It archives replaced events and preserves imported score baselines.
+The current stub rebuilds each affected state as:
+
+$$
+\alpha=\alpha_{\mathrm{base}}+\sum_{e\in H_{\mathrm{active}}}\mathbf{1}[e=\mathrm{success}],
+\qquad
+\beta=\beta_{\mathrm{base}}+\sum_{e\in H_{\mathrm{active}}}\mathbf{1}[e=\mathrm{failure}].
+$$
+
+$H_{\mathrm{active}}$ contains only active events for that entity, category, and role.
+The sums use unit weights. They do not implement the proposed value or pair weights.
+For an earlier success followed by seller fault, the seller changes from $(2,1)$ to $(1,2)$.
+The buyer returns from $(2,1)$ to its prior $(1,1)$.
+These examples assume one transaction and the unit prior.
+A repeated read changes neither state.
+Weighted revisions and policy migrations still need complete policy input history.
+Read [implementation status](implementation-status.md).
 
 ## Worked example
 
