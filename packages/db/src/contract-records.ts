@@ -52,6 +52,14 @@ export function listContractIds(db: Database, openOnly: boolean): string[] {
   return db.query<{id: string}, []>(sql).all().map((row) => row.id);
 }
 
+/** Live contracts where the entity is the buyer, with their open flag. Parses only those rows. */
+export function listLiveContractsForBuyer(db: Database, entityId: string): Array<{contract: Contract; open: boolean}> {
+  return db.query<{json: string; open: number}, [string]>(
+    `SELECT json, open FROM contract_contracts
+     WHERE json_extract(json, '$.buyerId') = ? AND json_extract(json, '$.mode') = 'live' ORDER BY rowid`,
+  ).all(entityId).map((row) => ({contract: JSON.parse(row.json) as Contract, open: row.open === 1}));
+}
+
 /** Writes one state change. Run inside a transaction. */
 export function commitContract(db: Database, change: ContractCommit): void {
   const contract = change.contract;

@@ -22,7 +22,7 @@ import type {
   TermsDecision, TransactionType,
 } from '../../packages/reliability/src/types';
 import type {ReliabilityPolicies} from './policies';
-import {addressKeyHashes} from './deposit-chain';
+import {proofsCoverAddress} from './deposit-chain';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -121,24 +121,38 @@ export class MarketplaceGate {
 
   /** True when one of the entity's wallet proofs covers this address. */
   ownsAddress(entityId: string, address: string): boolean {
-    const keys = addressKeyHashes(address);
-    return this.store.listWalletProofs(entityId).some((proof) =>
-      proof.credentialHash === (proof.credentialKind === 'stake' ? keys.stake : keys.payment));
+    return proofsCoverAddress(this.store.listWalletProofs(entityId), address);
   }
 
   /**
-   * Confirmed live deposits of one asset, less the amounts of the entity's
-   * open live contracts as buyer. Read docs/wallets.md.
+   * Confirmed live deposits of one asset, less what the entity's live
+   * contracts as buyer hold or spent. An open contract reserves its full
+   * amount. A closed contract spends each funded milestone amount, less the
+   * refunds to the buyer. Read docs/wallets.md.
    */
-  availableDeposit(entityId: string, unit: string): {deposited: bigint; reserved: bigint; available: bigint} {
+  availableDeposit(entityId: string, unit: string): {
+    deposited: bigint; reserved: bigint; spent: bigint; available: bigint;
+  } {
     const deposited = BigInt(this.store.confirmedDepositTotals(entityId).find((total) => total.unit === unit)?.quantity ?? '0');
     let reserved = 0n;
-    for (const id of this.store.listContractIds({openOnly: true})) {
-      const contract = this.store.getContract(id);
-      if (contract?.mode !== 'live' || contract.buyerId !== entityId || contract.terms.assetUnit !== unit) continue;
-      for (const milestone of contract.milestones) reserved += BigInt(milestone.amountAtomic);
+    let spent = 0n;
+    for (const {contract, open} of this.store.listLiveContractsForBuyer(entityId)) {
+      if (contract.terms.assetUnit !== unit) continue;
+      for (const milestone of contract.milestones) {
+        const amount = BigInt(milestone.amountAtomic);
+        if (open) {
+          reserved += amount;
+          continue;
+        }
+        // A milestone that was never funded left the balance untouched.
+        if (milestone.fundedAt === null || milestone.fundedAt === undefined) continue;
+        const refunded = (milestone.tranches ?? []).reduce(
+          (sum, tranche) => sum + BigInt(tranche.chain.paidToBuyerAtomic ?? '0'), 0n,
+        );
+        spent += amount > refunded ? amount - refunded : 0n;
+      }
     }
-    return {deposited, reserved, available: deposited - reserved};
+    return {deposited, reserved, spent, available: deposited - reserved - spent};
   }
 
   /** KYC only. Contract key registration uses it. */
@@ -193,10 +207,14 @@ export class MarketplaceGate {
     const seller = this.party(input.sellerId, 'seller', category, input.now, input.requiredKycTier);
     for (const party of [buyer, seller]) {
       if (!party.kyc.passed) {
+        // Without KYC the limit is zero, so a limit violation adds nothing.
         violations.push({code: party.kyc.code ?? 'kyc_not_verified', party: party.role, message: party.kyc.message});
-      } else if (!party.wallet.passed) {
+        continue;
+      }
+      if (!party.wallet.passed) {
         violations.push({code: 'wallet_required', party: party.role, message: party.wallet.message});
-      } else if (knownValue && value > party.limit) {
+      }
+      if (knownValue && value > party.limit) {
         violations.push({
           code: 'exposure_limit', party: party.role,
           message: `${party.entityId} has a ${party.role} limit of ${party.limit} ${currency} in ${category}; the sale is ${value}`,
@@ -208,7 +226,8 @@ export class MarketplaceGate {
       if (funds.available < input.liveDeposit.quantity) {
         violations.push({
           code: 'deposit_required', party: 'buyer',
-          message: `${input.buyerId} has ${funds.available} available of ${input.liveDeposit.unit} (deposited ${funds.deposited}, reserved ${funds.reserved}); the contract needs ${input.liveDeposit.quantity}`,
+          // The requester can be the other party, so the message names no balance.
+          message: `${input.buyerId} does not have enough confirmed deposits for this live contract`,
         });
       }
     }

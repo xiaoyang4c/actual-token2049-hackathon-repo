@@ -118,6 +118,8 @@ function startServer(
     }
   }
   try {
+    // Local callers only by default: the UI server sets the visitor header
+    // that the account rate limits trust. CONTROL_API_HOST overrides it.
     const server = serve("control-api", port, {
       ...createAgentRoutes(store),
 
@@ -151,7 +153,7 @@ function startServer(
       ...Object.fromEntries(
         reliabilityRoutes.map((route) => [`${route.method} ${route.path}`, (request: Request, url: URL) => route.handler(request, url, store)]),
       ),
-    })
+    }, { hostname: process.env.CONTROL_API_HOST?.trim() || "127.0.0.1" })
     let stopping: Promise<void> | undefined
     return {
       port: server.port!,

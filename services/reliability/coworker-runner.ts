@@ -107,7 +107,9 @@ function sameLot(milestone: string, item: string): boolean {
   const norm = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim();
   const a = norm(milestone);
   const b = norm(item);
-  return a === b || b.startsWith(`${a},`) || b.startsWith(`${a} `) || a.startsWith(`${b},`) || a.startsWith(`${b} `);
+  // A milestone that only adds comma details to the item is the same lot.
+  // A milestone that adds words ("Coffee batch 2" after "Coffee") is another lot.
+  return a === b || b.startsWith(`${a},`) || b.startsWith(`${a} `) || a.startsWith(`${b},`);
 }
 
 export function readDealDesk(text: string): {input?: DraftInput; problems: string[]} {

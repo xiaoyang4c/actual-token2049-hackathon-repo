@@ -16,7 +16,9 @@ import {TEST_USDM_UNIT} from './contract-config';
 import {attachWitnesses, buildDepositTx, type ChainTx, type ChainUtxo, type DepositChain, type TxUtxos} from './deposit-chain';
 import {DepositWatcher} from './deposit-watcher';
 import type {ProtocolParams} from './anchor-chain';
-import {accountRoutes, setDepositSettings} from './routes-account';
+import {accountRoutes, depositSettingsOrOff, setDepositSettings} from './routes-account';
+import {BlockfrostError} from './deposit-chain';
+import {WalletDeposits} from './wallet-deposits';
 import {RateLimiter} from './rate-limit';
 import {AccountError, CHALLENGE_TTL_MS, WalletAccounts} from './wallet-accounts';
 import {verifyWalletSignature, WalletProofError} from './wallet-proof';
@@ -157,6 +159,18 @@ describe('wallet accounts', () => {
     expect(() => accounts.sessionEntity(null)).toThrow('Sign in');
   });
 
+  test('a base address of a wallet whose stake key is proven signs in to the same account', () => {
+    const {signIn, store} = setup();
+    const alice = wallet(1);
+    const first = signIn(alice);
+    const again = signIn(alice, {viaBase: true});
+    expect(again).toMatchObject({entityId: first.entityId, created: false});
+    expect(store.listWalletProofs(first.entityId).map((proof) => proof.credentialKind).sort()).toEqual(['payment', 'stake']);
+    // Another account's session cannot claim it.
+    const bob = signIn(wallet(2));
+    expect(() => signIn(alice, {viaBase: true, session: bob.token})).toThrow('another Tally account');
+  });
+
   test('mock KYC through the account verifies the person, and readiness follows the gate', () => {
     const {accounts, signIn} = setup();
     const alice = signIn(wallet(1));
@@ -267,6 +281,48 @@ describe('live deposit watcher', () => {
     expect(await watcher.runOnce()).toMatchObject({rolledBack: 1});
     expect(store.listLiveDeposits()).toEqual([expect.objectContaining({status: 'rolled_back'})]);
   });
+
+  test('a rolled-back deposit that comes back on the chain is credited', async () => {
+    const {store, chain, watcher, signIn} = watching();
+    const alice = wallet(1);
+    const account = signIn(alice);
+    const deposit = {txHash: txHash(9), blockHeight: 100, blockTime: 1, inputs: [{address: alice.base, amounts: ada('9000000')}], outputs: [{address: POOL, index: 0, amounts: ada('4000000')}]};
+    chain.txs.push(deposit);
+    await watcher.runOnce();
+    chain.txs = [];
+    expect(await watcher.runOnce()).toMatchObject({rolledBack: 1});
+    // The same transaction is included again in a later block.
+    chain.txs.push({...deposit, blockHeight: 104});
+    chain.height = 110;
+    expect(await watcher.runOnce()).toMatchObject({confirmed: 1});
+    expect(store.confirmedDepositTotals(account.entityId)).toEqual([{unit: 'lovelace', quantity: '4000000'}]);
+  });
+
+  test('a steady pass makes two chain calls', async () => {
+    const {chain, watcher, signIn} = watching();
+    const alice = wallet(1);
+    signIn(alice);
+    const calls: string[] = [];
+    for (const name of ['tip', 'addressTransactions', 'transactionUtxos', 'transactionBlock'] as const) {
+      const original = chain[name].bind(chain) as (...args: unknown[]) => Promise<unknown>;
+      (chain as unknown as {[key: string]: unknown})[name] = (...args: unknown[]) => {
+        calls.push(name);
+        return original(...args);
+      };
+    }
+    chain.height = 200;
+    chain.txs.push(
+      // Tally's own transfer, an unattributed deposit, and a pending deposit.
+      {txHash: txHash(10), blockHeight: 150, blockTime: 1, inputs: [{address: POOL, amounts: ada('9')}], outputs: [{address: POOL, index: 0, amounts: ada('3')}]},
+      {txHash: txHash(11), blockHeight: 151, blockTime: 2, inputs: [{address: wallet(6).base, amounts: ada('9000000')}], outputs: [{address: POOL, index: 0, amounts: ada('3000000')}]},
+      {txHash: txHash(12), blockHeight: 199, blockTime: 3, inputs: [{address: alice.base, amounts: ada('9000000')}], outputs: [{address: POOL, index: 0, amounts: ada('3000000')}]},
+    );
+    await watcher.runOnce();
+    expect(calls.filter((name) => name === 'transactionUtxos')).toHaveLength(3);
+    calls.length = 0;
+    expect(await watcher.runOnce()).toMatchObject({pending: 1, unattributed: 1});
+    expect(calls).toEqual(['tip', 'addressTransactions']);
+  });
 });
 
 describe('deposit transaction', () => {
@@ -323,6 +379,19 @@ describe('basic security', () => {
     expect(accounts.sessionEntity(session.token)).toBe(session.entityId);
     advance(2 * 3_600_000);
     expect(() => accounts.sessionEntity(session.token)).toThrow('session ended');
+  });
+
+  test('the rate limit map stays bounded under a flood of new keys', () => {
+    let now = 0;
+    const limiter = new RateLimiter(2, 1000, () => now, 3);
+    for (const key of ['a', 'b', 'c']) expect(limiter.take(key)).toBe(0);
+    expect(limiter.take('a')).toBe(0);
+    expect(limiter.take('a')).toBeGreaterThan(0);
+    // A new key drops the oldest one and the map keeps three keys.
+    for (let index = 0; index < 50; index++) limiter.take(`flood-${index}`);
+    expect((limiter as unknown as {hits: Map<string, unknown>}).hits.size).toBe(3);
+    now = 5000;
+    expect(limiter.take('a')).toBe(0);
   });
 
   test('the rate limit counts per key and resets after its window', () => {
@@ -387,9 +456,67 @@ describe('every-time checks in the marketplace gate', () => {
       milestones: [{amountAtomic: '20000000'}],
     } as unknown as Contract;
     store.commitContract({contract, isNew: true, open: true, now: 1, audits: [], newOperations: [], operationUpdates: [], evidence: [], publications: []} as unknown as Parameters<AgentStore['commitContract']>[0]);
-    expect(gate.availableDeposit(buyer.entityId, TEST_USDM_UNIT)).toEqual({deposited: 25_000_000n, reserved: 20_000_000n, available: 5_000_000n});
+    expect(gate.availableDeposit(buyer.entityId, TEST_USDM_UNIT)).toEqual({
+      deposited: 25_000_000n, reserved: 20_000_000n, spent: 0n, available: 5_000_000n,
+    });
     expect(deal(10_000_000n).violations.map((item) => item.code)).toEqual(['deposit_required']);
+    // The refusal names no balance: the requester can be the other party.
+    expect(deal(10_000_000n).violations[0]?.message).not.toMatch(/deposited|reserved|available|25000000|5000000/);
     expect(deal(5_000_000n).allowed).toBe(true);
+  });
+
+  test('a closed live contract keeps its seller payout spent and returns refunds', () => {
+    const {store, accounts, signIn} = setup();
+    const buyer = signIn(wallet(1));
+    const seller = signIn(wallet(2));
+    for (const id of [buyer.entityId, seller.entityId]) accounts.submitKyc(id, {kind: 'person', documentId: `P${id.slice(-6)}`});
+    const gate = new MarketplaceGate(store, DEFAULT_RELIABILITY_POLICIES, {requireWallet: true});
+    store.upsertLiveDeposit({
+      txHash: txHash(31), outputIndex: 0, unit: TEST_USDM_UNIT, quantity: '25000000', depositAddress: POOL, entityId: buyer.entityId,
+      status: 'confirmed', blockHeight: 1, blockTime: 1, firstSeenAt: 1, confirmedAt: 1, note: null,
+    });
+    const tranche = (paidToSeller: string|null, paidToBuyer: string|null) => ({chain: {paidToSellerAtomic: paidToSeller, paidToBuyerAtomic: paidToBuyer}});
+    const commit = (id: string, open: boolean, milestones: unknown[], isNew = true) => store.commitContract({
+      contract: {
+        id, version: isNew ? 0 : 1, mode: 'live', templateId: 'physical-objective-spec', category: 'delivery',
+        buyerId: buyer.entityId, sellerId: seller.entityId, createdAt: 1, createdBy: buyer.entityId,
+        terms: {assetUnit: TEST_USDM_UNIT}, termsSha256: null, signatures: {}, milestones,
+      } as unknown as Contract,
+      isNew, open, now: 1, audits: [], newOperations: [], operationUpdates: [], evidence: [], publications: [],
+    } as unknown as Parameters<AgentStore['commitContract']>[0]);
+    // Settled: the seller was paid 20 USDM. Reusing it was the bug.
+    commit('paid', false, [{amountAtomic: '20000000', fundedAt: 5, tranches: [tranche('20000000', null)]}]);
+    expect(gate.availableDeposit(buyer.entityId, TEST_USDM_UNIT)).toEqual({
+      deposited: 25_000_000n, reserved: 0n, spent: 20_000_000n, available: 5_000_000n,
+    });
+    // Refunded in full, or cancelled before funding: nothing is spent.
+    commit('refunded', false, [{amountAtomic: '3000000', fundedAt: 5, tranches: [tranche(null, '3000000')]}]);
+    commit('unfunded', false, [{amountAtomic: '4000000', fundedAt: null, tranches: [tranche(null, null)]}]);
+    expect(gate.availableDeposit(buyer.entityId, TEST_USDM_UNIT).available).toBe(5_000_000n);
+    const deal = (quantity: bigint) => gate.checkDeal({
+      type: 'goods', buyerId: buyer.entityId, sellerId: seller.entityId, value: 10,
+      now: new Date(Date.UTC(2026, 9, 8, 3)).toISOString(), liveDeposit: {unit: TEST_USDM_UNIT, quantity},
+    });
+    expect(deal(20_000_000n).violations.map((item) => item.code)).toEqual(['deposit_required']);
+    expect(deal(5_000_000n).allowed).toBe(true);
+  });
+
+  test('a missing wallet does not hide an exposure limit', () => {
+    const {store, accounts, signIn} = setup();
+    const buyer = signIn(wallet(1));
+    accounts.submitKyc(buyer.entityId, {kind: 'person', documentId: 'P777777'});
+    store.insertEntity({
+      id: 'kyc-no-wallet', displayName: 'No wallet', wallets: [], roles: ['buyer', 'seller'],
+      kycStatus: 'verified', kycTier: 'basic', createdAt: new Date(0).toISOString(),
+    });
+    const gate = new MarketplaceGate(store, DEFAULT_RELIABILITY_POLICIES, {requireWallet: true});
+    const check = gate.checkDeal({
+      type: 'goods', buyerId: buyer.entityId, sellerId: 'kyc-no-wallet', value: 9000,
+      now: new Date(Date.UTC(2026, 9, 8, 3)).toISOString(),
+    });
+    expect(check.violations.map((item) => `${item.party}:${item.code}`)).toEqual([
+      'buyer:exposure_limit', 'seller:wallet_required', 'seller:exposure_limit',
+    ]);
   });
 });
 
@@ -425,10 +552,46 @@ describe('account routes', () => {
     expect((await call('POST', '/reliability/account/sign-out', {}, session)).status).toBe(200);
     expect((await call('GET', '/reliability/account', undefined, session)).status).toBe(401);
     // Signing in again with a blank optional name opens the same account.
+    // The ended session token in the request does not block the new sign-in.
     const again = await call('POST', '/reliability/wallets/challenge', {address: alice.reward});
     const resigned = await call('POST', '/reliability/wallets/verify', {
       challengeId: again.body.challengeId, address: alice.reward, ...signData(alice.stake, alice.reward, again.body.message as string), source: 'browser', displayName: '  ',
-    });
+    }, session);
     expect(resigned).toMatchObject({status: 200, body: {created: false, account: {entity: {displayName: 'Kopi'}}}});
+  });
+});
+
+describe('deposit settings and chain rejections', () => {
+  test('a bad deposit setting turns deposits off instead of failing every request', () => {
+    const env = (name: string, value: string) => Object.fromEntries([[name, value]]) as {[key: string]: string};
+    const off = {chain: null, depositAddress: null, confirmations: 3};
+    expect(depositSettingsOrOff(env('TALLY_DEPOSIT_ADDRESS', 'addr1_mainnet_is_refused'))).toEqual(off);
+    expect(depositSettingsOrOff(env('TALLY_DEPOSIT_CONFIRMATIONS', 'zero'))).toEqual(off);
+    expect(depositSettingsOrOff(env('TALLY_DEPOSIT_ADDRESS', POOL)).depositAddress).toBe(POOL);
+  });
+
+  test('a deposit that the chain rejects ends the build instead of reporting an outage', async () => {
+    const {store, signIn} = setup();
+    const alice = wallet(1);
+    const account = signIn(alice);
+    class RejectingChain extends FakeChain {
+      override async addressUtxos(): Promise<ChainUtxo[]> {
+        return [{txHash: txHash(41), index: 0, address: alice.base, amounts: ada('20000000')}];
+      }
+      override async submit(): Promise<string> {
+        throw new BlockfrostError('Blockfrost /tx/submit returned 400: inputs already spent', 400);
+      }
+    }
+    const deposits = new WalletDeposits(store, {chain: new RejectingChain(), depositAddress: POOL, confirmations: 3});
+    const built = await deposits.build(account.entityId, ada('5000000'), {kind: 'browser', address: alice.base});
+    const witnesses = C.TransactionWitnessSet.new();
+    const vkeys = C.Vkeywitnesses.new();
+    vkeys.add(C.make_vkey_witness(C.TransactionHash.from_hex(built.txHash), alice.payment));
+    witnesses.set_vkeys(vkeys);
+    await expect(deposits.submit(account.entityId, built.buildId, witnesses.to_hex())).rejects.toMatchObject({
+      code: 'deposit_rejected', status: 400,
+    });
+    // The rejected build is gone, so a retry cannot send it again.
+    await expect(deposits.submit(account.entityId, built.buildId, witnesses.to_hex())).rejects.toThrow('expired');
   });
 });

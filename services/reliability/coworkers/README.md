@@ -136,7 +136,6 @@ Mediator: `contract: <contract id>` and `milestone: 0`. Trust Check: `company: <
 
 ## Not done yet
 
-1. **A first live paid Task.** The worker is tested against fake Sokosumi and fake MPS services only.
-2. **The Mediator never signs.** The platform mediator key stays with a person. Wiring the signed ruling back into Tally is a manual step.
-3. **Score-based contract terms.** Tally does not set escrow terms from scores yet. Trust Check says so.
-4. **Bedrock with the server role.** The Bedrock provider uses a Bedrock API key. Signing with the instance role (SigV4) is not built.
+1. **The Mediator never signs.** The platform mediator key stays with a person. Wiring the signed ruling back into Tally is a manual step.
+2. **Score-based contract terms.** Tally does not set escrow terms from scores yet. Trust Check says so.
+3. **Bedrock with the server role.** The Bedrock provider uses a Bedrock API key. Signing with the instance role (SigV4) is not built.

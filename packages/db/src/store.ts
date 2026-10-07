@@ -641,6 +641,11 @@ export class AgentStore {
     return contractRecords.getContract(this.db, id);
   }
 
+  /** Live contracts where the entity is the buyer, with their open flag. */
+  listLiveContractsForBuyer(entityId: string): Array<{contract: Contract; open: boolean}> {
+    return contractRecords.listLiveContractsForBuyer(this.db, entityId);
+  }
+
   listContractIds(options: {openOnly: boolean}): string[] {
     return contractRecords.listContractIds(this.db, options.openOnly);
   }

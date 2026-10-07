@@ -26,10 +26,23 @@ export function setDepositSettings(next: DepositSettings): void {
   settings = next;
 }
 
+/**
+ * Deposit settings from the environment. A bad setting turns deposits off
+ * and is logged, so sign-in and paper deals keep working.
+ */
+export function depositSettingsOrOff(env: {[key: string]: string|undefined} = process.env): DepositSettings {
+  try {
+    return depositSettingsFromEnv(env);
+  } catch (error) {
+    console.error(JSON.stringify({event: 'deposit_settings_invalid', error: (error as Error).message}));
+    return {chain: null, depositAddress: null, confirmations: 3};
+  }
+}
+
 function servicesFor(store: AgentStore): AccountServices {
   const existing = services.get(store);
   if (existing) return existing;
-  settings ??= depositSettingsFromEnv(process.env);
+  settings ??= depositSettingsOrOff();
   const created = {
     accounts: new WalletAccounts(store, {domain: process.env.TALLY_SIGN_IN_DOMAIN?.trim() || undefined}),
     deposits: new WalletDeposits(store, settings),
@@ -122,7 +135,13 @@ export const accountRoutes: ReliabilityRoute[] = [
       const input = await body(request);
       const {accounts} = servicesFor(store);
       const token = bearer(request);
-      const sessionEntityId = token ? accounts.sessionEntity(token) : undefined;
+      // An ended or unknown token does not block a fresh sign-in.
+      let sessionEntityId: string|undefined;
+      try {
+        sessionEntityId = token ? accounts.sessionEntity(token) : undefined;
+      } catch (error) {
+        if (!(error instanceof AccountError) || error.code !== 'unauthorized') throw error;
+      }
       const source = input.source === 'browser' ? 'browser' : input.source === 'cip30' ? 'cip30' : null;
       if (!source) throw new AccountError('bad_input', 'source must be cip30 or browser');
       const signedIn = accounts.verify({

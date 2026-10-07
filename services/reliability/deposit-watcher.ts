@@ -11,11 +11,18 @@
  * own transfer and is not a deposit.
  *
  * A deposit is confirmed after `confirmations` blocks. A pending deposit that
- * leaves the chain is marked rolled back. The watcher signs nothing.
+ * leaves the chain is marked rolled back. A rolled-back transaction that
+ * comes back on the chain is read again and credited. The watcher signs
+ * nothing.
+ *
+ * Blockfrost budget: a transaction's inputs and outputs never change, so the
+ * watcher keeps them in memory while the transaction stays in the scan
+ * window. A steady pass then makes two calls (tip and address history).
+ * Tally's own transfers and unattributed deposits are not fetched again.
  */
 
 import type {AgentStore, LiveDepositRow, LiveDepositStatus} from '../../packages/db/src/index';
-import {addressKeyHashes, type DepositChain} from './deposit-chain';
+import {addressKeyHashes, type DepositChain, type TxUtxos} from './deposit-chain';
 
 /** The newest transactions that each pass reads. */
 const SCAN_COUNT = 100;
@@ -37,9 +44,13 @@ export interface PassResult {
   rolledBack: number;
 }
 
-const FINAL: ReadonlySet<LiveDepositStatus> = new Set(['confirmed', 'rolled_back']);
+// A rolled-back transaction is not final: it can come back on the chain.
+const FINAL: ReadonlySet<LiveDepositStatus> = new Set(['confirmed']);
 
 export class DepositWatcher {
+  /** Inputs and outputs of transactions in the current scan window. */
+  private readonly utxoCache = new Map<string, TxUtxos>();
+
   constructor(private readonly options: DepositWatcherOptions) {}
 
   /** Who owns each proven credential. */
@@ -66,7 +77,11 @@ export class DepositWatcher {
     for (const txHash of [...[...recent].reverse().map((tx) => tx.txHash), ...new Set(open)]) {
       const stored = store.listLiveDepositsForTx(txHash);
       if (stored.length && stored.every((row) => FINAL.has(row.status))) continue;
-      const utxos = await chain.transactionUtxos(txHash);
+      // A transaction in the address history is on the chain now, so its
+      // remembered inputs and outputs are still valid.
+      const cached = blocks.has(txHash) ? this.utxoCache.get(txHash) : undefined;
+      const utxos = cached ?? await chain.transactionUtxos(txHash);
+      if (utxos && blocks.has(txHash)) this.utxoCache.set(txHash, utxos);
       const block = blocks.get(txHash) ?? (utxos ? await chain.transactionBlock(txHash) : null);
       if (!utxos || !block) {
         for (const row of stored) store.upsertLiveDeposit({...row, status: 'rolled_back', note: 'the transaction left the chain'});
@@ -105,6 +120,10 @@ export class DepositWatcher {
       else if (status === 'pending') result.pending++;
       else result.unattributed++;
       if (!stored.length || stored[0]?.status !== status) log({event: 'deposit_seen', txHash, status, entityId, depth});
+    }
+    // Forget transactions that left the scan window.
+    for (const hash of this.utxoCache.keys()) {
+      if (!blocks.has(hash)) this.utxoCache.delete(hash);
     }
     return result;
   }

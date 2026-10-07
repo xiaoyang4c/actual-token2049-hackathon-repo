@@ -54,11 +54,18 @@ The deposit worker ([`deposit-watcher.ts`](../services/reliability/deposit-watch
 | --- | --- |
 | Every input comes from one account's proven wallet | `pending`, then `confirmed` after `TALLY_DEPOSIT_CONFIRMATIONS` blocks (default 3) |
 | An input comes from no proven wallet, or inputs come from two accounts | `unattributed`. An operator reviews it. It is credited if its sender later proves the wallet |
-| A pending deposit leaves the chain | `rolled_back` |
+| A pending deposit leaves the chain | `rolled_back`. It is credited if the same transaction comes back on the chain |
 | The transaction spends from the deposit address | Not a deposit |
 
-The balance is the sum of confirmed deposits.
-A live contract reserves the buyer's balance until the contract closes.
+The balance is the sum of confirmed deposits, less what the account's live contracts as buyer hold or spent.
+An open live contract reserves its full amount.
+A closed live contract spends each funded milestone amount, less the refunds to the buyer.
+A refund and a milestone that was never funded leave the balance.
+
+A deposit that the chain rejects, for example because its inputs are spent, returns `deposit_rejected`. Start it again.
+
+The worker remembers each transaction while it stays in the scan window.
+A steady pass makes two Blockfrost calls, so the default 20-second pace stays inside the free daily quota.
 
 ## Checks on every deal
 
@@ -68,7 +75,7 @@ Read [Marketplace rules](marketplace.md).
 - KYC, always.
 - A proven wallet, when `MARKETPLACE_REQUIRE_WALLET=on`. Code `wallet_required`.
 - Contract key registration: the payout address must be a proven wallet of the entity, when `MARKETPLACE_REQUIRE_WALLET=on`.
-- A live contract: the buyer's confirmed deposits, less open live contracts, must cover it. Code `deposit_required`.
+- A live contract: the buyer's available balance must cover it. Code `deposit_required`. The message names no balance, because the requester can be the other party.
 
 ## Security
 
@@ -76,6 +83,9 @@ Read [Marketplace rules](marketplace.md).
 - A challenge works once, for one address, for 10 minutes. It names the website (`TALLY_SIGN_IN_DOMAIN`) and says that signing moves no funds.
 - A session lasts 24 hours. Tally stores only the SHA-256 of the token. Sign-out ends it.
 - Each visitor has limits per 10 minutes: 20 sign-in requests, 10 KYC checks, 20 deposit requests, and 300 account reads.
+  The limiter keeps at most 10,000 visitors and drops the oldest one when it is full.
+- An ended session token does not block a new sign-in.
+- A base address whose stake key the account already proved signs in to the same account.
 - Tally checks every wallet signature against the transaction body before it sends a deposit.
 - The UI server forwards only the account routes in `ACCOUNT_ROUTES`, only a well-formed Bearer token, and bodies up to 256 KiB.
   Only the web app origins in `TALLY_WEB_ORIGINS` may call them from a browser.
@@ -87,11 +97,13 @@ Not built: sign-in rate limits that survive a restart, a way to remove a wallet,
 
 | Setting | Where | Purpose |
 | --- | --- | --- |
-| `TALLY_DEPOSIT_ADDRESS` | Control API and deposit worker | Public preprod address that receives deposits. Empty turns deposits off |
+| `TALLY_DEPOSIT_ADDRESS` | Control API and deposit worker | Public preprod address that receives deposits. Empty turns deposits off. A bad deposit setting turns deposits off in the control API and is logged. The deposit worker stops |
 | `BLOCKFROST_PROJECT_ID`, or `blockfrost_preprod` in `TALLY_SECRETS_DIR` | Control API and deposit worker | Chain reads and sends |
 | `TALLY_DEPOSIT_CONFIRMATIONS` | Both | Blocks before a deposit is credited. Default 3 |
 | `MARKETPLACE_REQUIRE_WALLET` | Control API | `on` makes every deal need a proven wallet |
 | `TALLY_SIGN_IN_DOMAIN` | Control API | Website named in the sign-in message. Default `tally-origins.vercel.app` |
+| `CONTROL_API_HOST` | Control API | Listening address. Default `127.0.0.1`. The account rate limits trust the visitor header that the UI server sets, so keep the control API private |
+| `DEPOSIT_POLL_MS` | Deposit worker | Time between passes. Default 20000 |
 | `TALLY_WEB_ORIGINS` | UI server | Web app origins that may call chat, accounts, and app routes |
 | `VITE_TALLY_SERVER_URL` | Web app build | Server for account routes and app deal routes |
 

@@ -145,7 +145,7 @@ export const laneAContractRoutes: ReliabilityRoute[] = [
   }),
   get('/reliability/contracts/audit', (service, url) => ({
     rows: service.lifecycle.audit(requiredQuery(url, 'id')),
-    chainIntact: service.view(requiredQuery(url, 'id')).auditChainIntact,
+    chainIntact: service.auditChainIntact(),
   })),
   post('/reliability/contracts/parties', (service, body) => ({
     party: service.registerParty({
