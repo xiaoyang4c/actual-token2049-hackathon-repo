@@ -2,18 +2,19 @@
 
 import { escapeHtml, formatFee, formatPct, formatValue, label, stamp } from "./format.js"
 import { evidenceRows, participantName } from "./model.js"
-import { renderCompanies, renderContractsTable, renderDeals, renderMediation } from "./tally-views.js"
+import { renderAsk, renderCompanies, renderContractsTable, renderDeals, renderMediation } from "./tally-views.js"
 
 export { escapeHtml }
 
 /** The Tally mark: four tally strokes and a fifth across them. Transparent, so it takes the text colour. */
 const BRAND_MARK = `<svg class="brand-svg" viewBox="10 16 80 68" aria-hidden="true"><defs><mask id="brand-gap" maskUnits="userSpaceOnUse"><rect width="100" height="100" fill="white"/><polygon fill="black" points="18.58,79.05 90.58,36.45 81.42,20.95 9.42,63.55"/></mask></defs><g fill="currentColor" mask="url(#brand-gap)"><rect x="17.5" y="32.5" width="11" height="50"/><rect x="35.5" y="27.5" width="11" height="50"/><rect x="53.5" y="22.5" width="11" height="50"/><rect x="71.5" y="17.5" width="11" height="50"/></g><polygon fill="currentColor" points="16.55,75.6 88.55,33 83.45,24.4 11.45,67"/></svg>`
 
-export const AREAS = ["deals", "mediation", "companies", "operator"]
+export const AREAS = ["deals", "mediation", "companies", "ask", "operator"]
 const AREA_TEXT = {
   deals: ["My deals", "Every milestone, who acts next, and by when."],
   mediation: ["Mediation desk", "Disputes that need a decision, with the evidence and what each ruling pays."],
   companies: ["Companies", "A company's Tally record before you deal with it. Facts, not a verdict."],
+  ask: ["Ask a Coworker", "Ask Tally's Coworkers to draft a contract, prepare a dispute case, or check a company. A free preview: no payment, and nothing is saved."],
   operator: ["Operator", "The marketplace ledger, participants, listings, and every contract."],
 }
 
@@ -205,9 +206,9 @@ export function renderDesk(view, lookup = {}, theme = "light", copy = {}, tally 
   const area = AREAS.includes(state.area) ? state.area : "deals"
   const [title, description] = AREA_TEXT[area]
   const body = area === "deals" ? renderDeals(state) : area === "mediation" ? renderMediation(state) :
-    area === "companies" ? renderCompanies(state) : renderOperator(view, lookup, state, copy)
+    area === "companies" ? renderCompanies(state) : area === "ask" ? renderAsk(state) : renderOperator(view, lookup, state, copy)
   return `<div class="desk" data-source="${e(view.source)}">${renderHeader(view, theme, area)}<main id="main" class="main-shell">
-    <div class="page-heading"><div><h1 id="page-title" tabindex="-1">${e(title)}</h1><p>${e(description)}</p></div><span class="read-only">${icon("lock")}Read only</span></div>
+    <div class="page-heading"><div><h1 id="page-title" tabindex="-1">${e(title)}</h1><p>${e(description)}</p></div><span class="read-only">${icon("lock")}${area === "ask" ? "Nothing is saved" : "Read only"}</span></div>
     ${renderNotice(view)}${state.contractsError && area !== "operator" ? `<div class="connection-notice" role="status"><strong>Contracts</strong> ${e(state.contractsError)}</div>` : ""}
     ${body}
     <footer class="app-footer"><span>Tally · Cardano preprod demo · Read only</span><span>${view.source === "fixture" ? "Saved demo snapshot" : `Last received ${e(stamp(view.updatedAt))}`}</span></footer>

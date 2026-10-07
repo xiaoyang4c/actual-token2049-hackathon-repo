@@ -1,4 +1,5 @@
-// Tally contract views: GET-only loaders and display models.
+// Tally contract views: GET-only loaders and display models, and the
+// "Ask a Coworker" calls (a free preview that reads only and stores nothing).
 // Every amount, deadline, payout, and score comes from the control API,
 // which takes them from the contract engine. This module only selects,
 // groups, and labels. Relative times ("in 3 h") are display aids.
@@ -44,6 +45,55 @@ export async function loadProfile(entityId, fetcher = fetch) {
   const value = await getJson(`/reliability/profile?entityId=${enc(entityId)}`, fetcher)
   if (!isRecord(value) || !isRecord(value.entity)) throw new Error(`Profile ${entityId} is malformed`)
   return value
+}
+
+/** Fingerprints of a contract's final records, and their Cardano anchors. */
+export async function loadContractAnchors(id, fetcher = fetch) {
+  return getJson(`/reliability/anchors/contract?id=${enc(id)}`, fetcher)
+}
+
+/** A company's chain of settlement fingerprints. */
+export async function loadCompanyAnchors(entityId, fetcher = fetch) {
+  return getJson(`/reliability/anchors/company?entityId=${enc(entityId)}`, fetcher)
+}
+
+// ---- Ask a Coworker (free preview; the worker reads only and stores nothing) ----
+
+export const COWORKERS = [
+  { slug: "deal-desk", name: "Deal Desk", does: "Drafts a contract: escrow, payouts, deadlines, and what happens in a dispute.",
+    example: "We are buying 1,200 kg of Grade A green arabica from a farm in Sumatra for 4,000 USDM. A lab checks the quality. If the coffee is off-spec, the seller keeps 70%." },
+  { slug: "mediator", name: "Mediator", does: "Prepares a dispute case for the human mediator. It never decides.",
+    example: "contract: <contract id>\nmilestone: 0" },
+  { slug: "trust-check", name: "Trust Check", does: "Reads a company's Tally record before you deal with it.",
+    example: "What is the record of Highland Estates Coffee?" },
+]
+
+export const coworkerName = (slug) => `Tally ${COWORKERS.find((item) => item.slug === slug)?.name ?? "Coworker"}`
+
+/** An example request. The Mediator's names a real dispute from the contract list. */
+export function exampleFor(slug, contracts = []) {
+  if (slug === "mediator") {
+    const dispute = mediationQueue(contracts).find((item) => item.milestone.state === "tier_3_mediation") ?? mediationQueue(contracts)[0]
+    if (dispute) return `contract: ${dispute.contract.id}\nmilestone: ${dispute.milestone.index}`
+  }
+  return COWORKERS.find((item) => item.slug === slug)?.example ?? ""
+}
+
+async function askJson(response) {
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok || !isRecord(body.job)) throw new Error(typeof body.error === "string" ? body.error : `The Coworkers returned ${response.status}`)
+  return body.job
+}
+
+export async function askCoworker(coworker, text, fetcher = fetch) {
+  return askJson(await fetcher("/coworkers/ask", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ coworker, text }),
+    cache: "no-store", signal: AbortSignal.timeout(8000),
+  }))
+}
+
+export async function loadAnswer(id, fetcher = fetch) {
+  return askJson(await fetcher(`/coworkers/ask?id=${enc(id)}`, { cache: "no-store", signal: AbortSignal.timeout(5000) }))
 }
 
 // ---- Display models ----

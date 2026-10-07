@@ -280,11 +280,7 @@ export function DealDeskPage() {
         description="Describe the deal. The engine returns the escrows, what each side gets in every outcome, the deadlines and the fees, the same numbers the Deal Desk Coworker gives on Sokosumi."
         actions={draft ? <Button variant="outline" onClick={() => { setDraft(null); setError(null); setAttempt(0); setRound((r) => r + 1) }} className="h-10 rounded-[9px] bg-white"><RotateCcw className="size-4" />New draft</Button> : undefined}
       />
-      {templates.error ? (
-        <ErrorNote>
-          The Deal Desk needs two engine routes that the control API does not serve yet: <span className="mono">GET /studio/templates</span> (CoworkerTools.listTemplates) and <span className="mono">POST /studio/draft</span> (CoworkerTools.draftContract). ({templates.error})
-        </ErrorNote>
-      ) : null}
+      {templates.error ? <ErrorNote>{templates.error}</ErrorNote> : null}
       {error ? <ErrorNote>The engine rejected the draft: {error}</ErrorNote> : null}
       {templates.data && !draft ? <div className={busy ? 'hidden' : undefined}><Wizard key={round} templates={templates.data} onDraft={run} attempt={attempt} /></div> : null}
       {busy || (templates.loading && !templates.data) ? <Skeleton className="h-80 rounded-[16px] bg-white/70" /> : null}

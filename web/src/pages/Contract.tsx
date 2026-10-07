@@ -2,6 +2,7 @@ import {useState} from 'react'
 import {Link, useParams} from 'react-router-dom'
 import {BlockChain, FundsFlow, Reveal} from '@/components/motion'
 import {ArrowLeft, Gavel, ShieldCheck, ShieldX} from 'lucide-react'
+import {ContractAnchorList} from '@/components/Anchors'
 import {EvidenceList} from '@/components/Evidence'
 import {Amount, Countdown, ErrorNote, Hash, KV, Section, SimTag, StageTrack, StateTag, Tag} from '@/components/kit'
 import {Skeleton} from '@/components/ui/skeleton'
@@ -36,6 +37,7 @@ export function ContractPage() {
   const view = useAsync(() => api.contract(id), `view-${id}`)
   const kase = useAsync(() => api.disputeCase(id, 0), `case-${id}`)
   const audit = useAsync(() => api.audit(id), `audit-${id}`)
+  const anchors = useAsync(() => api.contractAnchors(id), `anchors-${id}`)
   const summary = useAsync(() => api.contracts(), 'contracts-all').data?.find((c) => c.id === id)
 
   if (view.error) return <ErrorNote>{view.error}</ErrorNote>
@@ -143,6 +145,10 @@ export function ContractPage() {
               </ul>
             </Section>
           ) : null}
+
+          <Section title="On-chain fingerprint" aside="Cardano preprod">
+            {anchors.data ? <ContractAnchorList anchors={anchors.data} names={(entityId) => (entityId === v.contract.buyerId ? buyer : entityId === v.contract.sellerId ? seller : entityId)} /> : anchors.error ? <p className="text-[13px] text-ink-3">{anchors.error}</p> : <p className="text-[13px] text-ink-3">Loading…</p>}
+          </Section>
 
           <Section title="Reliability record">
             {m.reliability ? (

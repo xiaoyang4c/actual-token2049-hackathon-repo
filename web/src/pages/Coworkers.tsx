@@ -9,21 +9,21 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/c
 /* From services/reliability/coworkers/README.md in the copied repository. */
 const COWORKERS = [
   {
-    name: 'Tally Deal Desk', avatar: '/brand/deal-desk-avatar.png', to: '/deal-desk', open: 'Draft a contract',
+    name: 'Tally Deal Desk', avatar: '/brand/deal-desk-avatar.png', to: '/ask?coworker=deal-desk', open: 'Ask the Deal Desk',
     job: 'Turns a plain-English deal into a ready-to-sign escrow contract draft.',
     detail: 'Runs createContract in an in-memory sandbox, so the engine validates every draft. Returns escrows, payouts per outcome, Tier 1 options, the timeline, the maximum lock time, fees and a live deadline check.',
     tools: ['listTemplates()', 'draftContract(input)'],
     sokosumi: '01a11354-0a28-745c-8424-c0f06b1331cb', spotlight: 'rgba(255, 212, 0, 0.22)' as const,
   },
   {
-    name: 'Tally Mediator', avatar: '/brand/mediator-avatar.png', to: '/mediation', open: 'Open the mediation desk',
+    name: 'Tally Mediator', avatar: '/brand/mediator-avatar.png', to: '/ask?coworker=mediator', open: 'Ask the Mediator',
     job: 'Drafts a Tier 3 ruling for a human mediator to sign.',
     detail: 'Reads the case file and simulates each ruling with the real engine on a copy. Returns the exact bytes the mediator signs. The Coworker never signs.',
     tools: ['disputeCase(contractId, milestone)', 'rulingOptions(contractId, milestone)', 'rulingSigningPayload(…)'],
     sokosumi: '01a11354-2a34-71af-917c-8114f24fc1cb', spotlight: 'rgba(0, 51, 173, 0.14)' as const,
   },
   {
-    name: 'Tally Trust Check', avatar: '/brand/trust-check-avatar.png', to: '/companies', open: 'Check a company',
+    name: 'Tally Trust Check', avatar: '/brand/trust-check-avatar.png', to: '/ask?coworker=trust-check', open: 'Ask Trust Check',
     job: "Explains a company's Tally record before a deal.",
     detail: 'Reads scores through the scoring policy, stored terms decisions and contract history. Labels paper records SIMULATED and never gives a verdict.',
     tools: ['findEntities(query)', 'reliabilityProfile(entityId)'],

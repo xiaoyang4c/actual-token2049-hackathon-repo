@@ -1,7 +1,8 @@
 /*
- * Read client for the Tally engine (copied repository, served by
- * engine/studio-server.ts). Every route here is a GET except the Deal Desk
- * draft, which runs the engine in an in-memory sandbox and writes nothing.
+ * Read client for the control API (/reliability/*) and the Coworker ask
+ * server (/coworkers/ask). Every control API call is a GET; the Deal Desk
+ * draft runs the engine in an in-memory sandbox and writes nothing. The only
+ * POST is Ask a Coworker, a free preview that pays and stores nothing.
  */
 
 export interface Moment { ms: number; utc: string; singapore: string }
@@ -261,6 +262,86 @@ export interface DraftResult {
   createRequest: Record<string, unknown>
 }
 
+export type CoworkerSlug = 'deal-desk' | 'mediator' | 'trust-check'
+
+export interface AskJob {
+  id: string
+  coworker: CoworkerSlug
+  status: 'queued' | 'running' | 'done' | 'failed'
+  position: number
+  answer: string | null
+  mode: 'model' | 'fill-in' | 'needs-input' | null
+  error: string | null
+}
+
+export interface LedgerTransaction {
+  id: string
+  type: 'goods' | 'service' | 'invoice' | string
+  participants: Array<{entityId: string; role: Role}>
+  terms: Record<string, unknown>
+  value: number
+  createdAt: string
+  completedAt: string | null
+}
+
+export interface Receipt {
+  transaction: LedgerTransaction
+  outcome: {state: string; fault?: string; evidence: Record<string, unknown>; verificationMethod: string; verificationConfidence: number; decidedAt: string} | null
+  events: Array<{id: string; entityId: string; category: string; role: Role; outcome: string; value: number; createdAt: string}>
+  termsDecision: {entityId: string; category: string; buyerFeeBps: number; sellerFeeBps: number; reasonCode: string; policyVersion: string} | null
+}
+
+export interface Entity {
+  id: string
+  displayName: string
+  wallets: string[]
+  kycStatus: string
+  kycTier: string
+  roles: Role[]
+  createdAt: string
+}
+
+export interface ScoreRow { entityId: string; category: string; role: Role; value: number; lowerBound: number; confidence: number; eventCount: number }
+
+export interface Listing {
+  id: string
+  sellerId: string
+  transactionType: string
+  title: string
+  price: number | null
+  pricingMethod: string
+  requiredTerms: Record<string, unknown>
+  minSellerReliability: number
+  createdAt: string
+}
+
+export interface AnchorView {
+  status: 'waiting' | 'sending' | 'confirmed'
+  txHashes: string[]
+  explorerUrls: string[]
+  blockHeight: number | null
+  anchoredAt: string | null
+}
+
+export interface ContractAnchors {
+  contractId: string
+  records: Array<{
+    publicationId: string
+    milestoneId: string
+    outcome: string | null
+    recordHash: string
+    recordUnchanged: boolean
+    entries: Array<{entityId: string; seq: number; entryHash: string}>
+    anchor: AnchorView
+  }>
+}
+
+export interface CompanyAnchors {
+  entityId: string
+  chain: {intact: boolean; problems: string[]; length: number; anchored: number; head: string | null}
+  entries: Array<{seq: number; entryHash: string; recordHash: string; contractId: string; milestoneId: string; anchor: AnchorView}>
+}
+
 export class ApiError extends Error {}
 
 async function read<T>(path: string, init?: RequestInit): Promise<T> {
@@ -284,6 +365,23 @@ export const api = {
     read<RulingPayload>(`/reliability/contracts/ruling-payload?${q({id, milestone, winner, reason})}`),
   search: (text: string) => read<EntityHit[]>(`/reliability/profile/search?${q({q: text})}`),
   profile: (entityId: string) => read<Profile>(`/reliability/profile?${q({entityId})}`),
-  templates: () => read<TemplateInfo[]>('/studio/templates'),
-  draft: (input: DraftInput) => read<DraftResult>('/studio/draft', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(input)}),
+  templates: () => read<TemplateInfo[]>('/reliability/contracts/draft-templates'),
+  // The draft is a sandbox read: createContract runs in memory and nothing is stored.
+  draft: (input: DraftInput) => read<DraftResult>(`/reliability/contracts/draft?${q({input: JSON.stringify(input)})}`),
+
+  // Ask a Coworker: a free preview answered by the Coworker worker.
+  ask: (coworker: CoworkerSlug, text: string) =>
+    read<{job: AskJob}>('/coworkers/ask', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({coworker, text})}),
+  askStatus: (id: string) => read<{job: AskJob}>(`/coworkers/ask?${q({id})}`, {cache: 'no-store'}),
+
+  // Settlement anchors: fingerprints of final records on Cardano preprod.
+  contractAnchors: (id: string) => read<ContractAnchors>(`/reliability/anchors/contract?${q({id})}`),
+  companyAnchors: (entityId: string) => read<CompanyAnchors>(`/reliability/anchors/company?${q({entityId})}`),
+
+  // Operator: the v1 marketplace ledger.
+  transactions: () => read<LedgerTransaction[]>('/reliability/transactions'),
+  receipt: (transactionId: string) => read<Receipt>(`/reliability/receipts?${q({transactionId})}`),
+  entities: () => read<Entity[]>('/reliability/entities'),
+  scores: () => read<ScoreRow[]>('/reliability/scores'),
+  listings: () => read<Listing[]>('/reliability/listings'),
 }

@@ -176,7 +176,7 @@ export default tseslint.config(
   },
   {
     // Kalshi labels and Masumi wire fields (Amounts) are external keys.
-    files: ["packages/core/src/venues/kalshi.ts", "services/cardano-agents-ts/masumi.ts", "services/reliability/contract-masumi-escrow.ts", "services/reliability/contract-fake-mps.ts"],
+    files: ["packages/core/src/venues/kalshi.ts", "services/cardano-agents-ts/masumi.ts", "services/reliability/contract-masumi-escrow.ts", "services/reliability/contract-fake-mps.ts", "services/reliability/mps-seller.ts", "services/reliability/coworker-worker.test.ts"],
     rules: {
       "@typescript-eslint/naming-convention": namingConvention({ pascalRecordKeys: true }),
     },

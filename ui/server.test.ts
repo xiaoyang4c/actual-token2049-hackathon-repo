@@ -46,7 +46,7 @@ describe("operator ui server", () => {
       const css = await fetch(`${origin}/styles.css`)
       expect(css.status).toBe(200)
 
-      for (const name of ["app.js", "model.js", "render.js", "format.js", "fixture.js", "data.js", "audit.js", "tally.js", "tally-views.js"]) {
+      for (const name of ["app.js", "model.js", "render.js", "format.js", "fixture.js", "data.js", "audit.js", "tally.js", "tally-views.js", "markdown.js"]) {
         const module = await fetch(`${origin}/${name}`)
         expect(module.status).toBe(200)
         expect(module.headers.get("content-type")).toContain("javascript")
@@ -76,7 +76,7 @@ describe("operator ui server", () => {
 
       for (const name of ["entities", "scores", "listings", "transactions", "receipts", "lifecycle", "kyc", "kyc/fixtures",
         "contracts", "contracts/list", "contracts/templates", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload",
-        "profile", "profile/search"]) {
+        "profile", "profile/search", "anchors/contract", "anchors/company"]) {
         const path = `/reliability/${name}`
         const query = new URLSearchParams({transactionId: "a/b & c", entityId: "entity-new", now: "2026-10-06T12:00:00Z"})
         const read = await fetch(`${origin}${path}?${query}`)
@@ -98,6 +98,48 @@ describe("operator ui server", () => {
       expect(shock.status).toBe(405)
       expect(await fetch(`${origin}/nope`)).toHaveProperty("status", 404)
     })
+  })
+
+  test("forwards Ask a Coworker with the visitor address, and nothing else", async () => {
+    const seen: Array<{ method: string; path: string; visitor: string | null; body: string }> = []
+    const ask = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url)
+        seen.push({ method: req.method, path: url.pathname + url.search, visitor: req.headers.get("x-tally-visitor"), body: await req.text() })
+        return Response.json({ job: { id: "j1" } }, { status: req.method === "POST" ? 202 : 200 })
+      },
+    })
+    const ui = startUi({ port: 0, controlApiUrl: "http://127.0.0.1:9", askUrl: `http://127.0.0.1:${ask.port}` })
+    try {
+      const origin = `http://127.0.0.1:${ui.port}`
+      const body = JSON.stringify({ coworker: "deal-desk", text: "hi" })
+      const posted = await fetch(`${origin}/coworkers/ask`, { method: "POST", headers: { "x-forwarded-for": "203.0.113.9, 198.51.100.7" }, body })
+      expect(posted.status).toBe(202)
+      expect(await posted.json()).toEqual({ job: { id: "j1" } })
+      expect((await fetch(`${origin}/coworkers/ask?id=j1`)).status).toBe(200)
+      expect(seen[0]).toEqual({ method: "POST", path: "/ask", visitor: "198.51.100.7", body })
+      expect(seen[1]?.path).toBe("/ask?id=j1")
+      expect(seen[1]?.visitor).toMatch(/127\.0\.0\.1/)
+
+      expect((await fetch(`${origin}/coworkers/ask`, { method: "PUT", body })).status).toBe(405)
+      expect((await fetch(`${origin}/coworkers/ask`, { method: "POST", body: "x".repeat(17_000) })).status).toBe(413)
+      expect(seen).toHaveLength(2)
+    } finally {
+      ui.stop(true)
+      ask.stop(true)
+    }
+  })
+
+  test("says the Coworkers are offline when the worker is down", async () => {
+    const ui = startUi({ port: 0, controlApiUrl: "http://127.0.0.1:9", askUrl: "http://127.0.0.1:9" })
+    try {
+      const res = await fetch(`http://127.0.0.1:${ui.port}/coworkers/ask`, { method: "POST", body: "{}" })
+      expect(res.status).toBe(502)
+      expect((await res.json()).error).toContain("offline")
+    } finally {
+      ui.stop(true)
+    }
   })
 
   test("returns 502 when the control API is down", async () => {

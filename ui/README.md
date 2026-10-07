@@ -1,7 +1,8 @@
 # Tally UI
 
-This read-only display shows Tally: escrowed deals, disputes, company records, and the marketplace.
+This display shows Tally: escrowed deals, disputes, company records, and the marketplace.
 It does not edit policy, accept offers, send orders, sign, or change KYC.
+One area takes input: Ask a Coworker sends a request to Tally's Coworkers and shows the answer. It pays nothing and stores nothing.
 
 The hosted demo is <https://13-210-42-0.sslip.io>. It shows paper data only.
 
@@ -12,6 +13,7 @@ The hosted demo is <https://13-210-42-0.sslip.io>. It shows paper data only.
 | My deals | Buyers and sellers | Contracts and milestones, the stage of each, who acts next and by when, escrows, deadlines, history |
 | Mediation desk | The platform mediator | Disputes by urgency, the case file with signer status, what each ruling pays, and the bytes to sign |
 | Companies | Anyone checking a counterparty | Scores, terms decisions, and deal history, live and simulated apart |
+| Ask a Coworker | Anyone | A free preview of Deal Desk, Mediator, and Trust Check: a contract draft, a dispute case, or a company record |
 | Operator | The platform team | The marketplace ledger, participants, listings, and every contract |
 
 "Viewing as" in My deals is a lens, not sign-in. Anyone can choose any party.
@@ -19,7 +21,10 @@ Before real data, add sign-in and show each party only its own deals. Keep the M
 
 Every amount, deadline, payout, and score comes from the control API, which takes them from the contract engine.
 The UI formats them. It does not calculate them.
-Open an area directly with `/?view=deals`, `/?view=mediation`, `/?view=companies`, or `/?view=operator`.
+Open an area directly with `/?view=deals`, `/?view=mediation`, `/?view=companies`, `/?view=ask`, or `/?view=operator`.
+
+Ask a Coworker shows the answer as Markdown. [`markdown.js`](markdown.js) escapes every character first and turns only headings, lists, tables, code, bold, and italics into markup. Links and HTML stay plain text, because a language model can write the answer.
+The answer comes from the Coworker worker. Read [the Coworker README](../services/reliability/coworkers/README.md#on-the-tally-website).
 
 Start the services first. Then start the UI.
 
@@ -126,4 +131,6 @@ bun run lint
 The server allows only listed GET and HEAD routes.
 It retains the existing `/agent/state` and `/audit` read proxies.
 It forwards the query string for receipts, lifecycle views, and KYC.
-POST, PUT, PATCH, and DELETE requests are rejected.
+POST, PUT, PATCH, and DELETE requests are rejected, except one route.
+`POST /coworkers/ask` and `GET /coworkers/ask?id=` go to the Coworker worker (`COWORKER_ASK_URL`, default `http://127.0.0.1:8792`).
+The server sends the visitor address from `X-Forwarded-For` (the last entry, set by Caddy) and refuses a body over 16 KiB.

@@ -1,9 +1,10 @@
-// Tally views: My deals, Mediation desk, Companies, and the operator's
-// contract list. Render only. Every amount and deadline comes from the API.
+// Tally views: My deals, Mediation desk, Companies, Ask a Coworker, and the
+// operator's contract list. Render only. Every amount and deadline comes from the API.
 
 import { escapeHtml, formatPct, label } from "./format.js"
+import { renderMarkdown } from "./markdown.js"
 import {
-  STEPS, actionFor, dealsView, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, stateTone, viewerRole,
+  COWORKERS, STEPS, actionFor, coworkerName, dealsView, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, stateTone, viewerRole,
 } from "./tally.js"
 
 const e = escapeHtml
@@ -54,6 +55,45 @@ function actionCallout(next, role, nowMs) {
 }
 
 // ---------------------------------------------------------------------------
+// Settlement anchors (fingerprints of final records on Cardano)
+// ---------------------------------------------------------------------------
+
+const EXPLORER = "https://preprod.cardanoscan.io/transaction/"
+
+/** A link to the explorer, only for a transaction hash the API gave in the expected form. */
+function txLink(url) {
+  if (typeof url !== "string" || !url.startsWith(EXPLORER) || !/^[0-9a-f]{64}$/.test(url.slice(EXPLORER.length))) return ""
+  return `<a href="${e(url)}" target="_blank" rel="noopener noreferrer">View on Cardanoscan</a>`
+}
+
+export function anchorStatus(anchor) {
+  if (!anchor) return ""
+  if (anchor.status === "confirmed") {
+    return `<p class="anchor anchor-confirmed"><strong>Fingerprint on Cardano</strong> · block ${e(anchor.blockHeight)}${anchor.anchoredAt ? ` · ${e(sgt(anchor.anchoredAt))}` : ""} · ${anchor.explorerUrls.map(txLink).join(" · ")}</p>`
+  }
+  if (anchor.status === "sending") return `<p class="anchor"><strong>Fingerprint sent to Cardano.</strong> Waiting for confirmations.</p>`
+  return `<p class="anchor"><strong>Fingerprint recorded.</strong> It goes on Cardano with the next anchor batch.</p>`
+}
+
+function milestoneAnchors(anchors, milestoneId) {
+  const records = anchors?.records?.filter((record) => record.milestoneId === milestoneId) ?? []
+  if (!records.length) return ""
+  return `<h4>Settlement fingerprint</h4>${records.map((record) => `${record.recordUnchanged ? "" : '<p class="data-warning">This record changed after it was fingerprinted.</p>'}${anchorStatus(record.anchor)}
+    <p class="fine">Only this fingerprint goes on the chain: <code>${e(record.recordHash.slice(0, 16))}…</code> No names, amounts, or terms.</p>`).join("")}`
+}
+
+function companyChain(anchors) {
+  if (!anchors) return '<p class="muted">Loading the on-chain record…</p>'
+  const chain = anchors.chain
+  if (!chain.length) return '<p class="muted">No settled deals yet. Each settled deal adds a fingerprint to this company\'s chain.</p>'
+  const recent = anchors.entries.slice(-5).reverse()
+  return `<p>${e(chain.length)} settled ${chain.length === 1 ? "record" : "records"} fingerprinted · ${e(chain.anchored)} on Cardano · chain ${chain.intact ? "<strong>intact</strong>" : '<strong class="data-warning">broken</strong>'}</p>
+    ${chain.intact ? "" : `<ul class="plain">${chain.problems.map((problem) => `<li class="data-warning">${e(problem)}</li>`).join("")}</ul>`}
+    <ul class="plain anchor-list">${recent.map((entry) => `<li>#${e(entry.seq)} · ${entry.anchor.status === "confirmed" ? `on Cardano · ${entry.anchor.explorerUrls.map(txLink).join(" · ")}` : entry.anchor.status === "sending" ? "sent, confirming" : "waiting for the next batch"}</li>`).join("")}</ul>
+    <p class="fine">Each entry links to the one before it, so an edited or deleted deal breaks the chain. Only fingerprints are public.</p>`
+}
+
+// ---------------------------------------------------------------------------
 // My deals
 // ---------------------------------------------------------------------------
 
@@ -77,11 +117,12 @@ function dealCard(contract, partyId, selectedId, nowMs) {
   </article>`
 }
 
-function contractDetail(detail, summary, partyId, nowMs) {
+function contractDetail(detail, summary, partyId, nowMs, anchors = null) {
   if (!detail) return empty("Select a deal", "Choose a deal to see its stages, deadlines, escrows, and history.")
   const contract = detail.contract
   const role = viewerRole(summary, partyId)
   const decimals = contract.terms?.assetDecimals ?? 6
+  const ownAnchors = anchors?.contractId === contract.id ? anchors : null
   return `<div class="detail-top"><h2>${e(summary?.title ?? contract.id)}</h2>${modeTag(detail.mode === "live" ? "LIVE" : "SIMULATED")}</div>
     <p class="muted">${e(summary?.buyer.displayName ?? contract.buyerId)} (buyer) · ${e(summary?.seller.displayName ?? contract.sellerId)} (seller)${role ? ` · You are the ${e(role)}` : ""}</p>
     ${facts([["Contract", contract.id], ["Template", contract.templateId], ["Remedy", summary?.remedy], ["Custody", "Platform-managed test wallets (custodial test setup)"]])}
@@ -106,6 +147,7 @@ function contractDetail(detail, summary, partyId, nowMs) {
         <table class="mini-table"><thead><tr><th scope="col">Escrow</th><th scope="col">Amount</th><th scope="col">Escrow state</th></tr></thead>
         <tbody>${milestone.escrows.map((escrow) => `<tr><td>${e(label(escrow.role))}</td><td class="numeric">${e(atomic(escrow.amountAtomic, decimals))}</td><td>${e(escrow.onChainState ?? "Not funded")}${escrow.confirmed === false ? " (confirming)" : ""}</td></tr>`).join("")}</tbody></table>
         ${milestone.obligations.length ? `<h4>Ruling obligations</h4><ul class="plain">${milestone.obligations.map((obligation) => `<li>${e(label(obligation.party))}: ${e(label(obligation.action))}, due ${e(sgt(obligation.dueAt))}${obligation.compliedAt ? " · done" : obligation.ignoredAt ? " · ignored" : ""}</li>`).join("")}</ul>` : ""}
+        ${milestoneAnchors(ownAnchors, milestone.id)}
         ${milestone.reliability ? `<h4>Reliability record</h4>${facts([["Result", label(milestone.reliability.state)], ["At fault", milestone.reliability.fault ? label(milestone.reliability.fault) : "None"], ["Confidence", formatPct(milestone.reliability.verificationConfidence)]])}` : ""}
         <details id="history-${e(milestone.id)}"><summary>History (${history.length} steps)</summary>
           <ol class="history">${history.map((entry) => `<li><span>${e(stateText(entry.to))}</span><small>${e(sgt(new Date(entry.at).toISOString()))} · ${e(entry.actor)}</small></li>`).join("")}</ol>
@@ -129,7 +171,7 @@ export function renderDeals(tally, nowMs = Date.now()) {
         ${deals.rows.length ? deals.rows.map((contract) => dealCard(contract, tally.party, tally.selected, nowMs)).join("") :
           empty("No deals", "This party has no contracts on Tally yet.")}
       </section>
-      <aside class="panel receipt" id="deal-detail" tabindex="-1" aria-label="Deal detail">${tally.detailError ? `<div class="connection-notice" role="status">${e(tally.detailError)}</div>` : ""}${contractDetail(tally.detail, summary, tally.party, nowMs)}</aside>
+      <aside class="panel receipt" id="deal-detail" tabindex="-1" aria-label="Deal detail">${tally.detailError ? `<div class="connection-notice" role="status">${e(tally.detailError)}</div>` : ""}${contractDetail(tally.detail, summary, tally.party, nowMs, tally.detailAnchors)}</aside>
     </div>`
 }
 
@@ -245,6 +287,7 @@ export function renderCompanies(tally) {
           </tbody></table>` : '<p class="muted">No scored events yet.</p>'}
           ${profile.scoringPolicy.provisional ? `<p class="fine">Policy ${e(profile.scoringPolicy.version)} is a provisional placeholder. Read these as counts of successes and failures, not a calibrated rating.</p>` : ""}
         </section>
+        <section class="detail-section"><h3>On-chain record</h3>${companyChain(companies.anchors?.entityId === profile.entity.id ? companies.anchors : null)}</section>
         <section class="detail-section"><h3>Deals</h3>
           ${profile.deals.length ? `<table class="mini-table"><thead><tr><th scope="col">Deal</th><th scope="col">Role</th><th scope="col">Amount</th><th scope="col">Result</th></tr></thead><tbody>
           ${profile.deals.map((deal) => `<tr><td>${modeTag(deal.label)} <small>${e(deal.templateId)} · with ${e(deal.counterpartyId)}</small></td><td>${e(label(deal.role))}</td><td class="numeric">${e(deal.amount.display)}</td><td>${stateBadge(deal.state)}${deal.disputed ? `<small>Dispute won by the ${e(deal.disputeWinner ?? "pending")}</small>` : ""}${deal.ignoredRuling ? '<small class="data-warning">Ignored a ruling</small>' : ""}${deal.onTime === false && deal.role === "seller" ? '<small class="data-warning">Late delivery</small>' : ""}</td></tr>`).join("")}
@@ -252,6 +295,43 @@ export function renderCompanies(tally) {
         </section>
         <p class="fine">Tally records cover deals on this platform only. This is information, not a credit rating. Tally does not set contract terms from scores yet.</p>`}
     </aside>
+  </div>`
+}
+
+// ---------------------------------------------------------------------------
+// Ask a Coworker
+// ---------------------------------------------------------------------------
+
+function answerPanel(job) {
+  if (!job) return empty("Your answer appears here", "Pick a Coworker, write your request, and press Ask. A fill-in request takes a second. A plain-English request can take a minute.")
+  if (job.status === "queued" || job.status === "running") {
+    return `<p class="loading" role="status">${e(coworkerName(job.coworker))} is working${job.position ? ` (${e(job.position)} ahead of you)` : ""}…</p>`
+  }
+  if (job.status === "failed") return `<div class="connection-notice" role="status">${e(job.error ?? "The Coworker could not answer.")}</div>`
+  const tag = job.mode === "model" ? "AI answer" : job.mode === "fill-in" ? "Answered without AI" : "Needs more detail"
+  // The answer is untrusted text. renderMarkdown escapes it before it adds any markup.
+  return `<div class="detail-top"><h2>${e(coworkerName(job.coworker))}</h2><span class="mode-label">${e(tag)}</span></div>
+    <div class="md-answer">${renderMarkdown(job.answer)}</div>`
+}
+
+export function renderAsk(tally) {
+  const ask = tally.ask
+  const chosen = COWORKERS.find((item) => item.slug === ask.coworker) ?? COWORKERS[0]
+  return `<div class="workspace ask-workspace">
+    <section class="panel ask-panel" aria-label="Ask a Coworker">
+      <form id="ask-form" class="ask-form">
+        <fieldset><legend>Coworker</legend>
+          ${COWORKERS.map((item) => `<label class="ask-choice"><input type="radio" name="coworker" value="${e(item.slug)}" ${item.slug === chosen.slug ? "checked" : ""}><span><strong>${e(item.name)}</strong><small>${e(item.does)}</small></span></label>`).join("")}
+        </fieldset>
+        <label for="ask-text">Your request</label>
+        <textarea id="ask-text" rows="7" maxlength="4000" placeholder="${e(chosen.example)}">${e(ask.text)}</textarea>
+        <div class="ask-actions"><button type="submit" class="button" ${ask.busy ? "disabled" : ""}>${ask.busy ? "Working…" : `Ask ${e(chosen.name)}`}</button>
+          <button type="button" class="text-button" data-ask-example>Use an example</button></div>
+        ${ask.error ? `<p class="data-warning" role="status">${e(ask.error)}</p>` : ""}
+        <p class="fine">Free preview: no payment, and nothing is saved. Plain English uses an AI model with a small daily allowance. The fill-in format always works. For a paid Task with escrow, hire the Coworker on Sokosumi.</p>
+      </form>
+    </section>
+    <aside class="panel receipt" id="ask-answer" tabindex="-1" aria-label="Answer" aria-live="polite">${answerPanel(ask.job)}</aside>
   </div>`
 }
 

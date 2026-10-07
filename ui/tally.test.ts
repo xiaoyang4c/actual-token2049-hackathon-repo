@@ -2,9 +2,9 @@ import {describe, expect, test} from 'bun:test';
 import {buildView} from './model.js';
 import {deskTitle, renderDesk} from './render.js';
 import {
-  actionFor, dealsView, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, viewerRole,
+  actionFor, dealsView, exampleFor, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, viewerRole,
 } from './tally.js';
-import {atomic, renderCompanies, renderDeals, renderMediation} from './tally-views.js';
+import {anchorStatus, atomic, renderAsk, renderCompanies, renderDeals, renderMediation} from './tally-views.js';
 
 const NOW = Date.UTC(2026, 9, 7, 6, 0, 0);
 const HOUR = 3_600_000;
@@ -40,6 +40,7 @@ function tally(extra = {}) {
     area: 'deals', operatorTab: 'transactions', contracts: CONTRACTS, contractsError: '', party: 'kopi', selected: '', detail: null, detailError: '',
     mediation: {selected: null, caseFile: null, caseError: '', options: null, winner: 'buyer', reason: '', payload: null, busy: false, error: ''},
     companies: {query: '', results: [], selectedId: '', profile: null, busy: false, error: ''},
+    ask: {coworker: 'deal-desk', text: '', job: null, busy: false, error: ''},
     ...extra,
   };
 }
@@ -112,5 +113,71 @@ describe('tally views render safely', () => {
     }
     expect(deskTitle(view, 'mediation')).toBe('Mediation desk · Tally');
     expect(deskTitle(view, 'operator', 'contracts')).toBe('Contracts · Tally');
+    expect(deskTitle(view, 'ask')).toBe('Ask a Coworker · Tally');
+  });
+});
+
+describe('Ask a Coworker', () => {
+  const job = (extra: Record<string, unknown>) => ({id: 'j1', coworker: 'mediator', status: 'done', position: 0, mode: 'fill-in', error: null, answer: null, ...extra});
+
+  test('the form keeps the request, and the answer is escaped before it becomes Markdown', () => {
+    const html = renderAsk(tally({ask: {coworker: 'mediator', text: '<b>x</b>', busy: false, error: '',
+      job: job({answer: '## Case\n<script>alert(1)</script>\n| A | B |\n| --- | --- |\n| 1 | 2 |'})}}));
+    expect(html).toContain('value="mediator" checked');
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;</textarea>');
+    expect(html).toContain('Ask Mediator');
+    expect(html).toContain('<h3>Case</h3>');
+    expect(html).toContain('<td>1</td><td>2</td>');
+    expect(html).toContain('Answered without AI');
+    expect(html).not.toContain('<script>');
+  });
+
+  test('waiting, failed, and empty states', () => {
+    expect(renderAsk(tally({ask: {coworker: 'deal-desk', text: 'x', busy: true, error: '', job: job({status: 'queued', position: 2})}})))
+      .toContain('Tally Mediator is working (2 ahead of you)…');
+    expect(renderAsk(tally({ask: {coworker: 'deal-desk', text: 'x', busy: false, error: '', job: job({status: 'failed', error: 'The Coworkers are busy.'})}})))
+      .toContain('The Coworkers are busy.');
+    const empty = renderAsk(tally());
+    expect(empty).toContain('Your answer appears here');
+    expect(empty).toContain('Free preview: no payment, and nothing is saved.');
+  });
+
+  test('the Mediator example names a real dispute waiting for a ruling', () => {
+    expect(exampleFor('mediator', CONTRACTS)).toBe('contract: c2\nmilestone: 0');
+    expect(exampleFor('mediator', [])).toBe('contract: <contract id>\nmilestone: 0');
+    expect(exampleFor('deal-desk', CONTRACTS)).toContain('1,200 kg');
+  });
+});
+
+describe('settlement anchors on the website', () => {
+  const HASH = 'ab'.repeat(32);
+  const confirmed = {status: 'confirmed', txHashes: [HASH], explorerUrls: [`https://preprod.cardanoscan.io/transaction/${HASH}`], blockHeight: 42, anchoredAt: '2026-10-07T06:00:00Z'};
+
+  test('a confirmed anchor links to Cardanoscan, and only for a real transaction hash', () => {
+    const html = anchorStatus(confirmed);
+    expect(html).toContain('Fingerprint on Cardano');
+    expect(html).toContain(`href="https://preprod.cardanoscan.io/transaction/${HASH}"`);
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(anchorStatus({...confirmed, explorerUrls: ['javascript:alert(1)']})).not.toContain('href');
+    expect(anchorStatus({...confirmed, explorerUrls: ['https://preprod.cardanoscan.io/transaction/x" onclick="y']})).not.toContain('href');
+    expect(anchorStatus({status: 'waiting', txHashes: [], explorerUrls: [], blockHeight: null, anchoredAt: null})).toContain('next anchor batch');
+  });
+
+  test('a company shows its chain: anchored entries, and a broken chain says so', () => {
+    const profile = {
+      entity: {id: 'kopi', displayName: 'Kopi', kycStatus: 'verified', kycTier: 'basic', createdAt: '2026-10-01'},
+      contractSummary: {live: {}, simulated: {}}, scores: [], scoringPolicy: {version: 'v0', provisional: false}, deals: [],
+    };
+    const anchors = {entityId: 'kopi', chain: {intact: true, problems: [], length: 2, anchored: 1, head: HASH}, entries: [
+      {seq: 1, entryHash: HASH, recordHash: HASH, contractId: 'c1', milestoneId: 'm1', anchor: confirmed},
+      {seq: 2, entryHash: HASH, recordHash: HASH, contractId: 'c2', milestoneId: 'm2', anchor: {status: 'waiting', txHashes: [], explorerUrls: [], blockHeight: null, anchoredAt: null}},
+    ]};
+    const html = renderCompanies(tally({area: 'companies', companies: {query: '', results: [], selectedId: 'kopi', profile, anchors, busy: false, error: ''}}));
+    expect(html).toContain('2 settled records fingerprinted · 1 on Cardano · chain <strong>intact</strong>');
+    expect(html).toContain('#2 · waiting for the next batch');
+    const broken = renderCompanies(tally({area: 'companies', companies: {query: '', results: [], selectedId: 'kopi', profile, busy: false, error: '',
+      anchors: {...anchors, chain: {...anchors.chain, intact: false, problems: ['entry 2 does not link to the entry before it']}}}}));
+    expect(broken).toContain('broken');
+    expect(broken).toContain('entry 2 does not link to the entry before it');
   });
 });

@@ -172,20 +172,18 @@ Explain the dispute path from the draft result. Do not restate rules from memory
 
 ## 10. Answer format
 
-Write these sections in this order. Use only tool values.
+Use this layout. It matches the answer that Tally writes without a model. Use only tool values.
 
-1. **Summary.** Two sentences: the deal and the template. Mode: "Paper (SIMULATED) on this server" or "Live on Cardano preprod". Use `mode`.
-2. **Why this template.** One short paragraph.
-3. **Milestones and escrows.** Table: milestone, title, amount, escrows (role and amount).
-4. **What proves delivery.** `evidence.delivery`. Then the judge (`judge.type`, `judge.inspector`).
-5. **What the buyer can show in a dispute.** `evidence.buyerDispute`.
-6. **Timeline if funding starts at `fundingRequestedAt`.** Table: pay by, deliver by, last dispute moment if delivered last, release (unlock), expected payout, dispute window end. Then `maxLock` (both values).
-7. **If something goes wrong.** For each milestone: payout if the seller wins, payout if the buyer wins (and the follow-up from `buyerWinsFollowUp`), and the Tier 1 options with payouts. Then the tiers, their windows, and the Tier 3 default winner.
-8. **Fees.** Per tier, and the worst case with the payer.
-9. **Defaults and placeholders.** List `defaultsApplied`, `normalized`, and every placeholder with "Fill before signing". If `demoWindowsActive` is true, say: "This server uses shortened demo windows. A production contract uses the template windows."
-10. **Live check.** If `liveDeadlineCheck.ok` is false, list its problems and say the contract would fail on a live server.
-11. **Create request.** The `createRequest` JSON in a code block. Say: replace every `<...>` value; the parties sign the frozen terms in Tally.
-12. The three closing lists from the shared rules.
+1. **Heading.** `## Tally contract draft: <milestone title, or "N milestones">`. Then the mode line from `mode`: "**Paper contract (SIMULATED).** No real money moves on this server." or "**Live on Cardano preprod.** Payments use test USDM."
+2. **In short.** The contract type in plain words and one short reason it fits. What the buyer pays into escrow and the fund-by time. The deliver-by time. The payout time if nobody disputes. What each side gets if the buyer wins, with the follow-up from `buyerWinsFollowUp`.
+3. **Where the money goes.** Table: milestone, price, delivered as agreed (the seller's payout), buyer wins a dispute (both payouts). For a milestone with more than one escrow, one line with the parts (role and amount).
+4. **Key dates (Singapore time).** Table: fund the escrow by, deliver by, last moment to dispute if delivered on the last day, payout if nobody disputes, any dispute must finish by. Then the longest lock from `maxLock`.
+5. **Proof of delivery.** `evidence.delivery` in plain words. Then "**Who decides a quality dispute:**" from `judge`. Then one line with what the buyer can add in a dispute (`evidence.buyerDispute`).
+6. **If there is a dispute.** A numbered list with one line per tier: what happens, its window, the Tier 1 options with payouts, and any fee that is not zero with who pays. Then the winner if Tier 3 times out, and `fees.note`.
+7. **Before you sign.** Every placeholder ("Add …"), `defaultsApplied` ("Filled in for you: …"), and `normalized` ("Adjusted: …"). If `demoWindowsActive` is true: "This server uses shortened demo windows. A production contract uses the template windows." If `liveDeadlineCheck.ok` is false, add a section "This would fail on a live server" with its problems.
+8. **Next step** and what can still change (shared rules, section 8).
+9. **Technical details**, after a horizontal rule. The template id and version, the remedy type, then the `createRequest` JSON in a code block. Say: replace every `<...>` value; the parties sign the final terms in Tally.
+10. The italic last line from the shared rules.
 
 ## 11. Cases
 
