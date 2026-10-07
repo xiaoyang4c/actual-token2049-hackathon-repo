@@ -153,10 +153,9 @@ export class WalletDeposits {
     try {
       txHash = await chain.submit(signed.cborHex);
     } catch (error) {
-      // A 4xx reply means the chain rejected this transaction, for example
-      // because its inputs are spent or its time limit passed. Sending it
-      // again cannot work, so the build ends. Other errors keep it for a retry.
-      if (error instanceof BlockfrostError && error.status >= 400 && error.status < 500) {
+      // Blockfrost uses 400 for invalid transactions. A full mempool (425)
+      // or a rate limit (429) can clear, so other errors keep the build.
+      if (error instanceof BlockfrostError && error.status === 400) {
         this.builds.delete(buildId as string);
         throw new AccountError('deposit_rejected', `The chain rejected this deposit (${error.message}). Start it again.`, 400);
       }

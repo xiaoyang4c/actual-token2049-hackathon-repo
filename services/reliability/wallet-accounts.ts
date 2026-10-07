@@ -118,8 +118,8 @@ export class WalletAccounts {
 
   /**
    * Checks the signed challenge. A known wallet signs in to its entity. A
-   * base address whose stake key another proof covers belongs to that
-   * proof's entity. A new wallet with a session joins that session's entity.
+   * new payment key can join an account with a proven stake key only with
+   * that account's session. A new wallet with a session joins its entity.
    * Otherwise a new entity is created. Returns a session token. Only its hash
    * is stored.
    */
@@ -140,8 +140,8 @@ export class WalletAccounts {
     return this.store.transaction(() => {
       if (!this.store.useWalletChallenge(challenge.id, now)) throw new AccountError('challenge_used', 'This sign-in message was already used. Ask for a new one.');
       const known = this.store.getWalletProofByCredential(proof.credentialHash);
-      // A stake key proof covers every address of that wallet, so a payment
-      // key proof for one of its base addresses joins the same entity.
+      // A base address can contain any public stake hash. Its payment-key
+      // signature does not prove control of that stake key.
       const stakeHash = !known && proof.credentialKind === 'payment' ? addressKeyHashes(input.address).stake : undefined;
       const stakeProof = stakeHash ? this.store.getWalletProofByCredential(stakeHash) : undefined;
       const coveredBy = stakeProof?.credentialKind === 'stake' ? stakeProof : undefined;
@@ -153,6 +153,9 @@ export class WalletAccounts {
         }
         entityId = known.entityId;
       } else if (coveredBy) {
+        if (!sessionEntityId) {
+          throw new AccountError('unauthorized', 'Sign in with the stake key before you add this payment key.', 401);
+        }
         const owner = this.store.getWalletEntityId(input.address);
         if ((sessionEntityId && sessionEntityId !== coveredBy.entityId) || (owner && owner !== coveredBy.entityId)) {
           throw new AccountError('wallet_in_use', 'This wallet belongs to another Tally account.', 409);

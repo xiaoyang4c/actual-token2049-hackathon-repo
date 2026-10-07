@@ -159,16 +159,40 @@ describe('wallet accounts', () => {
     expect(() => accounts.sessionEntity(null)).toThrow('Sign in');
   });
 
-  test('a base address of a wallet whose stake key is proven signs in to the same account', () => {
+  test('a base address joins its stake account with a session, then signs in without one', () => {
     const {signIn, store} = setup();
     const alice = wallet(1);
     const first = signIn(alice);
-    const again = signIn(alice, {viaBase: true});
+    expect(() => signIn(alice, {viaBase: true})).toThrow('Sign in with the stake key');
+    const again = signIn(alice, {viaBase: true, session: first.token});
     expect(again).toMatchObject({entityId: first.entityId, created: false});
+    expect(signIn(alice, {viaBase: true})).toMatchObject({entityId: first.entityId, created: false});
     expect(store.listWalletProofs(first.entityId).map((proof) => proof.credentialKind).sort()).toEqual(['payment', 'stake']);
     // Another account's session cannot claim it.
     const bob = signIn(wallet(2));
     expect(() => signIn(alice, {viaBase: true, session: bob.token})).toThrow('another Tally account');
+  });
+
+  test('a copied stake hash cannot grant a session or link a payment key to its account', () => {
+    const {accounts, store, signIn} = setup();
+    const victim = wallet(1);
+    const owner = signIn(victim);
+    const attacker = wallet(2);
+    const forged = C.BaseAddress.new(0,
+      C.Credential.from_keyhash(attacker.payment.to_public().hash()),
+      C.Credential.from_keyhash(victim.stake.to_public().hash()),
+    ).to_address().to_bech32('addr_test');
+    const verify = (sessionEntityId?: string) => {
+      const challenge = accounts.challenge(forged);
+      return accounts.verify({challengeId: challenge.challengeId, address: forged,
+        ...signData(attacker.payment, forged, challenge.message), source: 'cip30'}, sessionEntityId);
+    };
+    expect(() => verify()).toThrow('Sign in with the stake key');
+    const attackerAccount = signIn(attacker);
+    expect(() => verify(accounts.sessionEntity(attackerAccount.token))).toThrow('another Tally account');
+    expect(store.getWalletProofByCredential(attacker.payment.to_public().hash().to_hex())).toBeUndefined();
+    expect(store.getWalletEntityId(forged)).toBeUndefined();
+    expect(accounts.wallets(owner.entityId)).toHaveLength(1);
   });
 
   test('mock KYC through the account verifies the person, and readiness follows the gate', () => {
@@ -595,3 +619,31 @@ describe('deposit settings and chain rejections', () => {
     await expect(deposits.submit(account.entityId, built.buildId, witnesses.to_hex())).rejects.toThrow('expired');
   });
 });
+
+for (const status of [425, 429]) {
+  test(`transient ${status} keeps a deposit build available for retry`, async () => {
+    const {store, signIn} = setup();
+    const alice = wallet(1);
+    const account = signIn(alice);
+    class BusyChain extends FakeChain {
+      busy = true;
+      override async addressUtxos(): Promise<ChainUtxo[]> {
+        return [{txHash: txHash(41), index: 0, address: alice.base, amounts: ada('20000000')}];
+      }
+      override async submit(): Promise<string> {
+        if (this.busy) throw new BlockfrostError(`Transient ${status}`, status);
+        return txHash(42);
+      }
+    }
+    const chain = new BusyChain();
+    const deposits = new WalletDeposits(store, {chain, depositAddress: POOL, confirmations: 3});
+    const built = await deposits.build(account.entityId, ada('5000000'), {kind: 'browser', address: alice.base});
+    const witnesses = C.TransactionWitnessSet.new();
+    const vkeys = C.Vkeywitnesses.new();
+    vkeys.add(C.make_vkey_witness(C.TransactionHash.from_hex(built.txHash), alice.payment));
+    witnesses.set_vkeys(vkeys);
+    await expect(deposits.submit(account.entityId, built.buildId, witnesses.to_hex())).rejects.toMatchObject({status});
+    chain.busy = false;
+    await expect(deposits.submit(account.entityId, built.buildId, witnesses.to_hex())).resolves.toMatchObject({txHash: txHash(42)});
+  });
+}

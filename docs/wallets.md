@@ -62,7 +62,9 @@ An open live contract reserves its full amount.
 A closed live contract spends each funded milestone amount, less the refunds to the buyer.
 A refund and a milestone that was never funded leave the balance.
 
-A deposit that the chain rejects, for example because its inputs are spent, returns `deposit_rejected`. Start it again.
+A deposit that the chain rejects with HTTP 400 returns `deposit_rejected`. Start it again.
+A full mempool or a rate limit keeps the deposit build available until it expires. Retry the same build.
+See the [Blockfrost error codes](https://github.com/blockfrost/openapi/blob/master/openapi.yaml).
 
 The worker remembers each transaction while it stays in the scan window.
 A steady pass makes two Blockfrost calls, so the default 20-second pace stays inside the free daily quota.
@@ -85,7 +87,8 @@ Read [Marketplace rules](marketplace.md).
 - Each visitor has limits per 10 minutes: 20 sign-in requests, 10 KYC checks, 20 deposit requests, and 300 account reads.
   The limiter keeps at most 10,000 visitors and drops the oldest one when it is full.
 - An ended session token does not block a new sign-in.
-- A base address whose stake key the account already proved signs in to the same account.
+- To add a new payment key to an account with a proven stake key, sign in with the stake key first.
+- After you link the payment key, it can sign in to the same account.
 - Tally checks every wallet signature against the transaction body before it sends a deposit.
 - The UI server forwards only the account routes in `ACCOUNT_ROUTES`, only a well-formed Bearer token, and bodies up to 256 KiB.
   Only the web app origins in `TALLY_WEB_ORIGINS` may call them from a browser.
