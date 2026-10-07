@@ -142,4 +142,45 @@ describe('Masumi V2 escrow adapter (fake payment service)', () => {
     expect(kit.service.lifecycle.operations(id).find((item) => item.kind === 'lock_funds')!.status).toBe('failed');
     kit.close();
   });
+
+  test('a concession waits for the buyer refund request before seller authorization', async () => {
+    const {kit, mps} = masumiKit();
+    try {
+      const id = digital(kit);
+      acceptTerms(kit, id);
+      await runUntil(kit, id, 'funded');
+      act(kit, id, kit.sellerId, 'deliver', {milestoneId: milestone(kit, id).id, evidence: [{type: 'content_file', content: FILE}]});
+      await runUntil(kit, id, 'in_inspection');
+      act(kit, id, kit.sellerId, 'concede_refund', {milestoneId: milestone(kit, id).id});
+      await kit.service.tick();
+      expect(mps.count('/purchase/request-refund')).toBe(1);
+      expect(mps.count('/payment/authorize-refund')).toBe(0);
+      await runUntil(kit, id, 'refunded');
+      expect(mps.count('/payment/authorize-refund')).toBe(1);
+      expect(kit.service.lifecycle.operations(id).every((operation) => operation.status === 'done')).toBe(true);
+      expect(milestone(kit, id).tranches[0]!.chain.paidToBuyerAtomic).toBe('25000000');
+    } finally {
+      kit.close();
+    }
+  });
+
+  test('confirmed MPS history recovers delivery after automatic payment', async () => {
+    const {kit, mps} = masumiKit();
+    try {
+      const id = digital(kit);
+      acceptTerms(kit, id);
+      await runUntil(kit, id, 'funded');
+      const submittedAt = kit.clock.now();
+      act(kit, id, kit.sellerId, 'deliver', {milestoneId: milestone(kit, id).id, evidence: [{type: 'content_file', content: FILE}]});
+      await kit.service.lifecycle.processOperations();
+      kit.clock.set(milestone(kit, id).deadlines!.unlockTime + 30_000);
+      await runUntil(kit, id, 'settled');
+      expect(milestone(kit, id).deliveredAt).toBe(submittedAt + 3_000);
+      expect(milestone(kit, id).tranches[0]!.chain.history?.some((entry) => entry.to === 'ResultSubmitted')).toBe(true);
+      expect(kit.store.getOutcome(`${id}/m0`)?.state).toBe('successful');
+      expect(mps.count('/payment/submit-result')).toBe(1);
+    } finally {
+      kit.close();
+    }
+  });
 });

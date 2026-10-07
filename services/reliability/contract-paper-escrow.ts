@@ -15,7 +15,7 @@ import {
   EscrowRejectedError, EscrowRetryableError, type ContractClock, type ContractEscrow,
   type EscrowRequest, type EscrowResult, type EscrowStatus,
 } from '../../packages/reliability/src/contract-lifecycle/ports';
-import type {Deadlines, OnChainState} from '../../packages/reliability/src/contract-lifecycle/types';
+import type {ConfirmedEscrowTransition, Deadlines, OnChainState} from '../../packages/reliability/src/contract-lifecycle/types';
 
 export interface PaperEscrowOptions {
   /** Simulated time from submission to confirmation. */
@@ -43,7 +43,7 @@ interface PaperEscrowRecord {
   paidToSellerAtomic: string|null;
   paidToBuyerAtomic: string|null;
   settlementTxId: string|null;
-  log: Array<{at: number; kind: string; from: OnChainState|null; to: OnChainState; txId: string}>;
+  log: Array<ConfirmedEscrowTransition & {kind: string; txId: string}>;
 }
 
 const PREFIX = 'paper-';
@@ -133,7 +133,7 @@ export class PaperContractEscrow implements ContractEscrow {
         break;
       }
       case 'request_refund':
-        if (record.state !== 'FundsLocked' && record.state !== 'ResultSubmitted' && record.state !== 'Disputed') {
+        if (record.state !== 'FundsLocked' && record.state !== 'ResultSubmitted') {
           reject(`SetRefundRequested is not allowed from ${String(record.state)}`);
         }
         if (now >= deadlines.unlockTime) reject('unlockTime has passed');
@@ -144,7 +144,7 @@ export class PaperContractEscrow implements ContractEscrow {
         this.schedule(record, 'AuthorizeWithdrawal', 'WithdrawAuthorized');
         break;
       case 'authorize_refund':
-        if (!['FundsLocked', 'ResultSubmitted', 'RefundRequested', 'Disputed'].includes(record.state ?? '')) {
+        if (!['RefundRequested', 'Disputed'].includes(record.state ?? '')) {
           reject(`AuthorizeRefund is not allowed from ${String(record.state)}`);
         }
         this.schedule(record, 'AuthorizeRefund', 'RefundAuthorized', null);
@@ -173,6 +173,7 @@ export class PaperContractEscrow implements ContractEscrow {
       paidToSellerAtomic: record.paidToSellerAtomic,
       paidToBuyerAtomic: record.paidToBuyerAtomic,
       settlementTxHash: record.settlementTxId,
+      history: record.log.map(({at, from, to, resultHash}) => ({at, from, to, resultHash})),
     };
   }
 
@@ -222,7 +223,7 @@ export class PaperContractEscrow implements ContractEscrow {
       if (record.pendingTx) {
         if (now < record.pendingTx.confirmAt) return;
         const tx = record.pendingTx;
-        record.log.push({at: tx.confirmAt, kind: tx.kind, from: record.state, to: tx.to, txId: tx.txId});
+        record.log.push({at: tx.confirmAt, kind: tx.kind, from: record.state, to: tx.to, txId: tx.txId, resultHash: tx.resultHash});
         record.state = tx.to;
         record.lastTxId = tx.txId;
         if (tx.resultHash !== undefined) record.resultHash = tx.resultHash;

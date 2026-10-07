@@ -31,12 +31,12 @@ function restart(kit: Kit, databasePath: string): Kit {
   return createKit({databasePath, clock: kit.clock, keys: kit.keys, reuseParties: true});
 }
 
-function newContract(kit: Kit): string {
+function newContract(kit: Kit, milestoneCount = 1): string {
   return kit.service.lifecycle.createContract({
     templateId: 'digital-machine-checkable',
     buyerId: kit.buyerId,
     sellerId: kit.sellerId,
-    milestones: [{title: 'file', amountAtomic: '5000000', deliverable: {expectedSha256: sha(FILE)}}],
+    milestones: Array.from({length: milestoneCount}, () => ({title: 'file', amountAtomic: '5000000', deliverable: {expectedSha256: sha(FILE)}})),
   }, kit.buyerId).id;
 }
 
@@ -70,13 +70,20 @@ class TimeoutAfterSuccess implements ContractEscrow {
 /** Holds every write until released, to model a slow rail call. */
 class SlowEscrow implements ContractEscrow {
   readonly mode = 'paper' as const;
+  readonly started: Promise<void>;
   calls = 0;
+  private signalStarted: () => void = () => {};
   private release: (() => void)|null = null;
-  constructor(private readonly inner: PaperContractEscrow) {}
+  constructor(private readonly inner: PaperContractEscrow) {
+    this.started = new Promise((resolve) => {
+      this.signalStarted = resolve;
+    });
+  }
   async execute(request: EscrowRequest): Promise<EscrowResult> {
     this.calls++;
     await new Promise<void>((resolve) => {
       this.release = resolve;
+      this.signalStarted();
     });
     return this.inner.execute(request);
   }
@@ -119,6 +126,33 @@ describe('contract restart recovery', () => {
       expect(kit.store.getOutcome(`${id}/m0`)?.state).toBe('successful');
       expect(kit.store.verifyContractAuditChain()).toBeNull();
       kit.close();
+    });
+  });
+
+  test('a restart after automatic payment recovers delivery time and funds the next milestone once', async () => {
+    await withDirectory(async (directory) => {
+      const databasePath = join(directory, 'agent.sqlite');
+      let kit = createKit({databasePath});
+      try {
+        const id = newContract(kit, 2);
+        acceptTerms(kit, id);
+        await runUntil(kit, id, 'funded');
+        act(kit, id, kit.sellerId, 'deliver', {milestoneId: milestone(kit, id).id, evidence: [{type: 'content_file', content: FILE}]});
+        const deliveredAt = kit.clock.now() + kit.service.config.paperEscrow.confirmationDelayMs;
+        await kit.service.lifecycle.processOperations();
+        kit.clock.set(milestone(kit, id).deadlines!.unlockTime + kit.service.config.paperEscrow.autoWithdrawDelayMs);
+        kit = restart(kit, databasePath);
+        await runUntil(kit, id, 'settled');
+        expect(milestone(kit, id).deliveredAt).toBe(deliveredAt);
+        expect(kit.store.getOutcome(`${id}/m0`)?.state).toBe('successful');
+        expect(kit.service.lifecycle.operations(id).filter((operation) => operation.milestoneId === milestone(kit, id, 1).id && operation.kind === 'create_terms')).toHaveLength(1);
+        const events = kit.store.listReliabilityEventsForTransaction(`${id}/m0`).length;
+        await settleTicks(kit);
+        expect(kit.store.listReliabilityEventsForTransaction(`${id}/m0`)).toHaveLength(events);
+        expect(kit.store.verifyContractAuditChain()).toBeNull();
+      } finally {
+        kit.close();
+      }
     });
   });
 
@@ -171,7 +205,7 @@ describe('contract restart recovery', () => {
     const workerA = serviceWith(kit, slow, 'worker-a');
     const workerB = serviceWith(kit, paperEscrow(kit), 'worker-b');
     const pending = workerA.lifecycle.processOperations(); // claims create_terms and waits on the rail
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await slow.started;
     await workerB.lifecycle.processOperations(); // the lease is held: worker B must not send
     const terms = kit.service.lifecycle.operations(id).find((item) => item.kind === 'create_terms')!;
     expect([terms.status, terms.attempts, terms.leaseOwner]).toEqual(['pending', 1, 'worker-a']);
@@ -182,7 +216,7 @@ describe('contract restart recovery', () => {
     kit.close();
   });
 
-  test('a restart across a tier deadline escalates on the first tick', async () => {
+  test('a restart across the ruling compliance deadline records the missed obligation on the first tick', async () => {
     await withDirectory(async (directory) => {
       const databasePath = join(directory, 'agent.sqlite');
       let kit = createKit({databasePath, clock: new ManualClock(Date.UTC(2026, 9, 6, 9))});

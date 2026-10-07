@@ -1,8 +1,8 @@
 /**
  * @fileoverview The milestone state machine as an explicit transition table.
  * A pair that is not in the table is illegal. Every milestone runs this
- * machine. A milestone owns one escrow, or core and holdback escrows that
- * move in lockstep.
+ * machine. A milestone owns one escrow, or core and holdback escrows.
+ * Each escrow has a separate confirmed state.
  */
 
 import {ContractError} from './errors';
