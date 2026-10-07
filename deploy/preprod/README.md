@@ -93,6 +93,16 @@ To roll back, point `~/tally-app/current` at an older folder in `~/tally-app/rel
 
 First setup on a new server: copy the two unit files to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, run the deploy script, then `sudo systemctl enable tally-services tally-ui`.
 
+Seed the demo contracts once, so the UI has deals to show:
+
+```sh
+sudo systemctl stop tally-services
+cd ~/tally-app/current && CONTROL_DB_PATH=$HOME/tally-app/data/agent.sqlite ~/.bun/bin/bun run contracts:showcase
+sudo systemctl start tally-services
+```
+
+The seed refuses a store that already has the showcase parties. All showcase contracts are SIMULATED.
+
 ## Register the Coworkers
 
 ### Masumi registry (on-chain)

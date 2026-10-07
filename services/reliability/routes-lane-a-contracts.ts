@@ -14,6 +14,7 @@ import {sha256Hex} from '../../packages/reliability/src/contract-lifecycle/hashi
 import type {EvidenceInput, NegotiatedOutcome, Remedy} from '../../packages/reliability/src/contract-lifecycle/types';
 import {json} from '../lib/http';
 import {contractServiceFor, type ContractService} from './contract-service';
+import {CoworkerTools, type ToolResult} from './coworker-tools';
 import type {ReliabilityRoute} from './route';
 
 const STATUS_BY_CODE: {[code: string]: number} = {
@@ -26,6 +27,7 @@ const STATUS_BY_CODE: {[code: string]: number} = {
   action_id_reused: 409,
   party_exists: 409,
   evidence_too_large: 413,
+  not_in_tier_3: 409,
 };
 
 const PARTY_ACTIONS: readonly PartyActionType[] = [
@@ -139,6 +141,34 @@ function get(path: string, handle: (service: ContractService, url: URL) => unkno
   };
 }
 
+/**
+ * A read route served by the Coworker tools, so the operator UI shows the
+ * same engine numbers as the Coworkers. A tool error becomes an HTTP error.
+ */
+function toolGet(path: string, handle: (tools: CoworkerTools, url: URL) => ToolResult<unknown>): ReliabilityRoute {
+  return {
+    method: 'GET',
+    path,
+    handler: (request, url, store) => {
+      try {
+        const service = serviceFor(store);
+        const tools = new CoworkerTools(store ?? null, {config: service.config, templates: service.templates, now: () => service.now()});
+        const result = handle(tools, url);
+        if (!result.ok) return json({error: result.error.message, code: result.error.code}, STATUS_BY_CODE[result.error.code] ?? 400);
+        return json(result.result);
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  };
+}
+
+/** A milestone by number (0, 1, ...) or by id. */
+function milestoneRef(url: URL): number|string {
+  const value = requiredQuery(url, 'milestone');
+  return /^\d+$/.test(value) ? Number(value) : value;
+}
+
 function requiredQuery(url: URL, key: string): string {
   const value = url.searchParams.get(key);
   if (!value) throw new ContractError('invalid_input', `${key} is required`);
@@ -240,6 +270,22 @@ export const laneAContractRoutes: ReliabilityRoute[] = [
     await afterAction(service);
     return service.view(id);
   }),
+  // Read views for the operator UI. They use the Coworker tools.
+  toolGet('/reliability/contracts/list', (tools, url) => tools.contractSummaries({
+    partyId: url.searchParams.get('partyId') ?? undefined,
+    disputesOnly: url.searchParams.get('disputes') === '1',
+  })),
+  toolGet('/reliability/contracts/case', (tools, url) => tools.disputeCase(requiredQuery(url, 'id'), milestoneRef(url))),
+  toolGet('/reliability/contracts/ruling-options', (tools, url) => tools.rulingOptions(requiredQuery(url, 'id'), milestoneRef(url))),
+  toolGet('/reliability/contracts/ruling-payload', (tools, url) => {
+    const winner = requiredQuery(url, 'winner');
+    if (winner !== 'buyer' && winner !== 'seller') throw new ContractError('invalid_ruling', 'winner must be buyer or seller');
+    return tools.rulingSigningPayload(requiredQuery(url, 'id'), milestoneRef(url), winner, requiredQuery(url, 'reason'));
+  }),
+  toolGet('/reliability/profile', (tools, url) => tools.reliabilityProfile(requiredQuery(url, 'entityId'), {
+    counterpartyId: url.searchParams.get('counterpartyId') ?? undefined,
+  })),
+  toolGet('/reliability/profile/search', (tools, url) => tools.findEntities(requiredQuery(url, 'q'))),
   post('/reliability/contracts/tick', async (service) => {
     const result = await service.tick();
     return {mode: service.mode, now: new Date(service.now()).toISOString(), ...result};

@@ -89,6 +89,12 @@ The marketplace UI reads the control API.
 | `POST` | `/reliability/contracts/ruling` | Submit a Tier 3 ruling signed by the mediator |
 | `POST` | `/reliability/contracts/tick` | Run one contract scheduler pass |
 | `GET` | `/reliability/contracts/audit` | Read a contract audit log and its hash-chain status |
+| `GET` | `/reliability/contracts/list` | List contracts with the next action on each milestone |
+| `GET` | `/reliability/contracts/case` | Read the case file of one disputed milestone |
+| `GET` | `/reliability/contracts/ruling-options` | Simulate each Tier 3 ruling on a copy of the contract |
+| `GET` | `/reliability/contracts/ruling-payload` | Return the exact bytes that the mediator signs |
+| `GET` | `/reliability/profile` | Read a company record |
+| `GET` | `/reliability/profile/search` | Find companies by name or id |
 
 Entity, listing, and transaction reads accept an optional `id` query.
 Score reads accept an optional `entityId` query.

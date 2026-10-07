@@ -263,6 +263,39 @@ export interface RulingOption {
   reliabilityIfSettled: {state: string; fault: string|null; verificationConfidence: number|null}|null;
 }
 
+/** Who must act next on a milestone, what they must do, and by when. */
+export interface NextAction {
+  actor: 'buyer'|'seller'|'both'|'either'|'inspector'|'mediator'|'escrow'|'none';
+  action: string;
+  dueAt: Moment|null;
+}
+
+export interface ContractSummary {
+  id: string;
+  label: 'SIMULATED'|'LIVE';
+  mode: 'paper'|'live';
+  templateId: string;
+  title: string;
+  buyer: {id: string; displayName: string};
+  seller: {id: string; displayName: string};
+  total: Money;
+  createdAt: Moment;
+  remedy: string;
+  milestones: Array<{
+    id: string;
+    index: number;
+    title: string;
+    amount: Money;
+    state: MilestoneState;
+    terminal: boolean;
+    inDispute: boolean;
+    tierReached: number;
+    outcome: string|null;
+    closedReason: string|null;
+    next: NextAction;
+  }>;
+}
+
 // ---------------------------------------------------------------------------
 // The tools
 // ---------------------------------------------------------------------------
@@ -375,6 +408,54 @@ export class CoworkerTools {
   /** Scores, terms decisions, and contract history of one entity, from the store and the policies. */
   reliabilityProfile(entityId: string, options: {counterpartyId?: string} = {}): ToolResult<{[key: string]: unknown}> {
     return guard(() => this.profile(entityId, options.counterpartyId ?? null));
+  }
+
+  // ---- Views ----
+
+  /**
+   * Contracts with their milestones and the next action on each. Filters:
+   * a party (as buyer or seller) and disputes only (a dispute tier or a ruling being carried out).
+   */
+  contractSummaries(filter: {partyId?: string; disputesOnly?: boolean} = {}): ToolResult<ContractSummary[]> {
+    return guard(() => {
+      const store = this.requireStore();
+      const name = (id: string) => ({id, displayName: store.getEntity(id)?.displayName ?? id});
+      const summaries: ContractSummary[] = [];
+      for (const id of store.listContractIds({openOnly: false})) {
+        const contract = store.getContract(id);
+        if (!contract) continue;
+        if (filter.partyId && contract.buyerId !== filter.partyId && contract.sellerId !== filter.partyId) continue;
+        const milestones = contract.milestones.map((milestone) => ({
+          id: milestone.id,
+          index: milestone.index,
+          title: milestone.title,
+          amount: this.money(milestone.amountAtomic),
+          state: milestone.state,
+          terminal: TERMINAL_STATES.has(milestone.state),
+          inDispute: DISPUTE_STATES.has(milestone.state) ||
+            (milestone.state === 'resolved' && milestone.dispute.tierReached > 0),
+          tierReached: milestone.dispute.tierReached,
+          outcome: milestone.outcome,
+          closedReason: milestone.closedReason,
+          next: milestoneNextAction(contract, milestone),
+        }));
+        if (filter.disputesOnly && !milestones.some((item) => item.inDispute)) continue;
+        summaries.push({
+          id: contract.id,
+          label: contract.mode === 'paper' ? 'SIMULATED' : 'LIVE',
+          mode: contract.mode,
+          templateId: contract.terms.template.id,
+          title: contract.milestones[0]?.title ?? contract.id,
+          buyer: name(contract.buyerId),
+          seller: name(contract.sellerId),
+          total: this.money(contract.milestones.reduce((sum, item) => sum + BigInt(item.amountAtomic), 0n)),
+          createdAt: moment(contract.createdAt),
+          remedy: describeRemedy(contract.terms.remedy),
+          milestones,
+        });
+      }
+      return summaries.sort((left, right) => right.createdAt.ms - left.createdAt.ms);
+    });
   }
 
   // =========================================================================
@@ -890,7 +971,9 @@ export class CoworkerTools {
           terminal: TERMINAL_STATES.has(milestone.state),
           settlementOutcome: milestone.outcome,
           closedReason: milestone.closedReason,
-          onTime: record.onTime,
+          // The settlement record marks an undelivered funded milestone as not on time.
+          // That is final only when the milestone is closed.
+          onTime: !TERMINAL_STATES.has(milestone.state) && milestone.deliveredAt === null ? null : record.onTime,
           disputed: record.disputed,
           disputeTierReached: record.disputeTierReached,
           disputeWinner: record.disputeWinner,
@@ -960,9 +1043,63 @@ function describeRemedy(remedy: Remedy): string {
   return remedy.type;
 }
 
+const DISPUTE_STATES: ReadonlySet<MilestoneState> = new Set<MilestoneState>([
+  'disputed', 'tier_1_negotiation', 'tier_2_evidence_rule', 'tier_3_mediation', 'return_pending', 'redo_pending', 'redo_inspection',
+]);
+
+/**
+ * Who must act next, what they must do, and by when. It reads the stored
+ * milestone only. A pending escrow write means the escrow acts next.
+ */
+export function milestoneNextAction(contract: Contract, milestone: Milestone): NextAction {
+  const at = (ms: number|null|undefined) => (ms === null || ms === undefined ? null : moment(ms));
+  const next = (actor: NextAction['actor'], action: string, dueAt: number|null|undefined = null): NextAction =>
+    ({actor, action, dueAt: at(dueAt)});
+  if (TERMINAL_STATES.has(milestone.state)) return next('none', `Closed: ${milestone.outcome ?? milestone.state}`);
+  if (milestone.pending) return next('escrow', `The escrow is confirming the ${milestone.pending.kind.replaceAll('_', ' ')}`);
+  const deadlines = milestone.deadlines;
+  const dispute = milestone.dispute;
+  switch (milestone.state) {
+    case 'draft': return next('either', 'Submit the terms for acceptance');
+    case 'pending_acceptance': {
+      const buyerSigned = Boolean(contract.signatures[contract.buyerId]);
+      const sellerSigned = Boolean(contract.signatures[contract.sellerId]);
+      return next(buyerSigned ? 'seller' : sellerSigned ? 'buyer' : 'both', 'Sign the frozen terms');
+    }
+    case 'awaiting_funding':
+      return deadlines ? next('buyer', 'Fund the escrow', deadlines.payByTime) : next('none', 'Waits for the previous milestone');
+    case 'funded': return next('seller', 'Deliver the required evidence', deadlines?.submitResultTime);
+    case 'delivered':
+    case 'in_inspection': return next('buyer', 'Accept the delivery or dispute it', milestone.inspectionCutoffAt);
+    case 'accepted_pending_release':
+    case 'auto_released': return next('escrow', 'Releases the funds to the seller at unlock', deadlines?.unlockTime);
+    case 'disputed': return next('escrow', 'The first dispute tier is opening');
+    case 'tier_1_negotiation': return next('both', 'Sign one fixed outcome, or escalate', dispute.tierDeadline);
+    case 'tier_2_evidence_rule':
+      return contract.terms.judge.type === 'signed_report' ?
+        next('inspector', 'The named inspector submits a signed report', dispute.tierDeadline) :
+        next('escrow', 'The code judge decides', dispute.tierDeadline);
+    case 'tier_3_mediation': return next('mediator', 'Rule: name the winner', dispute.tierDeadline);
+    case 'return_pending':
+      return dispute.returnShipmentEvidenceId ?
+        next('seller', 'Confirm receipt of the returned goods', dispute.followUpDeadline) :
+        next('buyer', 'Ship the goods back and record the tracking', dispute.followUpDeadline);
+    case 'redo_pending': return next('seller', 'Redeliver once', dispute.followUpDeadline);
+    case 'redo_inspection': return next('buyer', 'Accept or reject the redelivery', dispute.followUpDeadline);
+    case 'resolved': {
+      const open = dispute.obligations.filter((item) => item.compliedAt === null && item.forcedAt === null);
+      if (open.length === 0) return next('escrow', 'The ruling payouts are confirming');
+      const parties = new Set(open.map((item) => item.party));
+      const due = Math.min(...open.map((item) => item.dueAt));
+      return next(parties.size > 1 ? 'both' : (open[0]?.party ?? 'both'), 'Carry out the ruling', due);
+    }
+    default: return next('none', `No next action for ${milestone.state}`);
+  }
+}
+
 /** What the engine does next from this state. Mirrors engine.ts evaluate() and the party actions. */
 function nextStep(milestone: Milestone, tier3TimeoutWinner: string): string {
-  const deadline = (ms: number|null) => (ms === null ? 'the deadline' : moment(ms).utc);
+  const deadline = (ms: number|null) => (ms === null ? 'the deadline' : moment(ms).singapore);
   switch (milestone.state) {
     case 'draft': return 'The terms are a draft. A party submits them for acceptance.';
     case 'pending_acceptance': return 'Both parties must sign the frozen terms.';
