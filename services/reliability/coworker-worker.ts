@@ -22,6 +22,7 @@ import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {AgentStore} from '../../packages/db/src/index';
 import {loadContractConfig} from './contract-config';
+import {AskService, startAskServer} from './coworker-ask';
 import {BedrockProvider, GeminiProvider, ModelError, type ModelProvider} from './coworker-models';
 import {
   answerFillIn, COWORKER_SLUGS, needsInputMessage, fillInProblems, RESULT_LIMIT_BYTES, runCoworker, type CoworkerSlug,
@@ -421,17 +422,25 @@ async function main(): Promise<void> {
   }
   const provider = providerFromEnv(env, secretsDir);
   const store = AgentStore.open(databasePath);
+  const tools = new CoworkerTools(store, {config: loadContractConfig(env)});
+  const log = (line: {[key: string]: unknown}) => console.log(JSON.stringify({at: new Date().toISOString(), ...line}));
   const worker = new CoworkerWorker({
     coworkers,
     mps: new MpsSeller(mpsToken, {baseUrl: env.MPS_BASE_URL}),
-    tools: new CoworkerTools(store, {config: loadContractConfig(env)}),
+    tools,
     provider,
     journal: new Journal(stateDir),
     priceAtomic: config.priceAtomic,
     now: () => Date.now(),
-    log: (line) => console.log(JSON.stringify({at: new Date().toISOString(), ...line})),
+    log,
   });
-  console.log(JSON.stringify({event: 'worker_started', coworkers: coworkers.map((item) => item.slug), provider: provider?.name ?? 'none'}));
+  // The website's free previews share the tools and the model, so they share its quota limits too.
+  const askPort = env.COWORKER_ASK_PORT ? Number(env.COWORKER_ASK_PORT) : null;
+  const ask = askPort ? startAskServer(new AskService({
+    tools, provider, now: () => Date.now(), log,
+    limits: env.COWORKER_ASK_MODEL_PER_DAY ? {modelAnswersPerDay: Number(env.COWORKER_ASK_MODEL_PER_DAY)} : {},
+  }), askPort) : null;
+  console.log(JSON.stringify({event: 'worker_started', coworkers: coworkers.map((item) => item.slug), provider: provider?.name ?? 'none', askPort}));
   const once = process.argv.includes('--once');
   const stop = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => stop.abort());
@@ -445,6 +454,7 @@ async function main(): Promise<void> {
       break;
     }
   } while (!stop.signal.aborted);
+  await ask?.stop();
   store.close();
 }
 

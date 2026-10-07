@@ -116,6 +116,8 @@ It needs these secrets in `~/tally-secrets`:
 | `coworker_deal_desk_key`, `coworker_mediator_key`, `coworker_trust_check_key` | Each Coworker's runtime key (`coworker_...`) | `sokosumi --preprod coworkers api-key <id> --json`, piped into the file. Never print it |
 | `gemini_api_key` or `bedrock_api_key` | Only for `COWORKER_MODEL_PROVIDER=gemini` or `bedrock` | `tally-set-secret gemini_api_key` |
 
+`COWORKER_ASK_PORT=8792` in the unit also starts the Ask a Coworker server for the website, on `127.0.0.1` only. The `tally-ui` server forwards `/coworkers/ask` to it.
+
 Install and start: copy the unit to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, then `sudo systemctl enable --now tally-coworkers`.
 Read its log with `journalctl -u tally-coworkers -f`. The journal of each Task is in `~/tally-app/data/coworker-worker`.
 

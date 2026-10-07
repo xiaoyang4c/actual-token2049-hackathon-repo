@@ -2,9 +2,9 @@ import {describe, expect, test} from 'bun:test';
 import {buildView} from './model.js';
 import {deskTitle, renderDesk} from './render.js';
 import {
-  actionFor, dealsView, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, viewerRole,
+  actionFor, dealsView, exampleFor, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, viewerRole,
 } from './tally.js';
-import {atomic, renderCompanies, renderDeals, renderMediation} from './tally-views.js';
+import {atomic, renderAsk, renderCompanies, renderDeals, renderMediation} from './tally-views.js';
 
 const NOW = Date.UTC(2026, 9, 7, 6, 0, 0);
 const HOUR = 3_600_000;
@@ -40,6 +40,7 @@ function tally(extra = {}) {
     area: 'deals', operatorTab: 'transactions', contracts: CONTRACTS, contractsError: '', party: 'kopi', selected: '', detail: null, detailError: '',
     mediation: {selected: null, caseFile: null, caseError: '', options: null, winner: 'buyer', reason: '', payload: null, busy: false, error: ''},
     companies: {query: '', results: [], selectedId: '', profile: null, busy: false, error: ''},
+    ask: {coworker: 'deal-desk', text: '', job: null, busy: false, error: ''},
     ...extra,
   };
 }
@@ -112,5 +113,38 @@ describe('tally views render safely', () => {
     }
     expect(deskTitle(view, 'mediation')).toBe('Mediation desk · Tally');
     expect(deskTitle(view, 'operator', 'contracts')).toBe('Contracts · Tally');
+    expect(deskTitle(view, 'ask')).toBe('Ask a Coworker · Tally');
+  });
+});
+
+describe('Ask a Coworker', () => {
+  const job = (extra: Record<string, unknown>) => ({id: 'j1', coworker: 'mediator', status: 'done', position: 0, mode: 'fill-in', error: null, answer: null, ...extra});
+
+  test('the form keeps the request, and the answer is escaped before it becomes Markdown', () => {
+    const html = renderAsk(tally({ask: {coworker: 'mediator', text: '<b>x</b>', busy: false, error: '',
+      job: job({answer: '## Case\n<script>alert(1)</script>\n| A | B |\n| --- | --- |\n| 1 | 2 |'})}}));
+    expect(html).toContain('value="mediator" checked');
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;</textarea>');
+    expect(html).toContain('Ask Mediator');
+    expect(html).toContain('<h3>Case</h3>');
+    expect(html).toContain('<td>1</td><td>2</td>');
+    expect(html).toContain('Answered without AI');
+    expect(html).not.toContain('<script>');
+  });
+
+  test('waiting, failed, and empty states', () => {
+    expect(renderAsk(tally({ask: {coworker: 'deal-desk', text: 'x', busy: true, error: '', job: job({status: 'queued', position: 2})}})))
+      .toContain('Tally Mediator is working (2 ahead of you)…');
+    expect(renderAsk(tally({ask: {coworker: 'deal-desk', text: 'x', busy: false, error: '', job: job({status: 'failed', error: 'The Coworkers are busy.'})}})))
+      .toContain('The Coworkers are busy.');
+    const empty = renderAsk(tally());
+    expect(empty).toContain('Your answer appears here');
+    expect(empty).toContain('Free preview: no payment, and nothing is saved.');
+  });
+
+  test('the Mediator example names a real dispute waiting for a ruling', () => {
+    expect(exampleFor('mediator', CONTRACTS)).toBe('contract: c2\nmilestone: 0');
+    expect(exampleFor('mediator', [])).toBe('contract: <contract id>\nmilestone: 0');
+    expect(exampleFor('deal-desk', CONTRACTS)).toContain('1,200 kg');
   });
 });

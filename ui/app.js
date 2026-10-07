@@ -3,10 +3,13 @@ import { loadMarketplace, loadTransaction } from "./data.js"
 import { buildView, receiptLink } from "./model.js"
 import { AREAS, deskTitle, renderDesk } from "./render.js"
 import {
-  loadCase, loadContract, loadContracts, loadProfile, loadRulingOptions, loadRulingPayload, searchCompanies,
+  askCoworker, exampleFor, loadAnswer, loadCase, loadContract, loadContracts, loadProfile, loadRulingOptions, loadRulingPayload, searchCompanies,
 } from "./tally.js"
 
 const POLL_MS = 5000
+const ASK_POLL_MS = 2000
+/** Stop waiting for an answer after this long. The worker keeps it for 30 minutes. */
+const ASK_WAIT_MS = 240_000
 const THEME_KEY = "tally-theme"
 const app = document.querySelector("#app")
 let snapshot = FIXTURE
@@ -33,6 +36,7 @@ const tally = {
   detailError: "",
   mediation: { selected: null, caseFile: null, caseError: "", options: null, winner: "buyer", reason: "", payload: null, busy: false, error: "" },
   companies: { query: "", results: [], selectedId: "", profile: null, busy: false, error: "" },
+  ask: { coworker: "deal-desk", text: "", job: null, busy: false, error: "" },
 }
 
 function paint() {
@@ -273,6 +277,35 @@ async function openCompany(id) {
   document.getElementById("company-detail")?.focus({ preventScroll: true })
 }
 
+/** Sends the request, then reads the answer every 2 seconds until it is ready. */
+async function submitAsk() {
+  const ask = tally.ask
+  if (!ask.text.trim()) {
+    ask.error = "Write a request first, or press Use an example."
+    paint()
+    return
+  }
+  Object.assign(ask, { busy: true, error: "", job: null })
+  paint()
+  try {
+    ask.job = await askCoworker(ask.coworker, ask.text.trim())
+    paint()
+    const giveUpAt = Date.now() + ASK_WAIT_MS
+    while (ask.job.status === "queued" || ask.job.status === "running") {
+      if (Date.now() > giveUpAt) throw new Error("This is taking too long. Try again in a few minutes.")
+      await new Promise((resolve) => setTimeout(resolve, ASK_POLL_MS))
+      ask.job = await loadAnswer(ask.job.id)
+      paint()
+    }
+  } catch (error) {
+    ask.error = error.message
+  } finally {
+    ask.busy = false
+    paint()
+    if (ask.job?.status === "done") document.getElementById("ask-answer")?.focus({ preventScroll: true })
+  }
+}
+
 function setArea(area) {
   tally.area = area
   const url = new URL(location.href)
@@ -302,6 +335,12 @@ app.addEventListener("click", (event) => {
     return
   } else if (button.hasAttribute("data-case")) {
     openCase(button.dataset.case, Number(button.dataset.milestone))
+    return
+  } else if (button.hasAttribute("data-ask-example")) {
+    tally.ask.text = exampleFor(tally.ask.coworker, tally.contracts)
+    tally.ask.error = ""
+    paint()
+    document.getElementById("ask-text")?.focus({ preventScroll: true })
     return
   } else if (button.hasAttribute("data-company")) {
     openCompany(button.dataset.company)
@@ -343,6 +382,7 @@ app.addEventListener("input", (event) => {
   } else if (target.id === "transaction-id") lookup.value = target.value
   else if (target.id === "ruling-reason") tally.mediation.reason = target.value
   else if (target.id === "company-query") tally.companies.query = target.value
+  else if (target.id === "ask-text") tally.ask.text = target.value
 })
 
 app.addEventListener("change", (event) => {
@@ -353,6 +393,9 @@ app.addEventListener("change", (event) => {
     tally.party = target.value
     tally.selected = ""
     tally.detail = null
+  } else if (target.name === "coworker") {
+    tally.ask.coworker = target.value
+    tally.ask.error = ""
   } else if (target.name === "winner") {
     tally.mediation.winner = target.value
     tally.mediation.payload = null
@@ -365,6 +408,7 @@ app.addEventListener("submit", (event) => {
   if (event.target.id === "lookup-form") inspect(lookup.value)
   else if (event.target.id === "ruling-form") prepareRuling()
   else if (event.target.id === "company-form") findCompanies()
+  else if (event.target.id === "ask-form" && !tally.ask.busy) submitAsk()
 })
 
 async function loop() {

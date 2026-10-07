@@ -89,6 +89,20 @@ A model whose daily quota is used up is skipped until it resets. A model still o
 The next model in the list answers. If that happens in the middle of an answer, the answer starts again on the next model.
 While every model is out of quota or overloaded, the worker answers in the fill-in format and checks the request before payment, as with `none`.
 
+### On the Tally website
+
+The Ask a Coworker area of the Tally website sends requests to the same Coworkers.
+The worker answers them when `COWORKER_ASK_PORT` is set, on `127.0.0.1` only. The website forwards two routes to it.
+These answers are a free preview: no Masumi payment, no Sokosumi Task, and nothing is stored. Every tool only reads, and a draft uses a sandbox.
+
+[`../coworker-ask.ts`](../coworker-ask.ts) keeps the website from using the model quota that paid Tasks need:
+
+- A request in the fill-in format never uses the model.
+- At most 10 website answers a day use the model (`COWORKER_ASK_MODEL_PER_DAY`). After that, a plain-English request gets the fill-in format.
+- Each visitor can ask 5 times every 10 minutes.
+- One answer runs at a time, and at most 5 wait.
+- An answer stays readable for 30 minutes. The worker keeps jobs in memory, so a restart forgets them.
+
 ### Fill-in format
 
 Deal Desk:

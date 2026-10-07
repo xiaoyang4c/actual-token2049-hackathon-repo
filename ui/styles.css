@@ -300,6 +300,25 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
 .status-successful .status-dot { background: var(--success); }
 .status-pending .status-dot { background: var(--pending); }
 #company-form { padding: 16px 18px; }
+/* Ask a Coworker: the answer is the main column. */
+.workspace.ask-workspace { grid-template-columns: minmax(300px, 1fr) minmax(0, 1.7fr); }
+.ask-form { display: grid; gap: 10px; padding: 16px 18px; }
+.ask-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.ask-form legend, .ask-form > label { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.ask-choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 13px; }
+.ask-choice:has(input:checked) { border-color: var(--accent); background: var(--selected); }
+.ask-choice input { margin-top: 3px; }
+.ask-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.md-answer { font-size: 13px; line-height: 1.6; }
+.md-answer h3 { font-size: 16px; margin: 14px 0 6px; }
+.md-answer h4, .md-answer h5, .md-answer h6 { font-size: 13px; margin: 16px 0 4px; }
+.md-answer p { margin: 8px 0; }
+.md-answer hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+.md-answer code { font: 12px ui-monospace, "SFMono-Regular", Consolas, monospace; background: var(--surface); padding: 1px 4px; border-radius: 3px; }
+.md-answer pre code { padding: 0; background: none; }
+.md-list { margin: 6px 0; padding-left: 20px; }
+.md-list li { margin: 3px 0; }
+.md-table { overflow-x: auto; margin: 8px 0; }
 
 @media (max-width: 1250px) {
   .app-header { gap: 30px; padding: 0 28px; }
@@ -314,6 +333,7 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
   nav { order: 3; flex: 1 0 100%; min-width: 0; overflow-x: auto; height: 46px; }
   nav button { flex: 0 0 auto; white-space: nowrap; }
   .workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .workspace.ask-workspace { grid-template-columns: minmax(0, 1fr); }
   .receipt { max-width: none; }
   .kyc-examples { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

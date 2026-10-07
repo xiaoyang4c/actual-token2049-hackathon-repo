@@ -1,9 +1,10 @@
-// Tally views: My deals, Mediation desk, Companies, and the operator's
-// contract list. Render only. Every amount and deadline comes from the API.
+// Tally views: My deals, Mediation desk, Companies, Ask a Coworker, and the
+// operator's contract list. Render only. Every amount and deadline comes from the API.
 
 import { escapeHtml, formatPct, label } from "./format.js"
+import { renderMarkdown } from "./markdown.js"
 import {
-  STEPS, actionFor, dealsView, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, stateTone, viewerRole,
+  COWORKERS, STEPS, actionFor, coworkerName, dealsView, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, stateTone, viewerRole,
 } from "./tally.js"
 
 const e = escapeHtml
@@ -252,6 +253,43 @@ export function renderCompanies(tally) {
         </section>
         <p class="fine">Tally records cover deals on this platform only. This is information, not a credit rating. Tally does not set contract terms from scores yet.</p>`}
     </aside>
+  </div>`
+}
+
+// ---------------------------------------------------------------------------
+// Ask a Coworker
+// ---------------------------------------------------------------------------
+
+function answerPanel(job) {
+  if (!job) return empty("Your answer appears here", "Pick a Coworker, write your request, and press Ask. A fill-in request takes a second. A plain-English request can take a minute.")
+  if (job.status === "queued" || job.status === "running") {
+    return `<p class="loading" role="status">${e(coworkerName(job.coworker))} is working${job.position ? ` (${e(job.position)} ahead of you)` : ""}…</p>`
+  }
+  if (job.status === "failed") return `<div class="connection-notice" role="status">${e(job.error ?? "The Coworker could not answer.")}</div>`
+  const tag = job.mode === "model" ? "AI answer" : job.mode === "fill-in" ? "Answered without AI" : "Needs more detail"
+  // The answer is untrusted text. renderMarkdown escapes it before it adds any markup.
+  return `<div class="detail-top"><h2>${e(coworkerName(job.coworker))}</h2><span class="mode-label">${e(tag)}</span></div>
+    <div class="md-answer">${renderMarkdown(job.answer)}</div>`
+}
+
+export function renderAsk(tally) {
+  const ask = tally.ask
+  const chosen = COWORKERS.find((item) => item.slug === ask.coworker) ?? COWORKERS[0]
+  return `<div class="workspace ask-workspace">
+    <section class="panel ask-panel" aria-label="Ask a Coworker">
+      <form id="ask-form" class="ask-form">
+        <fieldset><legend>Coworker</legend>
+          ${COWORKERS.map((item) => `<label class="ask-choice"><input type="radio" name="coworker" value="${e(item.slug)}" ${item.slug === chosen.slug ? "checked" : ""}><span><strong>${e(item.name)}</strong><small>${e(item.does)}</small></span></label>`).join("")}
+        </fieldset>
+        <label for="ask-text">Your request</label>
+        <textarea id="ask-text" rows="7" maxlength="4000" placeholder="${e(chosen.example)}">${e(ask.text)}</textarea>
+        <div class="ask-actions"><button type="submit" class="button" ${ask.busy ? "disabled" : ""}>${ask.busy ? "Working…" : `Ask ${e(chosen.name)}`}</button>
+          <button type="button" class="text-button" data-ask-example>Use an example</button></div>
+        ${ask.error ? `<p class="data-warning" role="status">${e(ask.error)}</p>` : ""}
+        <p class="fine">Free preview: no payment, and nothing is saved. Plain English uses an AI model with a small daily allowance. The fill-in format always works. For a paid Task with escrow, hire the Coworker on Sokosumi.</p>
+      </form>
+    </section>
+    <aside class="panel receipt" id="ask-answer" tabindex="-1" aria-label="Answer" aria-live="polite">${answerPanel(ask.job)}</aside>
   </div>`
 }
 

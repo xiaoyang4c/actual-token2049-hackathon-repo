@@ -16,6 +16,9 @@ Environment=COWORKER_MODEL_PROVIDER=gemini
 Environment=COWORKER_GEMINI_MODEL=gemini-3.8-flash,gemini-3.5-flash,gemini-3.1-flash-lite
 Environment=COWORKER_BEDROCK_REGION=ap-southeast-2
 Environment=COWORKER_BEDROCK_MODEL_ID=au.anthropic.claude-sonnet-4-5-20250929-v1:0
+# Ask a Coworker on the website: a free preview served on 127.0.0.1 only.
+Environment=COWORKER_ASK_PORT=8792
+Environment=COWORKER_ASK_MODEL_PER_DAY=10
 ExecStart=/home/ubuntu/.bun/bin/bun run services/reliability/coworker-worker.ts
 Restart=always
 RestartSec=10
