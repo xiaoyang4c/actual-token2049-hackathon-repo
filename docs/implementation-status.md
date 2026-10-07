@@ -81,7 +81,7 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for stage and evidence ru
 | Legacy records | Reconcile old live stages that lack proof. Repair score history when a valid baseline cannot be recovered. |
 | Policy history | Version the selected parameters. Keep a paper score history apart from live evidence. |
 | Operator freshness | Add pagination, bounded reads, and clear source labels. |
-| Marketplace startup | Remove the legacy trading runtime and market-feed startup dependencies. Preserve shared storage and payment functions. |
+| Source retirement | Marketplace startup and store ownership are separate from the retired trading demo. Refactor the shared core payment types before deleting legacy source files. |
 
 ## Payment boundaries
 
@@ -108,11 +108,12 @@ Invoice payments are paper. They record `settlementVerified: false`.
 
 ## Validation
 
-All 723 local tests pass under `packages`, `services`, and `ui`.
+All 729 local tests pass under `packages`, `services`, and `ui`.
 One intermittent failure appeared once in 13 full runs on 2026-10-07. It did not reproduce, and its test is not identified yet.
 The control and payment TypeScript checks pass.
 Lint passes.
 Regression tests cover all seven gaps, restart behavior, and two database writers.
+Startup tests cover direct store ownership, existing paper book reads, and damaged legacy books.
 Score tests reproduce the worked example in the math page.
 Escrow checks use injected ports and offline adapter tests.
 They make no live chain calls.

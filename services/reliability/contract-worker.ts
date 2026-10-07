@@ -9,16 +9,10 @@
  * same escrow write, but one worker is the tested setup.
  */
 
-import {mkdirSync} from 'node:fs';
-import {dirname} from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {AgentStore} from '../../packages/db/src/index';
+import {openControlStore} from '../control-store';
 import {ContractService} from './contract-service';
 
-// Same default as the control API (services/agent-runtime.ts).
-const databasePath = process.env.CONTROL_DB_PATH ?? fileURLToPath(new URL('../.data/agent.sqlite', import.meta.url));
-mkdirSync(dirname(databasePath), {recursive: true});
-const store = AgentStore.open(databasePath);
+const store = openControlStore();
 const service = new ContractService(store);
 const label = service.mode === 'live' ? 'LIVE preprod' : 'paper';
 console.log(`[contract-worker] ${label} mode, custody ${service.config.settings.custodyModel}, every ${service.config.workerIntervalMs} ms`);

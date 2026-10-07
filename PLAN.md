@@ -96,6 +96,8 @@ It does not fund lifecycle escrow or return allocated credit after a refund.
 ## Source retirement
 
 The old trading plans and demo evidence are retired.
-Shared runtime code still supplies the control API store and payment types.
-Refactor these dependencies before deleting their source files or migrations.
-Separate marketplace startup from the legacy market feed during that refactor.
+The marketplace control API opens the shared store without the trading runtime.
+The marketplace launcher does not start the legacy market feed or score provider.
+Run `bun run services:legacy` for the retired paper trading demo.
+Payment code still uses shared core types.
+Refactor those types before deleting their source files or migrations.
