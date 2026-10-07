@@ -391,3 +391,14 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
   button { transition: background-color 120ms ease, color 120ms ease; }
   html { scroll-behavior: smooth; }
 }
+:where(.app-header nav) .evidence-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  color: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}

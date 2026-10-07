@@ -1,0 +1,7 @@
+demo-settings:
+  user-workflow:
+    workflow-name: tally-payment-evidence
+  workflow-artifacts:
+    workflow-path: ./main.ts
+    config-path: ./config.json
+    secrets-path: ./secrets.yaml

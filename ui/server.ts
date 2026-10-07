@@ -45,6 +45,7 @@ const PROXY_PATHS = new Set([
 ])
 
 const ASK_PATH = "/coworkers/ask"
+const EVIDENCE_PATHS = new Set(["/reliability/evidence/info", "/reliability/evidence/check"])
 /** A request is at most 4,000 characters; the JSON around it is small. */
 const ASK_BODY_LIMIT = 16_384
 
@@ -79,11 +80,12 @@ const proxyAsk = async (askUrl: string, req: Request, visitor: string, search: s
   }
 }
 
-const proxyGet = async (controlApiUrl: string, path: string) => {
+const proxyGet = async (controlApiUrl: string, path: string, visitor?: string) => {
   try {
     const upstream = await fetch(`${controlApiUrl}${path}`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(visitor ? 25_000 : 2500),
+      headers: visitor ? {"x-forwarded-for": visitor} : undefined,
     })
     const body = await upstream.text()
     return new Response(body, {
@@ -102,6 +104,7 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string; askUr
   const port = options?.port ?? Number(process.env.UI_PORT ?? 8791)
   const controlApiUrl = (options?.controlApiUrl ?? process.env.CONTROL_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "")
   const askUrl = (options?.askUrl ?? process.env.COWORKER_ASK_URL ?? "http://127.0.0.1:8792").replace(/\/$/, "")
+  const evidenceUrl = (process.env.CHAINLINK_EVIDENCE_URL ?? "http://127.0.0.1:8793").replace(/\/$/, "")
 
   return Bun.serve({
     hostname: "127.0.0.1",
@@ -111,6 +114,9 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string; askUr
       let res: Response
       if (url.pathname === ASK_PATH && (req.method === "POST" || req.method === "GET")) {
         res = await proxyAsk(askUrl, req, visitorOf(req, server.requestIP(req)?.address), url.search)
+      } else if ((req.method === "GET" || req.method === "HEAD") && EVIDENCE_PATHS.has(url.pathname)) {
+        res = await proxyGet(evidenceUrl, url.pathname + url.search, visitorOf(req, server.requestIP(req)?.address))
+        if (req.method === "HEAD") res = new Response(null, {status: res.status, headers: res.headers})
       } else if ((req.method === "GET" || req.method === "HEAD") && PROXY_PATHS.has(url.pathname)) {
         res = await proxyGet(controlApiUrl, url.pathname + url.search)
         // HEAD gets the GET status and headers with no body.

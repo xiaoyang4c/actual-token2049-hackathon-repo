@@ -17,6 +17,7 @@ import {AskService} from '../services/reliability/coworker-ask';
 import {CoworkerTools} from '../services/reliability/coworker-tools';
 import {contractServiceFor} from '../services/reliability/contract-service';
 import {reliabilityRoutes} from '../services/reliability/index';
+import {createEvidenceProxyRoutes} from '../services/reliability/routes-evidence';
 
 process.env.CARDANO_MODE = 'simulated';
 process.env.CARDANO_ALLOW_NETWORK = 'false';
@@ -25,6 +26,8 @@ const SEED = join(process.cwd(), '.demo-data/demo.sqlite');
 const DATABASE = '/tmp/tally-demo.sqlite';
 const json = (body: unknown, status = 200) => Response.json(body, {status, headers: {'cache-control': 'no-store'}});
 const routes = new Map(reliabilityRoutes.filter((route) => route.method === 'GET').map((route) => [route.path, route]));
+// Only these two reads reach EC2. The rest of the Vercel demo stays on paper data.
+for (const route of createEvidenceProxyRoutes(process.env.CHAINLINK_EVIDENCE_URL ?? 'https://13-210-42-0.sslip.io')) routes.set(route.path, route);
 
 function open() {
   if (!existsSync(DATABASE)) copyFileSync(SEED, DATABASE);

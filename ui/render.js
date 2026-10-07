@@ -47,7 +47,7 @@ function renderHeader(view, theme, area) {
   return `<header class="app-header">
     <a class="brand" href="/" aria-label="Tally home">${BRAND_MARK}Tally</a>
     <nav aria-label="Tally views">${AREAS.map((name) =>
-      `<button type="button" id="nav-${name}" data-area="${name}" ${area === name ? 'aria-current="page"' : ""}>${AREA_TEXT[name][0]}</button>`).join("")}</nav>
+      `<button type="button" id="nav-${name}" data-area="${name}" ${area === name ? 'aria-current="page"' : ""}>${AREA_TEXT[name][0]}</button>`).join("")}<a href="/evidence" class="evidence-nav-link">Evidence checker</a></nav>
     <div class="header-status"><span class="local-label">Demo · read only</span><span class="connection connection-${view.source}"><span class="status-dot" aria-hidden="true"></span>${connection}</span>
     <button type="button" id="theme-toggle" class="icon-button" data-theme-toggle aria-label="Switch to ${theme === "dark" ? "light" : "dark"} mode" title="Switch to ${theme === "dark" ? "light" : "dark"} mode">${icon(theme === "dark" ? "sun" : "moon")}</button>
     <button type="button" id="refresh-marketplace" class="icon-button" data-refresh aria-label="Refresh marketplace">${icon("refresh")}</button></div>

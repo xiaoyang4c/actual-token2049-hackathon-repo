@@ -2,7 +2,8 @@
 
 A front end for Tally: deals, contracts, the mediation desk, company records, the Deal Desk, Ask a
 Coworker, the Coworkers and the operator ledger. It reads the control API and never signs, funds or
-submits a contract action. Its one input is Ask a Coworker, a free preview that pays and stores nothing.
+submits a contract action. Ask a Coworker gives a free preview that pays and stores nothing.
+The evidence checker accepts payment details through a GET read.
 
 ## Run
 
@@ -34,6 +35,7 @@ that the Coworkers are offline; every other view works.
 | Ask a Coworker | Deal Desk, Mediator or Trust Check answers a request, fill-in format or plain English | `POST /coworkers/ask`, `GET /coworkers/ask?id=` |
 | Coworkers | The three Coworkers, their tools, the Masumi payment flow, registrations | static |
 | Operator | Transactions with receipts, outcomes and KYC that need attention, participants and scores, listings | `transactions`, `receipts`, `entities`, `scores`, `listings` |
+| Evidence checker | Recipient, net test USDM amount, and confirmations. Real CRE simulation with live preprod reads. No DON signature | `evidence/info`, `evidence/check` |
 
 All control API routes are under `/reliability/` and are GET. `contracts/draft` runs `createContract`
 in an in-memory sandbox through `CoworkerTools.draftContract` and stores nothing.

@@ -15,6 +15,7 @@ import {DealDeskPage} from '@/pages/DealDesk'
 import {DealsPage} from '@/pages/Deals'
 import {MediationPage} from '@/pages/Mediation'
 import {OperatorPage} from '@/pages/Operator'
+import {EvidencePage} from '@/pages/Evidence'
 
 function ScrollReset() {
   const {pathname} = useLocation()
@@ -36,6 +37,7 @@ function AnimatedRoutes() {
           <Route path="/ask" element={<AskPage />} />
           <Route path="/coworkers" element={<CoworkersPage />} />
           <Route path="/operator" element={<OperatorPage />} />
+          <Route path="/evidence" element={<EvidencePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </PageIn>

@@ -1,6 +1,6 @@
 import {useMemo, useState, type ReactNode} from 'react'
 import {Link, NavLink} from 'react-router-dom'
-import {Bot, Building2, FilePenLine, Gavel, LayoutList, Menu, MessageSquareText, TableProperties} from 'lucide-react'
+import {Bot, Building2, FilePenLine, Gavel, LayoutList, Menu, MessageSquareText, ShieldCheck, TableProperties} from 'lucide-react'
 import {Brand, useLens} from '@/components/kit'
 import Waves from '@/components/reactbits/Waves'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
@@ -17,6 +17,7 @@ const NAV = [
   {to: '/ask', label: 'Ask a Coworker', icon: MessageSquareText},
   {to: '/coworkers', label: 'Coworkers', icon: Bot},
   {to: '/operator', label: 'Operator', icon: TableProperties},
+  {to: '/evidence', label: 'Evidence checker', icon: ShieldCheck},
 ]
 
 function Nav({onNavigate}: {onNavigate?: () => void}) {

@@ -39,6 +39,7 @@ Read [Contract lifecycle](contract-lifecycle.md).
 | Tally UI | Read-only areas: My deals, Mediation desk, Companies, and Operator (transactions, attention, participants, listings, and contracts). Ask a Coworker gives a free preview. A public demo with paper data | Sign-in, per-party visibility, pagination, and clear source labels |
 | Coworkers | Three Sokosumi Coworkers on the Masumi registry, with engine-backed tools and instructions. The Task worker takes paid Tasks through Masumi escrow, with Gemini or the fill-in format. The first paid Task was collected on preprod | Bedrock with the instance role, and the Mediator signing flow back into Tally |
 | Settlement anchors | Fingerprints of settled records, chained per company, posted to Cardano preprod as CIP-20 messages, with confirm-or-expire batch rules. The website shows anchor status | The first live batch (waits for the go-ahead), and a signed chain head for lenders |
+| Chainlink payment evidence | UI checker for a preprod transaction, recipient, net test USDM amount, and three confirmations. Uses the official CRE simulator and Blockfrost. Reads only | Authorized DON deployment, Vault secrets, and signed report verification. Read [Payment evidence](chainlink-evidence.md) |
 | Hosted demo | A preprod server with the payment service, the control API, the UI, and six showcase contracts | A live escrow run and a running contract worker |
 | Pooled funding | Paper deposits and deal allocations | Escrow integration, return credits, and reconciliation |
 

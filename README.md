@@ -22,6 +22,7 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Reliability record | Separate buyer and seller scores per category, terms decisions, and mock KYC. Ignored rulings count against a party. | [Reliability math](docs/reliability-math.md) |
 | Coworkers on Sokosumi | Tally Deal Desk drafts contracts. Tally Mediator drafts rulings for a human mediator. Tally Trust Check explains a company's record. Every number comes from Tally's code. | [Tally Coworkers](services/reliability/coworkers/README.md) |
 | Tally UI | My deals, Mediation desk, Companies, and Operator views. Read-only. | [UI instructions](ui/README.md) |
+| Chainlink evidence checker | Checks a payment recipient, net test USDM amount, and confirmations in the UI. Runs the real CRE workflow in simulation against live preprod data. | [Payment evidence](docs/chainlink-evidence.md) |
 
 ## Status
 
@@ -33,6 +34,7 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Coworkers | Registered on the Masumi registry and approved in the TOKEN2049 workspace. The Task worker runs on the server. Paid Tasks complete with Masumi escrow on preprod, and the first collection is confirmed |
 | Settlement anchors | Built. Fingerprints of settled records, chained per company, for Cardano preprod. Posting waits for the team's go-ahead. Read [Settlement anchors](docs/settlement-anchors.md) |
 | Tally UI | Hosted publicly with six showcase contracts and Ask a Coworker (a free preview) |
+| Chainlink payment evidence | Built and tested through the UI. Read-only CRE simulation. No DON signature. EC2 activation waits for CRE authentication |
 | Scoring, pair decay, fees | Stubs. Read [Implementation status](docs/implementation-status.md) |
 | KYC | Mock provider |
 | Sign-in | Not built. Role views in the UI are lenses, not access control |
