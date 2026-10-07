@@ -24,8 +24,11 @@ The written phrase is the only backup.
 Every way signs in with the stake address (`stake_test1…`).
 A stake address cannot receive funds.
 Send test funds to a receive address (`addr_test1…`) on Preprod.
-The Account page shows the receive address of the browser wallet on this device.
-Lace and Eternl show their receive address on their Receive screen.
+The **Receive test funds** section on the Account page shows the receive address:
+
+- A browser wallet: the base address of the wallet on this device.
+- A wallet extension: the extension's change address, after you select **Show my receive address**.
+  The page shows it only if its stake part matches a proven stake address.
 
 A signed-in account can add more wallets.
 A wallet belongs to one account.

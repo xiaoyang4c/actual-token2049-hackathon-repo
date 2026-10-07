@@ -56,6 +56,26 @@ export function addressToBech32(addressHex: string): string {
   return bech32.encode(prefix, bech32.toWords(bytes), 1000)
 }
 
+/**
+ * True when a base address carries the stake credential of `stakeAddress`, so
+ * both belong to one wallet. A base address holds the payment part in bytes
+ * 1-28 and the stake part in bytes 29-56 (CIP-19).
+ */
+export function sharesStakeKey(baseAddress: string, stakeAddress: string): boolean {
+  try {
+    const base = bech32.fromWords(bech32.decode(baseAddress as `${string}1${string}`, 1000).words)
+    const stake = bech32.fromWords(bech32.decode(stakeAddress as `${string}1${string}`, 1000).words)
+    const baseType = base[0]! >> 4
+    const stakeType = stake[0]! >> 4
+    if (base.length !== 57 || stake.length !== 29 || baseType > 3 || (stakeType !== 0xe && stakeType !== 0xf)) return false
+    // Base types 2 and 3 have a script stake part, as does reward type 0xf.
+    if ((baseType >= 2) !== (stakeType === 0xf)) return false
+    return base.slice(29).every((byte, index) => byte === stake[index + 1])
+  } catch {
+    return false
+  }
+}
+
 /** Connects and checks the network. Preprod and preview report network id 0. */
 export async function connect(id: string): Promise<Cip30Api> {
   const wallet = window.cardano?.[id]

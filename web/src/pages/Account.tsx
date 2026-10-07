@@ -14,7 +14,7 @@ import {
   AccountApiError, type AccountView, type Profile, type Session,
 } from '@/lib/account'
 import {isRecoveryPhrase, newRecoveryPhrase, normalizePhrase, walletFromPhrase} from '@/lib/cardano-keys'
-import {installedWallets, type InstalledWallet} from '@/lib/cip30'
+import {addressToBech32, installedWallets, sharesStakeKey, type InstalledWallet} from '@/lib/cip30'
 import {deviceWallet, forgetDeviceWallet, receiveAddressFor, saveDeviceWallet, unlockDeviceWallet} from '@/lib/device-wallet'
 import {cn} from '@/lib/utils'
 
@@ -60,6 +60,64 @@ function ReceiveAddress({address}: {address: string}) {
         {copied ? <Check className="size-3.5 text-up" /> : <Copy className="size-3.5" />}
       </button>
     </span>
+  )
+}
+
+/**
+ * The receive address (addr_test1…) of the signed-in wallet. Sign-in uses the
+ * stake address, which cannot receive funds. A browser wallet reads the address
+ * from this device. A wallet extension gives its change address on request.
+ */
+function ReceiveFunds({session, account}: {session: Session; account: AccountView}) {
+  const [fromExtension, setFromExtension] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const extension = session.via.startsWith('cip30:') ? session.via.slice('cip30:'.length) : null
+  const stakeAddresses = account.wallets.filter((wallet) => wallet.credentialKind === 'stake').map((wallet) => wallet.address)
+  const onThisDevice = stakeAddresses.map((stake) => receiveAddressFor(stake)).find((address) => address !== null) ?? null
+  // A wallet without a stake address signs in with a payment address, which can receive funds.
+  const provenPayment = account.wallets.find((wallet) => wallet.credentialKind === 'payment')?.address ?? null
+  const address = fromExtension ?? onThisDevice ?? provenPayment
+
+  const ask = async () => {
+    if (!extension) return
+    setBusy(true); setError(null)
+    try {
+      const change = addressToBech32(await (await connect(extension)).getChangeAddress())
+      if (!stakeAddresses.some((stake) => sharesStakeKey(change, stake)) && !account.wallets.some((wallet) => wallet.address === change)) {
+        throw new Error('The wallet extension shows another wallet. Switch it to the wallet that you signed in with, then try again.')
+      }
+      setFromExtension(change)
+    } catch (e) {
+      setError(message(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 text-[13px] text-ink-2">
+      {address ? (
+        <>
+          <p>Send test ADA or test USDM to this address from a wallet set to Preprod. The funds go to your own wallet. Tally does not hold them.</p>
+          <ReceiveAddress address={address} />
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
+            <a className="underline" href={`https://preprod.cardanoscan.io/address/${address}`} target="_blank" rel="noreferrer">See the balance on Cardanoscan <ExternalLink className="inline size-3" /></a>
+            <a className="underline" href="https://dispenser.masumi.network" target="_blank" rel="noreferrer">Get test funds from the Masumi dispenser <ExternalLink className="inline size-3" /></a>
+          </p>
+        </>
+      ) : extension ? (
+        <>
+          <p>Your wallet extension holds the receive address. Tally asks the wallet for it. This moves no funds.</p>
+          <button type="button" className={SECONDARY} disabled={busy} onClick={ask}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}Show my receive address
+          </button>
+        </>
+      ) : (
+        <p>This browser has no copy of your wallet. Sign out, then select Restore from a recovery phrase to show the receive address here. You can also open the Receive screen of a wallet app with the same phrase, set to Preprod.</p>
+      )}
+      {error ? <ErrorNote>{error}</ErrorNote> : null}
+    </div>
   )
 }
 
@@ -482,30 +540,18 @@ export function AccountPage() {
             <Reveal delay={0.05}>
               <Section title="Wallets" aside={<button type="button" className="text-[12.5px] font-medium text-ink-2 hover:text-ink" onClick={() => setAdding(!adding)}>{adding ? 'Close' : 'Add a wallet'}</button>}>
                 <ul className="space-y-2.5">
-                  {account.wallets.map((wallet) => {
-                    const receive = receiveAddressFor(wallet.address)
-                    return (
-                      <li key={wallet.address} className="space-y-1.5 text-[13px]">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Hash value={wallet.address} n={12} />
-                          <Tag tone="quiet">{wallet.credentialKind === 'stake' ? 'whole wallet' : 'one address'}</Tag>
-                          <span className="text-ink-3">{wallet.source === 'browser' ? 'browser wallet' : wallet.walletName ?? 'extension'}</span>
-                        </div>
-                        {receive ? (
-                          <div className="space-y-1">
-                            <p className="text-[11.5px] text-ink-3">Receive address. Send test ADA and test USDM here.</p>
-                            <ReceiveAddress address={receive} />
-                          </div>
-                        ) : null}
-                      </li>
-                    )
-                  })}
+                  {account.wallets.map((wallet) => (
+                    <li key={wallet.address} className="flex flex-wrap items-center gap-2 text-[13px]">
+                      <Hash value={wallet.address} n={12} />
+                      <Tag tone="quiet">{wallet.credentialKind === 'stake' ? 'whole wallet' : 'one address'}</Tag>
+                      <span className="text-ink-3">{wallet.source === 'browser' ? 'browser wallet' : wallet.walletName ?? 'extension'}</span>
+                    </li>
+                  ))}
                 </ul>
                 {account.wallets.some((wallet) => wallet.credentialKind === 'stake') ? (
                   <p className="mt-3 text-[11.5px] text-ink-3">
                     A <span className="mono">stake_test1</span> address signs in for the whole wallet. It cannot receive funds.
-                    Send funds to a receive address that starts with <span className="mono">addr_test1</span>.
-                    Lace and Eternl show it on their Receive screen. Set the sending wallet to Preprod.
+                    Use the receive address under Receive test funds.
                   </p>
                 ) : null}
                 {adding ? <div className="mt-5 border-t border-border pt-5"><WalletChoices session={session} onSignedIn={signedIn} profile={{}} /></div> : null}
@@ -513,6 +559,12 @@ export function AccountPage() {
               </Section>
             </Reveal>
           </div>
+
+          <Reveal>
+            <Section title="Receive test funds" aside="Cardano preprod">
+              <ReceiveFunds session={session} account={account} />
+            </Section>
+          </Reveal>
 
           {APP_EDITION && appAccount.me ? <Reveal>
             <Section title="Set up deal signing" aside={appAccount.me.party ? <Tag tone="up">registered</Tag> : <Tag tone="warn">needed</Tag>}>
