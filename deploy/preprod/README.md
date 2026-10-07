@@ -117,7 +117,7 @@ It needs these secrets in `~/tally-secrets`:
 | --- | --- | --- |
 | `mps_worker_token` | A payment service API key with read and pay permission, Preprod only. Not the admin key | `POST /api/v1/api-key` with the admin key |
 | `coworker_deal_desk_key`, `coworker_mediator_key`, `coworker_trust_check_key` | Each Coworker's runtime key (`coworker_...`) | `sokosumi --preprod coworkers api-key <id> --json`, piped into the file. Never print it |
-| `gemini_api_key` or `bedrock_api_key` | Only for `COWORKER_MODEL_PROVIDER=gemini` or `bedrock` | `tally-set-secret gemini_api_key` |
+| `gemini_api_key`, `bedrock_api_key`, or `openai_compatible_api_key` | Only for `COWORKER_MODEL_PROVIDER=gemini`, `bedrock`, or `openai-compatible` | `tally-set-secret gemini_api_key` |
 
 `COWORKER_ASK_PORT=8792` in the unit also starts the Coworker chat server for the website, on `127.0.0.1` only. The `tally-ui` server forwards `/coworkers/ask` to it.
 

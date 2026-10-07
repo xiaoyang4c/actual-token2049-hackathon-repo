@@ -23,7 +23,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {AgentStore} from '../../packages/db/src/index';
 import {loadContractConfig} from './contract-config';
 import {AskService, startAskServer} from './coworker-ask';
-import {BedrockProvider, GeminiProvider, ModelError, type ModelProvider} from './coworker-models';
+import {BedrockProvider, GeminiProvider, ModelError, OpenAiCompatibleProvider, type ModelProvider} from './coworker-models';
 import {
   answerFillIn, COWORKER_SLUGS, needsInputMessage, fillInProblems, RESULT_LIMIT_BYTES, runCoworker, type CoworkerSlug,
 } from './coworker-runner';
@@ -384,7 +384,7 @@ function secret(directory: string, name: string): string|null {
 /** Each model has its own free-tier quota (20 requests a day in October 2026), so the worker tries them in turn. */
 export const DEFAULT_GEMINI_MODELS = 'gemini-3.8-flash,gemini-3.5-flash,gemini-3.1-flash-lite';
 
-/** Builds the provider from COWORKER_MODEL_PROVIDER: none, gemini, or bedrock. */
+/** Builds the provider from COWORKER_MODEL_PROVIDER: none, gemini, bedrock, or openai-compatible. */
 export function providerFromEnv(env: Record<string, string|undefined>, secretsDir: string): ModelProvider|null {
   const name = (env.COWORKER_MODEL_PROVIDER ?? 'none').trim().toLowerCase();
   if (name === 'none') return null;
@@ -399,7 +399,17 @@ export function providerFromEnv(env: Record<string, string|undefined>, secretsDi
     return new BedrockProvider(key, env.COWORKER_BEDROCK_REGION ?? 'ap-southeast-2',
       env.COWORKER_BEDROCK_MODEL_ID ?? 'au.anthropic.claude-sonnet-4-5-20250929-v1:0');
   }
-  throw new Error(`COWORKER_MODEL_PROVIDER must be none, gemini, or bedrock (got ${name})`);
+  if (name === 'openai-compatible') {
+    const key = secret(secretsDir, 'openai_compatible_api_key');
+    if (!key) throw new Error('COWORKER_MODEL_PROVIDER=openai-compatible needs the openai_compatible_api_key secret');
+    const baseUrl = env.COWORKER_OPENAI_BASE_URL?.trim();
+    const models = env.COWORKER_OPENAI_MODEL?.trim();
+    if (!baseUrl || !models) throw new Error('COWORKER_MODEL_PROVIDER=openai-compatible needs COWORKER_OPENAI_BASE_URL and COWORKER_OPENAI_MODEL');
+    const minIntervalMs = Number(env.COWORKER_OPENAI_MIN_INTERVAL_MS ?? 0);
+    if (!Number.isFinite(minIntervalMs) || minIntervalMs < 0) throw new Error('COWORKER_OPENAI_MIN_INTERVAL_MS must be a number of milliseconds');
+    return new OpenAiCompatibleProvider(key, baseUrl, models, {minIntervalMs});
+  }
+  throw new Error(`COWORKER_MODEL_PROVIDER must be none, gemini, bedrock, or openai-compatible (got ${name})`);
 }
 
 async function main(): Promise<void> {

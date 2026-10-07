@@ -9,13 +9,18 @@ WorkingDirectory=/home/ubuntu/tally-app/current
 Environment=CONTROL_DB_PATH=/home/ubuntu/tally-app/data/agent.sqlite
 Environment=COWORKER_STATE_DIR=/home/ubuntu/tally-app/data/coworker-worker
 Environment=TALLY_SECRETS_DIR=/home/ubuntu/tally-secrets
-# none (fill-in answers), gemini, or bedrock. Change it here, then: sudo systemctl restart tally-coworkers
+# none (fill-in answers), gemini, bedrock, or openai-compatible. Change it here, then: sudo systemctl restart tally-coworkers
 Environment=COWORKER_MODEL_PROVIDER=gemini
 # Tried in order. The free tier allows 20 requests a day per model; one answer takes 2 to 4.
 # gemini-2.5-flash is closed to new API keys (October 2026).
 Environment=COWORKER_GEMINI_MODEL=gemini-3.8-flash,gemini-3.5-flash,gemini-3.1-flash-lite
 Environment=COWORKER_BEDROCK_REGION=ap-southeast-2
 Environment=COWORKER_BEDROCK_MODEL_ID=au.anthropic.claude-sonnet-4-5-20250929-v1:0
+# openai-compatible: any OpenAI Chat Completions API, with the openai_compatible_api_key secret.
+# The Mistral free plan needs no payment card. It allows 1 request a second (October 2026).
+Environment=COWORKER_OPENAI_BASE_URL=https://api.mistral.ai/v1
+Environment=COWORKER_OPENAI_MODEL=mistral-large-latest,mistral-medium-latest
+Environment=COWORKER_OPENAI_MIN_INTERVAL_MS=1100
 # Ask a Coworker on the website: a free preview served on 127.0.0.1 only.
 Environment=COWORKER_ASK_PORT=8792
 Environment=COWORKER_ASK_MODEL_PER_DAY=10

@@ -6,15 +6,17 @@
 
 import {describe, expect, test} from 'bun:test';
 import {createHash} from 'node:crypto';
-import {mkdtempSync, rmSync} from 'node:fs';
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {TEST_USDM_UNIT} from './contract-config';
 import {createKit} from './contract-kit';
-import {BedrockProvider, GeminiProvider, ModelError, runWithTools, type ChatTurn, type ModelProvider, type ModelReply, type ToolSpec} from './coworker-models';
+import {
+  BedrockProvider, GeminiProvider, ModelError, OpenAiCompatibleProvider, runWithTools, type ChatTurn, type ModelProvider, type ModelReply, type ToolSpec,
+} from './coworker-models';
 import {readFields, readRemedy} from './coworker-runner';
 import {CoworkerTools} from './coworker-tools';
-import {CoworkerWorker, Journal, type CoreLike, type MpsLike, type WorkerCoworker} from './coworker-worker';
+import {CoworkerWorker, Journal, providerFromEnv, type CoreLike, type MpsLike, type WorkerCoworker} from './coworker-worker';
 import {MpsError, sokosumiResultHash, type MpsPayment, type PaymentPlan, type SellerSource} from './mps-seller';
 import {CoreError, type CoreEvent, type CoreReceipt, type CoreTask} from './sokosumi-core';
 
@@ -539,6 +541,80 @@ describe('providers and parsing', () => {
       .reply('rules', [{role: 'user', text: 'who is kopi?'}], [tool]);
     expect(auth).toBe('Bearer bedrock-key');
     expect(reply.calls).toEqual([{id: 'tu1', name: 'findEntities', args: {query: 'kopi'}}]);
+  });
+
+  test('OpenAI-compatible: function tools, a bearer key, and tool results sent back by call id', async () => {
+    const sent: Array<{url: string; auth: string; body: {model: string; messages: Array<{[key: string]: unknown}>; tools: unknown[]}}> = [];
+    const replies = [
+      {choices: [{message: {role: 'assistant', content: '', tool_calls: [{id: 'Ab3dE5gH7', type: 'function', function: {name: 'findEntities', arguments: '{"query":"kopi"}'}}]}}]},
+      {choices: [{message: {role: 'assistant', content: 'Kopi Origin Roasters has 4 simulated deals.'}}]},
+    ];
+    const fetcher = (async (url: string, init: RequestInit) => {
+      sent.push({url, auth: (init.headers as {[key: string]: string}).authorization ?? '', body: JSON.parse(String(init.body))});
+      return new Response(JSON.stringify(replies.shift()));
+    }) as unknown as typeof fetch;
+    const provider = new OpenAiCompatibleProvider('mistral-key', 'https://api.mistral.ai/v1/', 'mistral-medium-latest', {fetch: fetcher});
+    let query: unknown = null;
+    const result = await runWithTools(provider, 'rules', 'who is kopi?', [{...tool, run: (args) => { query = args.query; return {ok: true, result: []}; }}]);
+    expect(result).toEqual({text: 'Kopi Origin Roasters has 4 simulated deals.', toolCalls: 1});
+    expect(query).toBe('kopi');
+    expect(sent[0]?.url).toBe('https://api.mistral.ai/v1/chat/completions');
+    expect(sent[0]?.auth).toBe('Bearer mistral-key');
+    expect(sent[0]?.body.model).toBe('mistral-medium-latest');
+    expect(sent[0]?.body.messages).toEqual([{role: 'system', content: 'rules'}, {role: 'user', content: 'who is kopi?'}]);
+    expect(sent[0]?.body.tools).toEqual([{type: 'function', function: {name: 'findEntities', description: 'find', parameters: tool.parameters}}]);
+    expect(sent[1]?.body.messages.slice(2)).toEqual([
+      {role: 'assistant', content: '', tool_calls: [{id: 'Ab3dE5gH7', type: 'function', function: {name: 'findEntities', arguments: '{"query":"kopi"}'}}]},
+      {role: 'tool', tool_call_id: 'Ab3dE5gH7', content: '{"ok":true,"result":[]}'},
+    ]);
+  });
+
+  test('OpenAI-compatible: requests are spaced by the minimum interval for a free plan', async () => {
+    let now = T0;
+    const waits: number[] = [];
+    const fetcher = (async () => new Response(JSON.stringify({choices: [{message: {content: 'OK'}}]}))) as unknown as typeof fetch;
+    const provider = new OpenAiCompatibleProvider('k', 'https://api.mistral.ai/v1', 'mistral-small-latest', {
+      fetch: fetcher, now: () => now, sleep: async (ms) => { waits.push(ms); now += ms; }, minIntervalMs: 30_000,
+    });
+    const hi: ChatTurn[] = [{role: 'user', text: 'hi'}];
+    for (let i = 0; i < 3; i++) await provider.reply('rules', hi, []);
+    expect(waits).toEqual([30_000, 30_000]);
+    now += 60_000;
+    await provider.reply('rules', hi, []);
+    expect(waits).toHaveLength(2);
+  });
+
+  test('OpenAI-compatible: a busy model is skipped, and bad settings are refused', async () => {
+    const models: string[] = [];
+    const fetcher = (async (url: string, init: RequestInit) => {
+      const {model} = JSON.parse(String(init.body)) as {model: string};
+      models.push(model);
+      return model === 'model-a' ? new Response('{}', {status: 503}) : new Response(JSON.stringify({choices: [{message: {content: 'OK'}}]}));
+    }) as unknown as typeof fetch;
+    const provider = new OpenAiCompatibleProvider('k', 'https://example.test/v1', 'model-a, model-b', {fetch: fetcher, sleep: async () => {}});
+    expect((await provider.reply('rules', [{role: 'user', text: 'hi'}], [])).text).toBe('OK');
+    expect(models).toEqual(['model-a', 'model-a', 'model-a', 'model-a', 'model-b']);
+    expect(() => new OpenAiCompatibleProvider('k', 'http://api.mistral.ai/v1', 'm')).toThrow('must be an https URL');
+    expect(() => new OpenAiCompatibleProvider('k', 'https://api.mistral.ai/v1', 'bad model')).toThrow('invalid model name');
+  });
+
+  test('COWORKER_MODEL_PROVIDER=openai-compatible reads its key, base URL, models, and interval', () => {
+    const secrets = mkdtempSync(join(tmpdir(), 'coworker-secrets-'));
+    try {
+      // Later entries replace earlier ones with the same name.
+      const env = (...extra: Array<[string, string]>) => Object.fromEntries([
+        ['COWORKER_MODEL_PROVIDER', 'openai-compatible'], ['COWORKER_OPENAI_BASE_URL', 'https://api.mistral.ai/v1'],
+        ['COWORKER_OPENAI_MODEL', 'mistral-medium-latest'], ...extra,
+      ]);
+      expect(() => providerFromEnv(env(), secrets)).toThrow('needs the openai_compatible_api_key secret');
+      writeFileSync(join(secrets, 'openai_compatible_api_key'), 'mistral-key\n');
+      expect(providerFromEnv(env(), secrets)?.name).toBe('openai-compatible');
+      expect(() => providerFromEnv(env(['COWORKER_OPENAI_BASE_URL', '']), secrets)).toThrow('needs COWORKER_OPENAI_BASE_URL and COWORKER_OPENAI_MODEL');
+      expect(() => providerFromEnv(env(['COWORKER_OPENAI_MIN_INTERVAL_MS', 'soon']), secrets)).toThrow('must be a number of milliseconds');
+      expect(() => providerFromEnv(env(['COWORKER_MODEL_PROVIDER', 'other']), secrets)).toThrow('none, gemini, bedrock, or openai-compatible');
+    } finally {
+      rmSync(secrets, {recursive: true, force: true});
+    }
   });
 
   test('the Sokosumi result hash escapes quotes, backslashes, and newlines', () => {
