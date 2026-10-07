@@ -18,6 +18,13 @@ import * as kycRecords from './kyc-records';
 import * as lifecycleRecords from './lifecycle-records';
 import * as lifecycleCommands from './lifecycle-commands';
 import type {LifecycleCommandRecord} from '../../reliability/src/lifecycle/commands';
+import * as contractRecords from './contract-records';
+import type {
+  ContractAuditRow, ContractCommit, EscrowOperation, ProcessedAction, ReliabilityPublication,
+} from '../../reliability/src/contract-lifecycle/ports';
+import type {
+  Contract, ContractParty, EvidenceRecord,
+} from '../../reliability/src/contract-lifecycle/types';
 import * as reliabilityRecords from './reliability';
 import * as omnibusFunding from './omnibus-funding';
 import type {
@@ -533,5 +540,101 @@ export class AgentStore {
   /** Status records for one entity, in the order they were saved. */
   listKycStatusRecords(entityId: string): KycStatusRecord[] {
     return kycRecords.listKycStatusRecords(this.db, entityId);
+  }
+
+  // ---- Contract lifecycle (lane A, migration 012) ----
+
+  /** Registers the signing key and preprod address of an existing entity. */
+  insertContractParty(party: ContractParty, createdAt: string): void {
+    contractRecords.insertContractParty(this.db, party, createdAt);
+  }
+
+  getContractParty(entityId: string): ContractParty|undefined {
+    return contractRecords.getContractParty(this.db, entityId);
+  }
+
+  getContract(id: string): Contract|undefined {
+    return contractRecords.getContract(this.db, id);
+  }
+
+  listContractIds(options: {openOnly: boolean}): string[] {
+    return contractRecords.listContractIds(this.db, options.openOnly);
+  }
+
+  /** Writes one contract state change atomically. Throws on a version conflict. */
+  commitContract(change: ContractCommit): void {
+    this.transaction(() => contractRecords.commitContract(this.db, change));
+  }
+
+  listOperations(contractId: string): EscrowOperation[] {
+    return contractRecords.listOperations(this.db, contractId);
+  }
+
+  listPendingOperations(): EscrowOperation[] {
+    return contractRecords.listPendingOperations(this.db);
+  }
+
+  /** Leases a pending escrow operation and counts the attempt before the external write. */
+  claimOperation(id: string, owner: string, now: number, leaseUntil: number): EscrowOperation|undefined {
+    return this.transaction(() => contractRecords.claimOperation(this.db, id, owner, now, leaseUntil));
+  }
+
+  releaseOperation(id: string, error: string, now: number): void {
+    contractRecords.releaseOperation(this.db, id, error, now);
+  }
+
+  getEvidence(id: string): EvidenceRecord|undefined {
+    return contractRecords.getEvidence(this.db, id);
+  }
+
+  getEvidenceContent(sha256: string): Uint8Array|undefined {
+    return contractRecords.getEvidenceContent(this.db, sha256);
+  }
+
+  getProcessedAction(actionId: string): ProcessedAction|undefined {
+    return contractRecords.getProcessedAction(this.db, actionId);
+  }
+
+  listContractAudit(contractId: string): ContractAuditRow[] {
+    return contractRecords.listContractAudit(this.db, contractId);
+  }
+
+  /** Returns the first broken audit seq, or null when the hash chain is intact. */
+  verifyContractAuditChain(): number|null {
+    return contractRecords.verifyContractAuditChain(this.db);
+  }
+
+  listPendingContractPublications(): ReliabilityPublication[] {
+    return contractRecords.listPendingPublications(this.db);
+  }
+
+  markContractPublicationPublished(id: string, publishedAt: number): void {
+    contractRecords.markPublicationPublished(this.db, id, publishedAt);
+  }
+
+  getPaperEscrow(ref: string): string|undefined {
+    return contractRecords.getPaperEscrow(this.db, ref);
+  }
+
+  /** Saves a paper escrow. With `op`, records the applied operation in the same transaction. */
+  savePaperEscrow(ref: string, json: string, op?: {idempotencyKey: string; kind: string; appliedAt: number}): void {
+    this.transaction(() => {
+      contractRecords.savePaperEscrow(this.db, ref, json);
+      if (op) contractRecords.insertPaperEscrowOp(this.db, op.idempotencyKey, ref, op.kind, op.appliedAt);
+    });
+  }
+
+  getPaperEscrowOp(idempotencyKey: string): string|undefined {
+    return contractRecords.getPaperEscrowOp(this.db, idempotencyKey);
+  }
+
+  /** Paper clock offset in ms (paper time = system time + offset). */
+  getPaperClockOffset(): number {
+    return contractRecords.getPaperClockOffset(this.db);
+  }
+
+  /** Raises the paper clock offset. Paper time never goes back. */
+  raisePaperClockOffset(offsetMs: number): void {
+    contractRecords.raisePaperClockOffset(this.db, offsetMs);
   }
 }

@@ -69,6 +69,17 @@ describe('AgentStore', () => {
       expect(rows.map((row) => row.name)).toEqual([
         'agent_state',
         'audit_events',
+        'contract_actions',
+        'contract_audit',
+        'contract_contracts',
+        'contract_evidence',
+        'contract_evidence_content',
+        'contract_operations',
+        'contract_paper_clock',
+        'contract_paper_escrow_ops',
+        'contract_paper_escrows',
+        'contract_parties',
+        'contract_publications',
         'daily_summaries',
         'market_quotes',
         'market_resolutions',
@@ -109,8 +120,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-006, 008, 010-011, and 013-014. 012 is allocated to PR #17.
-      expect(versions.versions).toBe(11);
+      // 001-006, 008, and 010-014. 007 and 009 are reserved.
+      expect(versions.versions).toBe(12);
     } finally {
       db.close();
     }

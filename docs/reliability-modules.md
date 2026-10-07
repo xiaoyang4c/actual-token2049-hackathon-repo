@@ -18,6 +18,19 @@ and store writes. Its public exports stay available at the same import paths.
 | `escrow-evidence.ts` | Convert an escrow session to scalar evidence. Restore the session from that evidence. |
 | `outcome.ts` | Project stage history into an outcome, fault, and verification confidence. No store writes. |
 
+The contract lifecycle lives in `packages/reliability/src/contract-lifecycle/`.
+Read [Contract lifecycle](contract-lifecycle.md).
+
+| Module under `packages/reliability/src/contract-lifecycle/` | Responsibility |
+| --- | --- |
+| `engine.ts` | Contract actions, scheduler, rulings, and remedies. No store or network access. |
+| `transitions.ts` | The milestone transition table |
+| `ports.ts` | Store, escrow, and clock seams |
+| `settlement.ts` | Map a milestone to a transaction, an outcome, and penalty events |
+| `templates.ts` and `templates/` | Contract templates as configuration |
+| `deadlines.ts`, `remedies.ts`, `fees.ts` | Masumi deadlines, escrow layout and payouts, dispute fees |
+| `canonical-json.ts`, `hashing.ts`, `signatures.ts` | JCS, MIP-004 hashes, Ed25519 |
+
 The frozen domain types stay in `packages/reliability/src/types.ts`.
 The scoring, pair-decay, fee, and KYC interfaces stay in their lane files.
 
@@ -32,6 +45,11 @@ The scoring, pair-decay, fee, and KYC interfaces stay in their lane files.
 | `routes-lane-a.ts` | Map lifecycle requests and errors to HTTP responses. |
 | `routes-plumbing.ts` | Merge stored collection records over fixtures. Read stored receipts first. |
 | `masumi-escrow.ts` | Submit escrow actions. Use the shared verifier for live funds locks, payouts, and refunds. |
+| `contract-service.ts` | One contract engine per store: escrow choice, clock, and reliability publishing. |
+| `reliability-projection.ts` | Cumulative outcome projection on the shared store, with extra penalty events. |
+| `contract-paper-escrow.ts` | Paper model of the Masumi V2 escrow. |
+| `contract-masumi-escrow.ts` | Live Masumi V2 escrow on the shared payment client. |
+| `routes-lane-a-contracts.ts` | Map signed contract requests and errors to HTTP responses. |
 
 `createLaneARoutes` accepts policies, a clock, and an escrow factory for each store.
 It keeps a separate service cache for each route table and store.

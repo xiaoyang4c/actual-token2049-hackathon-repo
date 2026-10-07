@@ -1,0 +1,33 @@
+{
+  "id": "physical-subjective",
+  "version": 1,
+  "category": "physical_subjective",
+  "transactionType": "goods",
+  "status": "design_only",
+  "description": "Furniture, fashion, and other subjective physical goods. Evidence: dispatch and arrival photos. Judge: the buyer within the window, then the mediator.",
+  "deliverableSpecSchema": {
+    "type": "object",
+    "required": ["description"],
+    "properties": {"description": {"type": "string"}, "referencePhotosSha256": {"type": "string"}}
+  },
+  "delivery": {"requiredEvidence": [{"type": "dispatch_photo", "min": 1}]},
+  "dispute": {"buyerEvidence": [{"type": "arrival_photo", "min": 1}, {"type": "note", "min": 0}], "tiers": [1, 3], "tier3TimeoutWinner": "buyer"},
+  "judge": {"type": "buyer_then_mediator"},
+  "windows": {
+    "fundingWindowMs": 172800000,
+    "deliveryWindowMs": 1814400000,
+    "inspectionWindowMs": 259200000,
+    "disputeResolutionWindowMs": 2592000000,
+    "tier1WindowMs": 172800000,
+    "tier2WindowMs": 172800000,
+    "tier3WindowMs": 259200000,
+    "returnWindowMs": 1209600000,
+    "redoWindowMs": 1209600000,
+    "redoInspectionWindowMs": 259200000,
+    "rulingComplianceWindowMs": 172800000
+  },
+  "remedy": {"default": {"type": "full_refund_with_return"}, "allowed": ["full_refund_with_return", "partial_release"]},
+  "fees": {"rule": "loser_pays", "perTierAtomic": {"tier1": "0", "tier2": "0", "tier3": "5000000"}},
+  "milestones": {"fundingSchedule": "sequential", "maxMilestones": 1},
+  "notes": {"status": "Draft. It runs on the current engine after buyer_then_mediator judging exists."}
+}

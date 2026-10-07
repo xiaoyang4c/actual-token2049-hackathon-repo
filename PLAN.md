@@ -75,9 +75,9 @@ Live preprod testing needs assigned key owners.
 | 3 | Improve the operator display | Add pagination, bounded polling, and clear evidence sources. |
 | 3 | Connect pooled funding to escrow | Reconcile allocations, payouts, refunds, cancellations, and available balances. |
 
-Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) proposes contract templates and a contract lifecycle.
-It is not merged into main.
-Review its changes against these requirements before merge.
+Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) adds contract templates and a signed contract lifecycle.
+It is merged into main.
+Read [Contract lifecycle](docs/contract-lifecycle.md) for its implemented flows and remaining limits.
 
 ## Payment boundary
 

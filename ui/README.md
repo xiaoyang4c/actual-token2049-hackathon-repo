@@ -20,6 +20,12 @@ Use `CONTROL_API_URL` to select the control API.
 
 - Transactions: search by agreement or participant. Filter by type and outcome.
   Select a row to read its receipt, fault, fee offers, and raw evidence.
+- Needs attention: review pending, failed, disputed, unresolved, and unknown outcomes.
+  A reason marks a passed resolution deadline without changing the recorded outcome.
+  Review expired, rejected, pending, or unavailable mock KYC and pending renewal checks.
+  The summary counts each transaction or participant once, even with several reasons.
+  Search applies to both groups. Type and outcome filters apply to transactions only.
+  Select **View participant** to read that participant's scores and KYC history.
 - Participants: read separate buyer and seller scores in each category.
   Each score shows its mean, lower bound, confidence, and event count.
   Read mock KYC badges, pending checks, history, and re-registration flags.
@@ -33,6 +39,11 @@ If it returns 404, the UI reads the demo receipt for that ID.
 Other lifecycle errors do not trigger a fixture fallback.
 Unknown IDs show an error and keep the current display.
 
+Use **Copy ID** or **Copy receipt link** in the receipt inspector.
+If clipboard access fails, copy from the selected text field.
+Receipt links open on the same local operator UI and read the latest available data.
+They are not public links or saved receipt snapshots.
+
 ## Data and evidence
 
 The UI polls the marketplace read routes every five seconds.
@@ -41,6 +52,8 @@ A stored record takes precedence for the same ID.
 New stored transactions appear in the transaction collection.
 Receipt reads use stored transactions, outcomes, and events first.
 Use the transaction ID field to inspect the complete lifecycle history.
+The Needs attention view covers loaded records, including the current ID lookup.
+An empty view does not prove that all stored transactions are clear.
 The score route combines stored states with fixtures. A stored state takes precedence
 for the same entity, category, and role.
 The mock KYC route can return a stored entity record.

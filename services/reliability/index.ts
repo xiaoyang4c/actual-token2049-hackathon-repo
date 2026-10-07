@@ -7,6 +7,7 @@
 
 import {laneAKycRoutes} from './routes-lane-a-kyc';
 import {laneARoutes} from './routes-lane-a';
+import {laneAContractRoutes} from './routes-lane-a-contracts';
 import {plumbingRoutes, type ReliabilityRoute} from './routes-plumbing';
 
 export type {ReliabilityRoute};
@@ -19,4 +20,5 @@ export const reliabilityRoutes: ReliabilityRoute[] = [
   ...plumbingRoutes,
   ...laneARoutes,
   ...laneAKycRoutes,
+  ...laneAContractRoutes,
 ];

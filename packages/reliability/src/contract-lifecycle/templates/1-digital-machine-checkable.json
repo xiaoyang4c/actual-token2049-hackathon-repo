@@ -1,0 +1,52 @@
+{
+  "id": "digital-machine-checkable",
+  "version": 1,
+  "category": "digital_machine_checkable",
+  "transactionType": "goods",
+  "status": "enabled",
+  "description": "Digital deliverable that code can check, such as a file or a data export. Evidence: the file. Judge: code compares the file hash with the agreed hash. Disputes resolve automatically at Tier 2.",
+  "deliverableSpecSchema": {
+    "type": "object",
+    "required": ["expectedSha256"],
+    "additionalProperties": false,
+    "properties": {
+      "expectedSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "fileName": {"type": "string"},
+      "mediaType": {"type": "string"}
+    }
+  },
+  "delivery": {
+    "requiredEvidence": [{"type": "content_file", "min": 1, "max": 1}]
+  },
+  "dispute": {
+    "buyerEvidence": [{"type": "note", "min": 0}, {"type": "content_file", "min": 0}],
+    "tiers": [2, 3],
+    "tier3TimeoutWinner": "buyer"
+  },
+  "judge": {"type": "code", "rule": "content_hash_match"},
+  "windows": {
+    "fundingWindowMs": 86400000,
+    "deliveryWindowMs": 604800000,
+    "inspectionWindowMs": 259200000,
+    "disputeResolutionWindowMs": 1814400000,
+    "tier1WindowMs": 172800000,
+    "tier2WindowMs": 3600000,
+    "tier3WindowMs": 259200000,
+    "returnWindowMs": 604800000,
+    "redoWindowMs": 604800000,
+    "redoInspectionWindowMs": 259200000,
+    "rulingComplianceWindowMs": 172800000
+  },
+  "remedy": {
+    "default": {"type": "full_refund_no_return"},
+    "allowed": ["full_refund_no_return", "redo_or_replace", "partial_release"]
+  },
+  "fees": {"rule": "loser_pays", "perTierAtomic": {"tier1": "0", "tier2": "0", "tier3": "2000000"}},
+  "milestones": {"fundingSchedule": "sequential", "maxMilestones": 10},
+  "notes": {
+    "windows": "Funding 24 h, delivery 7 d, inspection 72 h. The code judge rules at once; the 1 h Tier 2 window is a safety bound. The 21 d dispute window covers Tier 2, Tier 3, one redo, and the 48 h ruling compliance window. Contract creation checks this.",
+    "fees": "Code judging is free. Tier 3 mediation costs 2 test USDM (2000000 atomic units). The loser pays.",
+    "tier3TimeoutWinner": "If the mediator does not rule, the buyer gets a refund. The platform did not judge, so the seller is not paid for an unverified delivery.",
+    "transactionType": "A delivered file is goods, so the rating category is delivery."
+  }
+}

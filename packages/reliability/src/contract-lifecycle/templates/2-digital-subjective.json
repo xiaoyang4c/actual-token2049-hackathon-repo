@@ -1,0 +1,36 @@
+{
+  "id": "digital-subjective",
+  "version": 1,
+  "category": "digital_subjective",
+  "transactionType": "service",
+  "status": "design_only",
+  "description": "Design, reports, and other subjective digital work. Evidence: the deliverable against written acceptance criteria. Judge: the buyer with revision rounds, then the mediator.",
+  "deliverableSpecSchema": {
+    "type": "object",
+    "required": ["acceptanceCriteriaSha256", "revisionRounds"],
+    "properties": {
+      "acceptanceCriteriaSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "revisionRounds": {"type": "integer", "minimum": 0}
+    }
+  },
+  "delivery": {"requiredEvidence": [{"type": "content_file", "min": 1}]},
+  "dispute": {"buyerEvidence": [{"type": "note", "min": 1}], "tiers": [1, 3], "tier3TimeoutWinner": "buyer"},
+  "judge": {"type": "buyer_then_mediator"},
+  "windows": {
+    "fundingWindowMs": 86400000,
+    "deliveryWindowMs": 1209600000,
+    "inspectionWindowMs": 259200000,
+    "disputeResolutionWindowMs": 2592000000,
+    "tier1WindowMs": 172800000,
+    "tier2WindowMs": 172800000,
+    "tier3WindowMs": 259200000,
+    "returnWindowMs": 604800000,
+    "redoWindowMs": 604800000,
+    "redoInspectionWindowMs": 259200000,
+    "rulingComplianceWindowMs": 172800000
+  },
+  "remedy": {"default": {"type": "redo_or_replace"}, "allowed": ["redo_or_replace", "partial_release", "full_refund_no_return"]},
+  "fees": {"rule": "loser_pays", "perTierAtomic": {"tier1": "0", "tier2": "0", "tier3": "2000000"}},
+  "milestones": {"fundingSchedule": "sequential", "maxMilestones": 10},
+  "notes": {"status": "Draft. It needs N revision rounds instead of one redo before it can be enabled."}
+}

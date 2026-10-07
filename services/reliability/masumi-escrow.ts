@@ -21,6 +21,8 @@ import {
   type MasumiAdapter, type MasumiPaymentRequest, type MasumiTerms,
 } from '../cardano-agents-ts/masumi';
 import type {ApiTransport, CredentialResolver} from '../cardano-agents-ts/types';
+import {validateDeadlines} from '../../packages/reliability/src/contract-lifecycle/deadlines';
+import {isIdentifierFromPurchaser} from '../../packages/reliability/src/contract-lifecycle/hashing';
 
 const SIMULATED_AGENT = 'simulated-reliability-agent';
 
@@ -154,6 +156,7 @@ export class ChainEscrow implements EscrowPort {
   }
 
   async fund(request: EscrowFundRequest): Promise<EscrowSession> {
+    if (this.broadcast) assertLiveFundable(request);
     const terms = await this.masumi.createPayment(
       paymentRequest(request, this.config), request.amountLovelace,
     );
@@ -311,6 +314,34 @@ function simulatedPort(config: PaymentConfig, store?: AgentStore): EscrowPort {
   const cardano = new SimulatedCardanoAdapter(cardanoStore, config);
   const masumi = new SimulatedMasumiAdapter(cardano, cardanoStore);
   return new SimulatedMasumiEscrow(masumi, cardano);
+}
+
+/**
+ * Rejects a live order that the Masumi payment service would refuse, before
+ * any request leaves this process. The v1 lifecycle uses the transaction id
+ * as the buyer nonce and one time for every deadline. MPS needs a 14 to 26
+ * character hex nonce and 15 minutes between deadlines. Use the contract
+ * lifecycle (/reliability/contracts) for live escrow.
+ */
+function assertLiveFundable(request: EscrowFundRequest): void {
+  const problems: string[] = [];
+  if (!isIdentifierFromPurchaser(request.transactionId)) {
+    problems.push('the buyer nonce (transaction id) must be 14 to 26 lowercase hex characters');
+  }
+  try {
+    validateDeadlines({
+      payByTime: Date.parse(request.payByTime),
+      submitResultTime: Date.parse(request.submitResultTime),
+      unlockTime: Date.parse(request.unlockTime),
+      externalDisputeUnlockTime: Date.parse(request.externalDisputeUnlockTime),
+    }, Date.parse(request.payByTime), 'live');
+  } catch (error) {
+    problems.push(error instanceof Error ? error.message : String(error));
+  }
+  if (problems.length > 0) {
+    throw new Error(`the v1 lifecycle cannot fund a live Masumi escrow: ${problems.join('; ')}. ` +
+      'Use the contract lifecycle routes (/reliability/contracts) for live escrow.');
+  }
 }
 
 function paymentRequest(

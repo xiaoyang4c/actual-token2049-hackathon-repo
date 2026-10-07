@@ -31,7 +31,7 @@ KYC currently uses a mock provider.
 | `packages/reliability` | Marketplace types, scoring, terms, KYC, evidence, and escrow lifecycle |
 | `packages/db` | Shared SQLite store, migrations, marketplace records, and payment records |
 | `services/control-api.ts` | Registers marketplace routes against one shared `AgentStore` |
-| `services/reliability` | Read routes, lifecycle actions, mock KYC, and the Masumi escrow adapter |
+| `services/reliability` | Read routes, lifecycle actions, the contract lifecycle service, mock KYC, and the Masumi escrow adapters |
 | `services/cardano-agents-ts` | Shared Cardano and Masumi adapters, payment evidence, and settlement observer |
 | `ui` | Local display for transactions, receipts, buyer and seller scores, KYC, and listings |
 
@@ -77,6 +77,18 @@ The marketplace UI reads the control API.
 | `POST` | `/reliability/lifecycle/open` | Open a stored transaction |
 | `POST` | `/reliability/lifecycle/terms` | Record transaction terms |
 | `POST` | `/reliability/lifecycle/transition` | Submit a lifecycle action |
+| `GET` | `/reliability/contracts/templates` | List contract templates |
+| `POST` | `/reliability/contracts/parties` | Link a signing key and a preprod address to an entity |
+| `POST` | `/reliability/contracts` | Create a contract |
+| `GET` | `/reliability/contracts` | Read a contract by `id` |
+| `GET` | `/reliability/contracts/terms` | Read the exact terms bytes that both parties sign |
+| `POST` | `/reliability/contracts/sign` | Sign the frozen terms |
+| `POST` | `/reliability/contracts/action` | Submit one signed party action |
+| `POST` | `/reliability/contracts/agree` | Submit a Tier 1 outcome signed by both parties |
+| `POST` | `/reliability/contracts/terminate` | Submit a mutual termination signed by both parties |
+| `POST` | `/reliability/contracts/ruling` | Submit a Tier 3 ruling signed by the mediator |
+| `POST` | `/reliability/contracts/tick` | Run one contract scheduler pass |
+| `GET` | `/reliability/contracts/audit` | Read a contract audit log and its hash-chain status |
 
 Entity, listing, and transaction reads accept an optional `id` query.
 Score reads accept an optional `entityId` query.
@@ -87,6 +99,7 @@ Use the lifecycle read for stage history and current terms recommendations.
 Listing and offer write routes still need implementation.
 
 Read [Transaction lifecycle](docs/reliability-lifecycle.md) for actions and evidence rules.
+Read [Contract lifecycle](docs/contract-lifecycle.md) for contract templates, tiered disputes, signed party actions, and live Masumi escrow.
 Read [mock KYC](docs/kyc.md) for onboarding states and tier rules.
 Read [module boundaries](docs/reliability-modules.md) before you extend a lane.
 

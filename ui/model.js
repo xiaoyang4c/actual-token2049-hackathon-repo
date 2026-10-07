@@ -4,7 +4,7 @@ import { formatValue, label } from "./format.js"
 export { allEvents, executionOf, fillMode } from "./audit.js"
 
 const OUTCOMES = new Set(["pending", "successful", "failed", "disputed", "cancelled", "unresolved"])
-const ATTENTION = new Set(["failed", "disputed", "unresolved"])
+const ATTENTION = new Set(["pending", "failed", "disputed", "unresolved", "unknown"])
 const SOURCES = new Set(["connected", "fixture", "stale"])
 const KYC_BADGES = new Set(["unverified", "pending", "verified", "rejected", "expired"])
 
@@ -35,6 +35,34 @@ export function escrowOf(receipt) {
 
 export function participantName(entities, id) {
   return entities.find((entity) => entity.id === id)?.displayName ?? id ?? "Not provided"
+}
+
+export function receiptLink(id, baseUrl) {
+  const url = new URL("/", baseUrl)
+  url.searchParams.set("transactionId", id)
+  return url.href
+}
+
+function transactionAttention(transaction, now) {
+  const reasons = []
+  if (ATTENTION.has(transaction.outcome)) {
+    reasons.push(transaction.outcome === "unknown" ? "Outcome unavailable" : label(transaction.outcome))
+  }
+  const resolveBy = transaction.receipt?.outcome?.resolveBy
+  const deadline = typeof resolveBy === "string" ? Date.parse(resolveBy) : NaN
+  if (["pending", "disputed", "unresolved"].includes(transaction.outcome) && deadline <= now) {
+    reasons.push("Resolution deadline passed")
+  }
+  return reasons
+}
+
+function participantAttention(entity) {
+  const reasons = []
+  if (["expired", "rejected", "pending", "unknown"].includes(entity.kycBadge)) {
+    reasons.push(entity.kycBadge === "unknown" ? "KYC unavailable" : `KYC ${entity.kycBadge}`)
+  }
+  if (entity.checkPending && entity.kycBadge !== "pending") reasons.push("KYC check pending")
+  return reasons
 }
 
 function presentEntity(entity, scores, kycById, kycErrors, storedEntityIds) {
@@ -79,13 +107,18 @@ function presentTransaction(transaction, snapshot, entities) {
   }
 }
 
-export function buildView(snapshot = {}, meta = {}, controls = {}) {
+export function buildView(snapshot = {}, meta = {}, controls = {}, now = Date.now()) {
   const entities = list(snapshot.entities).map((entity) =>
     presentEntity(entity, list(snapshot.scores), snapshot.kycById, snapshot.kycErrors, snapshot.storedEntityIds ?? []))
   const transactions = list(snapshot.transactions).map((transaction) =>
     presentTransaction(transaction, snapshot, entities))
+  for (const transaction of transactions) transaction.attentionReasons = transactionAttention(transaction, now)
+  for (const entity of entities) entity.attentionReasons = participantAttention(entity)
+  const attentionTransactions = transactions.filter((transaction) => transaction.attentionReasons.length)
+  const attentionEntities = entities.filter((entity) => entity.attentionReasons.length)
   const query = String(controls.query ?? "").trim().toLowerCase()
   const filtered = transactions.filter((transaction) =>
+    (controls.tab !== "attention" || transaction.attentionReasons.length) &&
     (!query || transaction.search.includes(query)) &&
     (!controls.type || transaction.type === controls.type) &&
     (!controls.outcome || transaction.outcome === controls.outcome))
@@ -98,9 +131,11 @@ export function buildView(snapshot = {}, meta = {}, controls = {}) {
     source: SOURCES.has(meta.source) ? meta.source : "fixture",
     updatedAt: meta.updatedAt ?? "",
     error: String(meta.error ?? "").slice(0, 200),
-    tab: ["transactions", "participants", "listings"].includes(controls.tab) ? controls.tab : "transactions",
+    tab: ["transactions", "attention", "participants", "listings"].includes(controls.tab) ? controls.tab : "transactions",
     controls: { query: controls.query ?? "", type: controls.type ?? "", outcome: controls.outcome ?? "", page },
     entities,
+    attentionEntities: attentionEntities.filter((entity) =>
+      !query || `${entity.id} ${entity.displayName}`.toLowerCase().includes(query)),
     listings: list(snapshot.listings),
     kycExamples: list(snapshot.kycExamples?.cases),
     kycExamplesError: snapshot.kycExamplesError ?? "",
@@ -112,7 +147,9 @@ export function buildView(snapshot = {}, meta = {}, controls = {}) {
     metrics: {
       total: transactions.length,
       completed: transactions.filter((transaction) => transaction.outcome === "successful").length,
-      attention: transactions.filter((transaction) => ATTENTION.has(transaction.outcome)).length,
+      attention: attentionTransactions.length + attentionEntities.length,
+      attentionTransactions: attentionTransactions.length,
+      attentionParticipants: attentionEntities.length,
       unknown: transactions.filter((transaction) => transaction.outcome === "unknown").length,
       participants: entities.length,
     },

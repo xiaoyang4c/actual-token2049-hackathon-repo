@@ -2,7 +2,7 @@
 
 This page describes the marketplace after the lifecycle correctness fixes.
 The review date is 2026-10-07.
-The fixes build on main at commit `347f257`.
+The fixes build on main at commit `05790d6`.
 Update this page when a change removes a listed limit.
 
 The product is the B2B and B2C marketplace with its reliability checker.
@@ -14,10 +14,15 @@ Marketplace orders are paper.
 Escrow uses simulation by default.
 An enabled preprod request has `mode: live`.
 That mode alone does not prove settlement.
-Live money stages now require confirmed chain evidence.
+The v1 lifecycle remains a paper demo.
+Its standard adapter rejects live funding before a network request.
+Its live verification seam now requires confirmed chain evidence.
+Use the contract lifecycle for live escrow.
+The contract adapter has separate recovery and settlement checks.
 
-Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) proposes the contract lifecycle.
-Its templates, tiered disputes, and contract routes are not on main.
+Pull request [#17](https://github.com/xiaoyang4c/actual-token2049-hackathon-repo/pull/17) adds the contract lifecycle.
+Its templates, tiered disputes, and signed contract routes are now on main.
+Read [Contract lifecycle](contract-lifecycle.md).
 
 ## Marketplace features
 
@@ -67,7 +72,7 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for stage and evidence ru
 
 | Area | Remaining work |
 | --- | --- |
-| Caller identity | Authenticate participants and resolvers. Authorize actions and consent. Demo evidence checks still compare supplied strings. |
+| Caller identity | Authenticate v1 participants and resolvers. Bind contract key registration to verified identity and KYC. |
 | External recovery | Add an operator reconciliation flow for a call that started but lost its response. Automatic resubmission stays blocked. |
 | Legacy records | Reconcile old live stages that lack proof. Repair score history when a valid baseline cannot be recovered. |
 | Policy history | Store value, pair weight, and policy inputs. Add controlled policy migrations and rebuilds. |
@@ -77,7 +82,11 @@ Read [Transaction lifecycle](reliability-lifecycle.md) for stage and evidence ru
 
 ## Payment boundaries
 
-The marketplace now uses the shared [settlement verifier](masumi-settlement.md).
+The v1 live verification seam uses the shared [settlement verifier](masumi-settlement.md).
+The standard v1 live funding guard remains in place.
+The signed contract lifecycle is the supported live path.
+Its adapter currently checks ADA settlement only.
+Actual USDM receipt verification still needs implementation.
 Live funding needs a confirmed funds lock.
 Live release needs a verified seller payout.
 Live refund needs a verified buyer refund.
@@ -90,11 +99,12 @@ Cancellation and refund actions do not return its allocated credit.
 Live custody requires a separate implementation.
 
 Actual preprod settlement has not been tested.
-The demo services do not implement public authentication or caller isolation.
+The v1 demo routes do not authenticate callers.
+Contract actions check signatures, but initial key registration is open.
 
 ## Validation
 
-The local checks pass 421 tests under `packages`, `services`, and `ui`.
+The local test suite covers `packages`, `services`, and `ui`.
 The control and payment TypeScript checks pass.
 Lint passes.
 Regression tests cover all seven gaps, restart behavior, and two database writers.
