@@ -14,6 +14,7 @@ import {sha256Hex} from '../../packages/reliability/src/contract-lifecycle/hashi
 import type {EvidenceInput, NegotiatedOutcome, Remedy} from '../../packages/reliability/src/contract-lifecycle/types';
 import {json} from '../lib/http';
 import {contractServiceFor, type ContractService} from './contract-service';
+import {MarketplaceRuleError} from './marketplace-gate';
 import type {ReliabilityRoute} from './route';
 
 const STATUS_BY_CODE: {[code: string]: number} = {
@@ -25,6 +26,7 @@ const STATUS_BY_CODE: {[code: string]: number} = {
   funding_in_flight: 409,
   action_id_reused: 409,
   party_exists: 409,
+  kyc_required: 403,
   evidence_too_large: 413,
 };
 
@@ -35,6 +37,9 @@ const PARTY_ACTIONS: readonly PartyActionType[] = [
 ];
 
 function fail(error: unknown): Response {
+  if (error instanceof MarketplaceRuleError) {
+    return json({error: error.message, code: 'deal_not_allowed', violations: error.violations}, 403);
+  }
   if (error instanceof ContractError) return json({error: error.message, code: error.code}, STATUS_BY_CODE[error.code] ?? 400);
   throw error;
 }
@@ -176,7 +181,7 @@ export const laneAContractRoutes: ReliabilityRoute[] = [
   post('/reliability/contracts', async (service, body) => {
     const milestones = body.milestones;
     if (!Array.isArray(milestones)) throw new ContractError('invalid_input', 'milestones must be an array');
-    const contract = service.lifecycle.createContract({
+    const contract = service.createContract({
       templateId: text(body, 'templateId'),
       buyerId: text(body, 'buyerId'),
       sellerId: text(body, 'sellerId'),

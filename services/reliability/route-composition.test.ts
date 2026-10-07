@@ -34,9 +34,21 @@ async function request(
   }), url, store);
 }
 
+/** The marketplace gate needs KYC-verified parties before a sale opens. */
+function verifyParties(store: AgentStore): void {
+  for (const id of ['buyer', 'seller']) {
+    if (store.getEntity(id)) continue;
+    store.insertEntity({
+      id, displayName: id, wallets: [], roles: ['buyer', 'seller'],
+      kycStatus: 'verified', kycTier: 'basic', createdAt: NOW,
+    });
+  }
+}
+
 async function openSale(
   routes: ReliabilityRoute[], store: AgentStore, value = 50,
 ): Promise<void> {
+  verifyParties(store);
   const response = await request(routes, store, '/reliability/lifecycle/open', {
     id: 'sale', type: 'goods', buyerId: 'buyer', sellerId: 'seller',
     terms: {goods: 'cable'}, value, at: NOW,

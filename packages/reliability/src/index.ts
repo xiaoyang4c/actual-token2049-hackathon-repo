@@ -44,6 +44,31 @@ export {
 } from './scoring';
 export {betaCdf, betaQuantile, logGamma} from './beta-math';
 export {
+  checkKyc,
+  KYC_GATE_VERSION,
+  type KycGateCode,
+  type KycGateResult,
+  type KycGateSubject,
+} from './kyc-gate';
+export {
+  basisPointsOf,
+  FEE_CHARGE_VERSION,
+  quoteFeeCharge,
+  settleFeeCharge,
+  toMinorUnits,
+  type FeeCharge,
+  type FeeChargeSide,
+  type FeeChargeStatus,
+} from './fee-charges';
+export {
+  decideOffer,
+  effectiveOfferStatus,
+  OFFER_STATUSES,
+  OfferError,
+  type Offer,
+  type OfferStatus,
+} from './offers';
+export {
   composeEventWeight,
   weightInputsKey,
   type EventWeightRecord,

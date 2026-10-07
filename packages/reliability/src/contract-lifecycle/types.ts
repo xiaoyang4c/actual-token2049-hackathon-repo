@@ -326,6 +326,11 @@ export interface ContractTemplate {
   remedy: {default: Remedy; allowed: RemedyType[]};
   fees: FeeRules;
   milestones: {fundingSchedule: 'sequential'|'upfront'; maxMilestones: number};
+  /**
+   * KYC tier both parties need before a contract on this template opens.
+   * It raises the KYC_TIER_RULES minimum. The contract service reads it.
+   */
+  minimumKycTier?: 'basic'|'enhanced';
   notes?: {[key: string]: string};
 }
 

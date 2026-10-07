@@ -13,6 +13,7 @@ import {
   optionalText, readBody, runAction, termsField, textField, transactionType,
 } from './lifecycle-request';
 import {LifecycleService} from './lifecycle-service';
+import {MarketplaceRuleError} from './marketplace-gate';
 import type {ReliabilityPolicies} from './policies';
 import type {ReliabilityRoute} from './route';
 
@@ -22,6 +23,9 @@ function requireStore(store: AgentStore|undefined): AgentStore {
 }
 
 function fail(error: unknown): Response {
+  if (error instanceof MarketplaceRuleError) {
+    return json({error: error.message, violations: error.violations}, 403);
+  }
   if (error instanceof LifecyclePendingError) return json({pending: true, error: error.message}, 202);
   if (error instanceof LifecycleCommandError) return json({error: error.message}, 409);
   if (error instanceof LifecycleError) {
@@ -36,6 +40,8 @@ export interface LifecycleRouteOptions {
   policies?: ReliabilityPolicies;
   clock?: () => string;
   escrowForStore?: (store: AgentStore) => EscrowPort;
+  /** KYC, limits, and fee charges at open. Defaults to true. */
+  enforceMarketplaceRules?: boolean;
 }
 
 /** Creates handlers with isolated store caches and explicit policy dependencies. */
@@ -50,6 +56,7 @@ export function createLaneARoutes(
       policies: options.policies,
       clock: options.clock ?? (() => new Date().toISOString()),
       escrow: options.escrowForStore?.(store),
+      enforceMarketplaceRules: options.enforceMarketplaceRules,
     });
     services.set(store, created);
     return created;
@@ -69,13 +76,11 @@ export function createLaneARoutes(
           const sellerId = textField(body, 'sellerId');
           const service = serviceFor(records);
           const lifecycle = service.lifecycle;
-          service.ensureParty(buyerId, at);
-          service.ensureParty(sellerId, at);
           const value = body.value;
           if (value !== undefined && typeof value !== 'number') {
             throw new LifecycleError('value must be a non-negative number');
           }
-          const transaction = lifecycle.open({
+          const {transaction, check, feeCharge} = service.openTransaction({
             id: textField(body, 'id'),
             type: transactionType(textField(body, 'type')),
             buyerId,
@@ -91,6 +96,11 @@ export function createLaneARoutes(
             transaction,
             stage: lifecycle.currentStage(transaction.id),
             outcome: lifecycle.outcomeFor(transaction.id, {now: at}),
+            feeCharge,
+            checks: check ? {
+              buyer: {kyc: check.buyer.kyc, lowerBound: check.buyer.score.lowerBound, limit: check.buyer.limit},
+              seller: {kyc: check.seller.kyc, lowerBound: check.seller.score.lowerBound, limit: check.seller.limit},
+            } : null,
           });
         } catch (error) {
           return fail(error);
@@ -102,11 +112,12 @@ export function createLaneARoutes(
       path: '/reliability/lifecycle/terms',
       handler: async (request, url, store) => {
         try {
-          const lifecycle = serviceFor(requireStore(store)).lifecycle;
+          const service = serviceFor(requireStore(store));
+          const lifecycle = service.lifecycle;
           const body = await readBody(request);
           const transactionId = textField(body, 'transactionId');
           const at = textField(body, 'at');
-          const version = lifecycle.amendTerms(
+          const version = service.amendTerms(
             transactionId, termsField(body.terms), textField(body, 'reason'), at,
           );
           return json({

@@ -28,6 +28,9 @@ import type {
 import * as reliabilityRecords from './reliability';
 import * as omnibusFunding from './omnibus-funding';
 import * as scoreWeights from './score-weights';
+import * as marketplaceRecords from './marketplace-records';
+import type {FeeCharge} from '../../reliability/src/fee-charges';
+import type {Offer} from '../../reliability/src/offers';
 import type {EventWeightRecord} from '../../reliability/src/event-weights';
 import type {
   DealFundingRequest, OmnibusBalance, PaperDealFundingRecord,
@@ -472,6 +475,37 @@ export class AgentStore {
   /** Deletes every weight and pair row before a full score rebuild. */
   clearScoreWeights(): void {
     scoreWeights.clearScoreWeights(this.db);
+  }
+
+  insertOffer(offer: Offer): void {
+    marketplaceRecords.insertOffer(this.db, offer);
+  }
+
+  /** Replaces an offer while it is still open. False when another writer decided it. */
+  updateOpenOffer(offer: Offer, at: string): boolean {
+    return marketplaceRecords.updateOpenOffer(this.db, offer, at);
+  }
+
+  getOffer(id: string): Offer|undefined {
+    return marketplaceRecords.getOffer(this.db, id);
+  }
+
+  listOffers(filter: {listingId?: string; buyerId?: string; sellerId?: string} = {}): Offer[] {
+    return marketplaceRecords.listOffers(this.db, filter);
+  }
+
+  /** Inserts the accepted buyer and seller fees for one sale (migration 016). */
+  insertFeeCharge(charge: FeeCharge): void {
+    marketplaceRecords.insertFeeCharge(this.db, charge);
+  }
+
+  /** Moves a charge from `fromStatus`. False when another writer moved it first. */
+  settleFeeCharge(charge: FeeCharge, fromStatus: FeeCharge['status']): boolean {
+    return marketplaceRecords.settleFeeChargeRow(this.db, charge, fromStatus);
+  }
+
+  getFeeCharge(transactionId: string): FeeCharge|undefined {
+    return marketplaceRecords.getFeeCharge(this.db, transactionId);
   }
 
   /** Archives and replaces the active events after an outcome correction. */

@@ -6,11 +6,19 @@
 import type {AgentStore} from '../../packages/db/src/index';
 import {
   EscrowTransactionLifecycle, LifecycleError, type LifecycleTransition,
+  type OpenTransactionInput,
 } from '../../packages/reliability/src/lifecycle';
+import type {FeeCharge} from '../../packages/reliability/src/fee-charges';
+import type {
+  JsonValue, Listing, MarketplaceTransaction, TermsVersion,
+} from '../../packages/reliability/src/types';
 import type {EscrowPort} from '../../packages/reliability/src/escrow-port';
 import {STUB_SCORING_VERSION} from '../../packages/reliability/src/scoring';
 import {outcomeToEvents} from '../../packages/reliability/src/event-flow';
 import {flowLifecycleOutcome} from '../../packages/reliability/src/lifecycle-flow';
+import {
+  FeeBook, MarketplaceGate, platformFeeTerms, reliabilityTerms, type DealCheck,
+} from './marketplace-gate';
 import {createEscrowPort} from './masumi-escrow';
 import {
   DEFAULT_RELIABILITY_POLICIES, type ReliabilityPolicies,
@@ -22,7 +30,15 @@ export interface LifecycleServiceOptions {
   policies?: ReliabilityPolicies;
   escrow?: EscrowPort;
   clock?: () => string;
+  /**
+   * Check KYC, exposure limits, and invoice payment days before a sale
+   * opens, and record the accepted fees. Defaults to true.
+   */
+  enforceMarketplaceRules?: boolean;
 }
+
+/** Terms keys that the service fixes when a sale opens. */
+const FIXED_TERMS = ['platformFees', 'reliabilityTerms'] as const;
 
 /** One service per control store. The route factory owns its lifetime. */
 export class LifecycleService {
@@ -30,6 +46,11 @@ export class LifecycleService {
   /** Recorded event weights and score rebuilds for this store. */
   readonly ledger: ScoreLedger;
   readonly policies: ReliabilityPolicies;
+  /** KYC, limit, and listing checks before a sale opens. */
+  readonly gate: MarketplaceGate;
+  /** Accepted buyer and seller fees. */
+  readonly fees: FeeBook;
+  private readonly enforce: boolean;
 
   constructor(
     private readonly store: AgentStore,
@@ -38,6 +59,9 @@ export class LifecycleService {
     const policies = withRecordedWeights(store, options.policies ?? DEFAULT_RELIABILITY_POLICIES);
     this.policies = policies;
     this.ledger = policies.ledger;
+    this.gate = new MarketplaceGate(store, policies);
+    this.fees = new FeeBook(store);
+    this.enforce = options.enforceMarketplaceRules ?? true;
     this.lifecycle = new EscrowTransactionLifecycle({
       store,
       clock: options.clock,
@@ -58,6 +82,71 @@ export class LifecycleService {
     });
   }
 
+  /**
+   * Opens a sale after the marketplace checks. The agreed terms record the
+   * accepted fees and both parties' score-based terms. With enforcement
+   * off, unknown parties are created unverified, as in the original demo.
+   */
+  openTransaction(input: OpenTransactionInput & {listing?: Listing}): {
+    transaction: MarketplaceTransaction;
+    check: DealCheck|null;
+    feeCharge: FeeCharge|null;
+  } {
+    const {listing, ...open} = input;
+    return this.store.transaction(() => {
+      if (!this.enforce) {
+        this.ensureParty(open.buyerId, open.at);
+        this.ensureParty(open.sellerId, open.at);
+        return {transaction: this.lifecycle.open(open), check: null, feeCharge: null};
+      }
+      if (this.lifecycle.hasTransaction(open.id)) {
+        throw new LifecycleError(`transaction ${open.id} already exists`);
+      }
+      const currency = typeof open.terms.currency === 'string' ? open.terms.currency : undefined;
+      const check = this.gate.assertDeal({
+        type: open.type, buyerId: open.buyerId, sellerId: open.sellerId, value: open.value,
+        currency, terms: open.terms, listing, now: open.at,
+      });
+      const feeCharge = this.fees.quote(check, open.id, open.at);
+      const terms: {[key: string]: JsonValue} = {
+        ...open.terms,
+        platformFees: platformFeeTerms(feeCharge),
+        reliabilityTerms: reliabilityTerms(check),
+      };
+      const transaction = this.lifecycle.open({...open, terms});
+      this.fees.accept(feeCharge);
+      return {transaction, check, feeCharge};
+    });
+  }
+
+  /**
+   * Records a new terms version. The fee and score-based terms fixed at
+   * open carry over. A request that changes them is refused. An invoice
+   * due date must stay inside the buyer's payment days.
+   */
+  amendTerms(
+    transactionId: string, terms: {[key: string]: JsonValue}, reason: string, at: string,
+  ): TermsVersion {
+    const current = this.lifecycle.getTransaction(transactionId);
+    const next: {[key: string]: JsonValue} = {...terms};
+    for (const key of FIXED_TERMS) {
+      const fixed = current.terms[key];
+      if (fixed === undefined) continue;
+      if (next[key] !== undefined && JSON.stringify(next[key]) !== JSON.stringify(fixed)) {
+        throw new LifecycleError(`${key} are fixed when the sale opens`);
+      }
+      next[key] = fixed;
+    }
+    if (this.enforce && current.type === 'invoice' && next.dueDate !== current.terms.dueDate) {
+      const buyer = current.participants.find((party) => party.role === 'buyer');
+      if (buyer) {
+        const violations = this.gate.invoiceTermsViolations(buyer.entityId, next, current.createdAt);
+        if (violations.length > 0) throw new LifecycleError(violations.map((item) => item.message).join('; '));
+      }
+    }
+    return this.lifecycle.amendTerms(transactionId, next, reason, at);
+  }
+
   view(transactionId: string, now: string): {
     mode: 'paper'|'live';
     transaction: ReturnType<EscrowTransactionLifecycle['getTransaction']>;
@@ -67,6 +156,7 @@ export class LifecycleService {
     entities: ReturnType<AgentStore['listEntities']>;
     events: ReturnType<typeof flowLifecycleOutcome>['events'];
     termsDecisions: ReturnType<typeof flowLifecycleOutcome>['decisions'];
+    feeCharge: FeeCharge|null;
   } {
     const lifecycle = this.lifecycle;
     if (!lifecycle.hasTransaction(transactionId)) {
@@ -75,8 +165,9 @@ export class LifecycleService {
     const transaction = lifecycle.getTransaction(transactionId);
     // Hold the write lock while reading history and committing the projection.
     // This synchronous work uses local records and injected policies only.
-    const {outcome, flowed} = this.store.transaction(() => {
+    const {outcome, flowed, feeCharge} = this.store.transaction(() => {
       const outcome = lifecycle.outcomeFor(transactionId, {now});
+      const feeCharge = this.fees.settle(transactionId, outcome, 'lifecycle') ?? null;
       const entities = new Map(
         this.store.listEntities().map((entity) => [entity.id, entity]),
       );
@@ -186,7 +277,7 @@ export class LifecycleService {
         this.store.saveReliabilityState(state);
         this.store.insertTermsDecision(decision);
       }
-      return {outcome, flowed};
+      return {outcome, flowed, feeCharge};
     });
     const parties = transaction.participants.flatMap((participant) => {
       const entity = this.store.getEntity(participant.entityId);
@@ -201,6 +292,7 @@ export class LifecycleService {
       entities: parties,
       events: flowed.events,
       termsDecisions: flowed.decisions,
+      feeCharge,
     };
   }
 

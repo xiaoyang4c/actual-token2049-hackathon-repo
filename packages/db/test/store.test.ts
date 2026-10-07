@@ -93,12 +93,14 @@ describe('AgentStore', () => {
         'reliability_event_revisions',
         'reliability_event_weights',
         'reliability_events',
+        'reliability_fee_charges',
         'reliability_kyc_identifiers',
         'reliability_kyc_profiles',
         'reliability_kyc_status_records',
         'reliability_lifecycle_commands',
         'reliability_lifecycle_transitions',
         'reliability_listings',
+        'reliability_offers',
         'reliability_omnibus_deal_funding',
         'reliability_omnibus_deposits',
         'reliability_omnibus_pools',
@@ -122,8 +124,8 @@ describe('AgentStore', () => {
       if (versions === null) {
         return;
       }
-      // 001-008 and 010-014. 009 is reserved.
-      expect(versions.versions).toBe(13);
+      // 001-008, 010-014, and 016. 009 is reserved. 015 is reserved for anchors.
+      expect(versions.versions).toBe(14);
     } finally {
       db.close();
     }
