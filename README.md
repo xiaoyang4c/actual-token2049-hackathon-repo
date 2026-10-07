@@ -30,8 +30,9 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Contract engine, disputes, remedies, audit log | Built and tested. Paper by default |
 | Live Masumi V2 escrow | Built. Tested against a fake payment service. No live preprod run yet |
 | Masumi payment service | Running on the preprod server with funded wallets |
-| Coworkers | Registered on the Masumi registry and approved in the TOKEN2049 workspace. The Task worker waits for model access |
-| Tally UI | Hosted publicly with six showcase contracts |
+| Coworkers | Registered on the Masumi registry and approved in the TOKEN2049 workspace. The Task worker runs on the server. Paid Tasks complete with Masumi escrow on preprod, and the first collection is confirmed |
+| Settlement anchors | Built. Fingerprints of settled records, chained per company, for Cardano preprod. Posting waits for the team's go-ahead. Read [Settlement anchors](docs/settlement-anchors.md) |
+| Tally UI | Hosted publicly with six showcase contracts and Ask a Coworker (a free preview) |
 | Scoring, pair decay, fees | Stubs. Read [Implementation status](docs/implementation-status.md) |
 | KYC | Mock provider |
 | Sign-in | Not built. Role views in the UI are lenses, not access control |

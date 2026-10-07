@@ -3,7 +3,7 @@ import { loadMarketplace, loadTransaction } from "./data.js"
 import { buildView, receiptLink } from "./model.js"
 import { AREAS, deskTitle, renderDesk } from "./render.js"
 import {
-  askCoworker, exampleFor, loadAnswer, loadCase, loadContract, loadContracts, loadProfile, loadRulingOptions, loadRulingPayload, searchCompanies,
+  askCoworker, exampleFor, loadAnswer, loadCase, loadCompanyAnchors, loadContract, loadContractAnchors, loadContracts, loadProfile, loadRulingOptions, loadRulingPayload, searchCompanies,
 } from "./tally.js"
 
 const POLL_MS = 5000
@@ -34,8 +34,9 @@ const tally = {
   selected: "",
   detail: null,
   detailError: "",
+  detailAnchors: null,
   mediation: { selected: null, caseFile: null, caseError: "", options: null, winner: "buyer", reason: "", payload: null, busy: false, error: "" },
-  companies: { query: "", results: [], selectedId: "", profile: null, busy: false, error: "" },
+  companies: { query: "", results: [], selectedId: "", profile: null, anchors: null, busy: false, error: "" },
   ask: { coworker: "deal-desk", text: "", job: null, busy: false, error: "" },
 }
 
@@ -191,9 +192,10 @@ async function inspect(id) {
 async function openDeal(id, focus = true) {
   tally.selected = id
   try {
-    const detail = await loadContract(id)
+    const [detail, anchors] = await Promise.all([loadContract(id), loadContractAnchors(id).catch(() => null)])
     if (tally.selected !== id) return
     tally.detail = detail
+    tally.detailAnchors = anchors
     tally.detailError = ""
   } catch (error) {
     if (tally.selected === id) tally.detailError = `Deal unavailable: ${error.message}`
@@ -268,7 +270,9 @@ async function openCompany(id) {
   const companies = tally.companies
   companies.selectedId = id
   try {
-    companies.profile = await loadProfile(id)
+    const [profile, anchors] = await Promise.all([loadProfile(id), loadCompanyAnchors(id).catch(() => null)])
+    companies.profile = profile
+    companies.anchors = anchors
     companies.error = ""
   } catch (error) {
     companies.error = error.message

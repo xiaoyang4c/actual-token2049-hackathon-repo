@@ -9,7 +9,9 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {partyActionBytes, type PartyAction} from '../../packages/reliability/src/contract-lifecycle/engine';
 import {generateEd25519, signBytes} from '../../packages/reliability/src/contract-lifecycle/signatures';
+import {AgentStore} from '../../packages/db/src/index';
 import {start} from '../control-api';
+import {AnchorWorker} from './anchors';
 import {envOf} from './contract-kit';
 import {seedShowcase} from './contract-showcase';
 
@@ -159,6 +161,20 @@ describe('contract read views', () => {
       expect(search.map((item) => item.id)).toEqual(['kopi-origin']);
       const profile = await call(origin, '/reliability/profile?entityId=kopi-origin');
       expect((profile.body.entity as {displayName: string}).displayName).toBe('Kopi Origin Roasters');
+
+      // Settlement anchors: the worker fingerprints the final records; the routes read them.
+      const store = AgentStore.open(databasePath);
+      new AnchorWorker({store, chain: null, submit: false, now: () => Date.now(), log: () => {}}).collect();
+      store.close();
+      const chain = await call(origin, '/reliability/anchors/company?entityId=kopi-origin');
+      expect(chain.status).toBe(200);
+      expect((chain.body.chain as {intact: boolean; length: number}).intact).toBe(true);
+      expect((chain.body.chain as {length: number}).length).toBeGreaterThan(0);
+      const anchored = await call(origin, `/reliability/anchors/contract?id=${settled.id}`);
+      const records = anchored.body.records as Array<{recordUnchanged: boolean; anchor: {status: string}}>;
+      expect(records.length).toBeGreaterThan(0);
+      expect(records.every((record) => record.recordUnchanged && record.anchor.status === 'waiting')).toBe(true);
+      expect((await call(origin, '/reliability/anchors/company')).status).toBe(400);
     } finally {
       await server.stop(true);
       process.env = previous;

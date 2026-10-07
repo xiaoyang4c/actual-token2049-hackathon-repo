@@ -39,6 +39,7 @@ const PROXY_PATHS = new Set([
   "/reliability/contracts", "/reliability/contracts/list", "/reliability/contracts/templates",
   "/reliability/contracts/case", "/reliability/contracts/ruling-options", "/reliability/contracts/ruling-payload",
   "/reliability/profile", "/reliability/profile/search",
+  "/reliability/anchors/contract", "/reliability/anchors/company",
 ])
 
 const ASK_PATH = "/coworkers/ask"

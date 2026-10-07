@@ -76,7 +76,7 @@ describe("operator ui server", () => {
 
       for (const name of ["entities", "scores", "listings", "transactions", "receipts", "lifecycle", "kyc", "kyc/fixtures",
         "contracts", "contracts/list", "contracts/templates", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload",
-        "profile", "profile/search"]) {
+        "profile", "profile/search", "anchors/contract", "anchors/company"]) {
         const path = `/reliability/${name}`
         const query = new URLSearchParams({transactionId: "a/b & c", entityId: "entity-new", now: "2026-10-06T12:00:00Z"})
         const read = await fetch(`${origin}${path}?${query}`)

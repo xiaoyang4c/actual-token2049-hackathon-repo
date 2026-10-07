@@ -47,6 +47,16 @@ export async function loadProfile(entityId, fetcher = fetch) {
   return value
 }
 
+/** Fingerprints of a contract's final records, and their Cardano anchors. */
+export async function loadContractAnchors(id, fetcher = fetch) {
+  return getJson(`/reliability/anchors/contract?id=${enc(id)}`, fetcher)
+}
+
+/** A company's chain of settlement fingerprints. */
+export async function loadCompanyAnchors(entityId, fetcher = fetch) {
+  return getJson(`/reliability/anchors/company?entityId=${enc(entityId)}`, fetcher)
+}
+
 // ---- Ask a Coworker (free preview; the worker reads only and stores nothing) ----
 
 export const COWORKERS = [

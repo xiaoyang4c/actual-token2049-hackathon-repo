@@ -4,7 +4,7 @@ import {deskTitle, renderDesk} from './render.js';
 import {
   actionFor, dealsView, exampleFor, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, viewerRole,
 } from './tally.js';
-import {atomic, renderAsk, renderCompanies, renderDeals, renderMediation} from './tally-views.js';
+import {anchorStatus, atomic, renderAsk, renderCompanies, renderDeals, renderMediation} from './tally-views.js';
 
 const NOW = Date.UTC(2026, 9, 7, 6, 0, 0);
 const HOUR = 3_600_000;
@@ -146,5 +146,38 @@ describe('Ask a Coworker', () => {
     expect(exampleFor('mediator', CONTRACTS)).toBe('contract: c2\nmilestone: 0');
     expect(exampleFor('mediator', [])).toBe('contract: <contract id>\nmilestone: 0');
     expect(exampleFor('deal-desk', CONTRACTS)).toContain('1,200 kg');
+  });
+});
+
+describe('settlement anchors on the website', () => {
+  const HASH = 'ab'.repeat(32);
+  const confirmed = {status: 'confirmed', txHashes: [HASH], explorerUrls: [`https://preprod.cardanoscan.io/transaction/${HASH}`], blockHeight: 42, anchoredAt: '2026-10-07T06:00:00Z'};
+
+  test('a confirmed anchor links to Cardanoscan, and only for a real transaction hash', () => {
+    const html = anchorStatus(confirmed);
+    expect(html).toContain('Fingerprint on Cardano');
+    expect(html).toContain(`href="https://preprod.cardanoscan.io/transaction/${HASH}"`);
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(anchorStatus({...confirmed, explorerUrls: ['javascript:alert(1)']})).not.toContain('href');
+    expect(anchorStatus({...confirmed, explorerUrls: ['https://preprod.cardanoscan.io/transaction/x" onclick="y']})).not.toContain('href');
+    expect(anchorStatus({status: 'waiting', txHashes: [], explorerUrls: [], blockHeight: null, anchoredAt: null})).toContain('next anchor batch');
+  });
+
+  test('a company shows its chain: anchored entries, and a broken chain says so', () => {
+    const profile = {
+      entity: {id: 'kopi', displayName: 'Kopi', kycStatus: 'verified', kycTier: 'basic', createdAt: '2026-10-01'},
+      contractSummary: {live: {}, simulated: {}}, scores: [], scoringPolicy: {version: 'v0', provisional: false}, deals: [],
+    };
+    const anchors = {entityId: 'kopi', chain: {intact: true, problems: [], length: 2, anchored: 1, head: HASH}, entries: [
+      {seq: 1, entryHash: HASH, recordHash: HASH, contractId: 'c1', milestoneId: 'm1', anchor: confirmed},
+      {seq: 2, entryHash: HASH, recordHash: HASH, contractId: 'c2', milestoneId: 'm2', anchor: {status: 'waiting', txHashes: [], explorerUrls: [], blockHeight: null, anchoredAt: null}},
+    ]};
+    const html = renderCompanies(tally({area: 'companies', companies: {query: '', results: [], selectedId: 'kopi', profile, anchors, busy: false, error: ''}}));
+    expect(html).toContain('2 settled records fingerprinted · 1 on Cardano · chain <strong>intact</strong>');
+    expect(html).toContain('#2 · waiting for the next batch');
+    const broken = renderCompanies(tally({area: 'companies', companies: {query: '', results: [], selectedId: 'kopi', profile, busy: false, error: '',
+      anchors: {...anchors, chain: {...anchors.chain, intact: false, problems: ['entry 2 does not link to the entry before it']}}}}));
+    expect(broken).toContain('broken');
+    expect(broken).toContain('entry 2 does not link to the entry before it');
   });
 });

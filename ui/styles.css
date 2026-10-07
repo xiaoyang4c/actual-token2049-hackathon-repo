@@ -300,6 +300,12 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
 .status-successful .status-dot { background: var(--success); }
 .status-pending .status-dot { background: var(--pending); }
 #company-form { padding: 16px 18px; }
+/* Settlement anchors. */
+.anchor { font-size: 12px; margin: 6px 0 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.anchor-confirmed { border-color: var(--success); }
+.anchor a { color: inherit; text-decoration: underline; }
+.anchor-list li { margin: 2px 0; }
+
 /* Ask a Coworker: the answer is the main column. */
 .workspace.ask-workspace { grid-template-columns: minmax(300px, 1fr) minmax(0, 1.7fr); }
 .ask-form { display: grid; gap: 10px; padding: 16px 18px; }

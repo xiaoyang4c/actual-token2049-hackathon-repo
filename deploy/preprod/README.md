@@ -121,6 +121,17 @@ It needs these secrets in `~/tally-secrets`:
 Install and start: copy the unit to `/etc/systemd/system`, run `sudo systemctl daemon-reload`, then `sudo systemctl enable --now tally-coworkers`.
 Read its log with `journalctl -u tally-coworkers -f`. The journal of each Task is in `~/tally-app/data/coworker-worker`.
 
+## Settlement anchors
+
+[`tally-anchors.service`](tally-anchors.service) fingerprints settled records and, with `ANCHOR_SUBMIT=on`, posts them to Cardano preprod. Read [Settlement anchors](../../docs/settlement-anchors.md).
+
+| File in `~/tally-secrets` | What | How to create it |
+| --- | --- | --- |
+| `anchor_wallet_skey` | The anchor wallet key. It pays only anchor fees | `bun run anchors:wallet` creates it and prints only the address |
+| `blockfrost_preprod` | Already present for the payment service | |
+
+Fund the address with test ADA, check `bun run anchors:status`, then install the unit like the others. It starts with submission off.
+
 ## Register the Coworkers
 
 ### Masumi registry (on-chain)
