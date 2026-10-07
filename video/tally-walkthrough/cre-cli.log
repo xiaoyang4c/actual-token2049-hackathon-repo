@@ -1,0 +1,28 @@
+Initializing...
+Loading settings...
+! Using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.
+Checking RPC connectivity...
+  Reading pre-built WASM binary...
+✓ Loaded WASM binary from ./main.wasm
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: 1984e39ece6fc2e000d7c857f6b6bb23af67d2223b4805fcb1d279d091ab07da
+  Config hash: ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356
+✓ Parsed JSON input successfully
+✓ Created HTTP trigger payload with 3 fields
+2026-10-07T15:17:23Z [SIMULATION] Simulator Initialized
+
+2026-10-07T15:17:23Z [SIMULATION] Running trigger trigger=http-trigger@1.0.0-alpha
+2026-10-07T15:17:24Z [USER LOG] TALLY_EVIDENCE_REPORT:{"version":1,"network":"preprod","assetUnit":"16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d","claim":{"txHash":"1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52","recipient":"addr_test1qzt8grww0fvwn8j6e95ayeedfr706dg0pxhltrpmpxpnj6n6vv2u6sgysk32l3f0zj4cuj2crvh8773m8t4upsw0thfs36sckq","amountAtomic":"1000000"},"status":"verified","checks":{"transaction":true,"recipient":true,"amount":true,"confirmations":true},"minimumConfirmations":3,"confirmations":1736,"receivedAtomic":"1000000","observation":{"txHash":"1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52","validContract":true,"blockHash":"16781a007ddd8a29a1a9253d85885ccd01e846f678b004fb851d0f02f8cedc1b","blockHeight":5263112,"blockTime":1791347791,"recipientInputAtomic":"0","recipientOutputAtomic":"1000000","observedHeight":5264847}}
+
+✓ Workflow Simulation Result:
+"{\"version\":1,\"network\":\"preprod\",\"assetUnit\":\"16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d\",\"claim\":{\"txHash\":\"1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52\",\"recipient\":\"addr_test1qzt8grww0fvwn8j6e95ayeedfr706dg0pxhltrpmpxpnj6n6vv2u6sgysk32l3f0zj4cuj2crvh8773m8t4upsw0thfs36sckq\",\"amountAtomic\":\"1000000\"},\"status\":\"verified\",\"checks\":{\"transaction\":true,\"recipient\":true,\"amount\":true,\"confirmations\":true},\"minimumConfirmations\":3,\"confirmations\":1736,\"receivedAtomic\":\"1000000\",\"observation\":{\"txHash\":\"1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52\",\"validContract\":true,\"blockHash\":\"16781a007ddd8a29a1a9253d85885ccd01e846f678b004fb851d0f02f8cedc1b\",\"blockHeight\":5263112,\"blockTime\":1791347791,\"recipientInputAtomic\":\"0\",\"recipientOutputAtomic\":\"1000000\",\"observedHeight\":5264847}}"
+
+2026-10-07T15:17:24Z [SIMULATION] Execution finished signal received
+2026-10-07T15:17:24Z [SIMULATION] Skipping WorkflowEngineV2
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
