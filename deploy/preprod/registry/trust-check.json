@@ -22,7 +22,7 @@
     "token2049"
   ],
   "name": "Tally Trust Check",
-  "apiBaseUrl": "https://13-210-42-0.sslip.io/trust-check",
+  "apiBaseUrl": "https://13.210.42.0/trust-check",
   "description": "Explains a company's Tally reliability record before you deal with it: completed deals, disputes, rulings followed, and the escrow terms its score supports. Preprod demo, test USDM only.",
   "Capability": {
     "name": "tally-trust-check",

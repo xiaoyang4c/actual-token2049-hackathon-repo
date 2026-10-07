@@ -6,10 +6,12 @@
  */
 
 import {connect, signInAddress, utf8Hex, type Cip30Api} from './cip30'
+import {APP_EDITION} from './edition'
+import {serverUrl} from './server-url'
 import {walletFromPhrase, type BrowserWallet} from './cardano-keys'
 
 /** The Tally server. Empty means this origin (the Vite proxy or ui/server.ts). */
-const SERVER = ((import.meta.env.VITE_TALLY_SERVER_URL as string | undefined) ?? (import.meta.env.VITE_COWORKER_ASK_URL as string | undefined) ?? '').replace(/\/$/, '')
+const SERVER = serverUrl(import.meta.env.VITE_TALLY_SERVER_URL) || serverUrl(import.meta.env.VITE_COWORKER_ASK_URL)
 const SESSION_KEY = 'tally-session'
 
 export interface Session {
@@ -94,6 +96,7 @@ function saveSession(session: Session | null) {
     if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
     else localStorage.removeItem(SESSION_KEY)
   } catch { /* storage unavailable: the session lasts until the page closes */ }
+  if (APP_EDITION) window.dispatchEvent(new CustomEvent('tally-session-changed', {detail: session}))
 }
 
 export interface Profile {

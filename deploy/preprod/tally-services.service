@@ -13,7 +13,7 @@ Environment=TALLY_SECRETS_DIR=/home/ubuntu/tally-secrets
 Environment=TALLY_DEPOSIT_ADDRESS=
 # on: every sale and contract needs a wallet that the entity proved it controls.
 Environment=MARKETPLACE_REQUIRE_WALLET=on
-Environment=TALLY_SIGN_IN_DOMAIN=tally-origins.vercel.app
+Environment=TALLY_SIGN_IN_DOMAIN=main.d23gra1a9ugqjs.amplifyapp.com
 ExecStart=/home/ubuntu/.bun/bin/bun run services/dev.ts
 Restart=always
 RestartSec=5

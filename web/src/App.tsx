@@ -1,3 +1,7 @@
+import {AppGate, AppSessionProvider} from '@/lib/app-session'
+import {APP_EDITION} from '@/lib/edition'
+import {AppContractPage} from '@/pages/AppContract'
+import {NewDealPage} from '@/pages/NewDeal'
 import {useEffect} from 'react'
 import {BrowserRouter, Navigate, Route, Routes, useLocation} from 'react-router-dom'
 import {AnimatePresence} from 'motion/react'
@@ -29,15 +33,17 @@ function AnimatedRoutes() {
     <AnimatePresence mode="wait">
       <PageIn key={location.pathname}>
         <Routes location={location}>
-          <Route path="/" element={<DealsPage />} />
-          <Route path="/contracts/:id" element={<ContractPage />} />
-          <Route path="/mediation" element={<MediationPage />} />
+          <Route path="/" element={APP_EDITION ? <AppGate><DealsPage /></AppGate> : <DealsPage />} />
+          {APP_EDITION ? <Route path="/deals/new" element={<AppGate><NewDealPage /></AppGate>} /> : null}
+          {APP_EDITION ? <Route path="/deals/:id" element={<AppGate><AppContractPage /></AppGate>} /> : null}
+          {!APP_EDITION ? <Route path="/contracts/:id" element={<ContractPage />} /> : null}
+          {!APP_EDITION ? <Route path="/mediation" element={<MediationPage />} /> : null}
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/deal-desk" element={<DealDeskPage />} />
           <Route path="/ask" element={<AskPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/coworkers" element={<CoworkersPage />} />
-          <Route path="/operator" element={<OperatorPage />} />
+          {!APP_EDITION ? <Route path="/operator" element={<OperatorPage />} /> : null}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </PageIn>
@@ -49,7 +55,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <TooltipProvider delay={150}>
-        <LensProvider>
+        <AppSessionProvider><LensProvider>
           <ScrollReset />
           <Backdrop />
           <ScrollProgress />
@@ -57,7 +63,7 @@ export default function App() {
             <AnimatedRoutes />
           </Shell>
           <Toaster />
-        </LensProvider>
+        </LensProvider></AppSessionProvider>
       </TooltipProvider>
     </BrowserRouter>
   )

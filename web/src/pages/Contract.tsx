@@ -1,4 +1,4 @@
-import {useState} from 'react'
+import {useState, type ReactNode} from 'react'
 import {Link, useParams} from 'react-router-dom'
 import {BlockChain, FundsFlow, Reveal} from '@/components/motion'
 import {ArrowLeft, Gavel, ShieldCheck, ShieldX} from 'lucide-react'
@@ -7,7 +7,7 @@ import {EvidenceList} from '@/components/Evidence'
 import {Amount, Countdown, ErrorNote, Hash, KV, Section, SimTag, StageTrack, StateTag, Tag} from '@/components/kit'
 import {Skeleton} from '@/components/ui/skeleton'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
-import {api, type AuditRow} from '@/lib/api'
+import {api, type AuditRow, type ContractView, type DisputeCase, type ContractSummary, type ContractAnchors} from '@/lib/api'
 import {ACTION_LABEL, REMEDY_LABEL, dateTime, pct, pretty, usdm} from '@/lib/format'
 import {useAsync} from '@/lib/useAsync'
 
@@ -43,13 +43,21 @@ export function ContractPage() {
   if (view.error) return <ErrorNote>{view.error}</ErrorNote>
   if (!view.data || !kase.data) return <div className="space-y-4"><Skeleton className="h-40 rounded-[16px] bg-white/70" /><Skeleton className="h-96 rounded-[16px] bg-white/70" /></div>
 
-  const v = view.data
-  const k = kase.data
-  const m = v.milestones[0]
+  return <ContractDetails view={view.data} kase={kase.data} audit={audit.data} anchors={anchors.data} anchorsError={anchors.error} summary={summary} />
+}
+
+/** Shared deal sections. App callers supply only session-gated data. */
+export function ContractDetails({view: v, kase: k, audit, anchors, anchorsError, summary, milestoneIndex = 0, actions, privateDeal = false}: {
+  view: ContractView; kase: DisputeCase; audit?: {rows: AuditRow[]; chainIntact: boolean} | null;
+  anchors?: ContractAnchors | null; anchorsError?: string | null; summary?: ContractSummary;
+  milestoneIndex?: number; actions?: ReactNode; privateDeal?: boolean
+}) {
+  const id = v.contract.id
+  const m = v.milestones[milestoneIndex]
   const fault = m.reliability?.fault ?? 'none'
-  const rawNext = summary?.milestones[0]?.next
+  const rawNext = summary?.milestones[milestoneIndex]?.next
   const next = rawNext && rawNext.actor !== 'none' ? rawNext : null
-  const outcome = summary?.milestones[0]?.outcome
+  const outcome = summary?.milestones[milestoneIndex]?.outcome
   const terms = v.contract.terms
   const buyer = summary?.buyer.displayName ?? terms.buyer.displayName ?? v.contract.buyerId
   const seller = summary?.seller.displayName ?? terms.seller.displayName ?? v.contract.sellerId
@@ -75,12 +83,12 @@ export function ContractPage() {
             <Amount display={k.milestone.amount.display} className="display mt-2 block text-[38px]" />
           </div>
         </div>
-        <div className="mt-8"><StageTrack state={k.milestone.state} terminal={summary?.milestones[0]?.terminal ?? false} /></div>
+        <div className="mt-8"><StageTrack state={k.milestone.state} terminal={summary?.milestones[milestoneIndex]?.terminal ?? false} /></div>
         <div className="mt-6 flex flex-col gap-3 rounded-[12px] bg-black/[0.035] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           {next ? (
             <p className="text-[14px]"><span className="font-semibold">Waiting for the {next.actor}</span><span className="text-ink-2"> · {next.action}</span>{next.dueAt ? <span className="text-ink-3"> · by {dateTime(next.dueAt.ms)}, <Countdown ms={next.dueAt.ms} /></span> : null}</p>
           ) : <p className="text-[14px] text-ink-2">{outcome ? <><span className="font-semibold text-ink">Closed</span> · {pretty(outcome.toLowerCase())}{m.reliability ? `, recorded as ${m.reliability.state}${fault !== 'none' ? ` with the ${fault} at fault` : ''}` : ''}.</> : k.nextStep}</p>}
-          {inT3 ? <Link to={`/mediation?case=${id}`} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] bg-ink px-3.5 text-[13px] font-semibold text-white hover:bg-ink-2"><Gavel className="size-4" />Open the case</Link> : null}
+          {inT3 && !privateDeal ? <Link to={`/mediation?case=${id}`} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] bg-ink px-3.5 text-[13px] font-semibold text-white hover:bg-ink-2"><Gavel className="size-4" />Open the case</Link> : null}
         </div>
       </header>
 
@@ -93,6 +101,8 @@ export function ContractPage() {
           <FundsFlow escrows={m.escrows} buyer={buyer} seller={seller} />
         </section>
       </Reveal>
+
+      {actions}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-6">
@@ -114,7 +124,7 @@ export function ContractPage() {
 
           <Reveal><Section title="Evidence"><EvidenceList kase={k} /></Section></Reveal>
 
-          {audit.data ? <AuditTrail rows={audit.data.rows} intact={audit.data.chainIntact} /> : null}
+          {audit ? <AuditTrail rows={audit.rows} intact={audit.chainIntact} /> : null}
         </div>
 
         <div className="min-w-0 space-y-6">
@@ -126,12 +136,12 @@ export function ContractPage() {
               ['Network', `${terms.network} · test USDM`],
               ['Custody', v.custodyModel === 'platform_custodial_test_only' ? 'Platform test wallets' : v.custodyModel],
               ['Signatures', `${Object.keys(v.contract.signatures).length} of 2`],
-              ['Terms hash', <Hash key="h" value={v.contract.termsSha256} n={6} />],
+              ['Terms hash', v.contract.termsSha256 ? <Hash key="h" value={v.contract.termsSha256} n={6} /> : 'Submit to freeze terms'],
             ]} />
           </Section>
 
           <Section title="Deadlines">
-            <KV rows={Object.entries(k.milestone.deadlines).map(([key, moment]) => [pretty(key.replace(/([A-Z])/g, ' $1').toLowerCase()), <span key={key}>{dateTime(moment.ms)} <span className="text-ink-3">· <Countdown ms={moment.ms} className="text-[12px]" /></span></span>])} />
+            {k.milestone.deadlines ? <KV rows={Object.entries(k.milestone.deadlines).map(([key, moment]) => [pretty(key.replace(/([A-Z])/g, ' $1').toLowerCase()), <span key={key}>{dateTime(moment.ms)} <span className="text-ink-3">· <Countdown ms={moment.ms} className="text-[12px]" /></span></span>])} /> : <p className="text-[13px] text-ink-3">Deadlines are set after both parties sign.</p>}
           </Section>
 
           {m.obligations.length ? (
@@ -148,7 +158,7 @@ export function ContractPage() {
           ) : null}
 
           <Section title="On-chain fingerprint" aside="Cardano preprod">
-            {anchors.data ? <ContractAnchorList anchors={anchors.data} names={(entityId) => (entityId === v.contract.buyerId ? buyer : entityId === v.contract.sellerId ? seller : entityId)} /> : anchors.error ? <p className="text-[13px] text-ink-3">{anchors.error}</p> : <p className="text-[13px] text-ink-3">Loading…</p>}
+            {anchors ? <ContractAnchorList anchors={anchors} names={(entityId) => (entityId === v.contract.buyerId ? buyer : entityId === v.contract.sellerId ? seller : entityId)} /> : anchorsError ? <p className="text-[13px] text-ink-3">{anchorsError}</p> : <p className="text-[13px] text-ink-3">Loading…</p>}
           </Section>
 
           <Section title="Reliability record">

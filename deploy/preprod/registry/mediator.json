@@ -22,7 +22,7 @@
     "token2049"
   ],
   "name": "Tally Mediator",
-  "apiBaseUrl": "https://13-210-42-0.sslip.io/mediator",
+  "apiBaseUrl": "https://13.210.42.0/mediator",
   "description": "Reviews a disputed Tally escrow: the signed terms, the agreed evidence and both sides' statements. Drafts a reasoned Tier 3 ruling under the contract's fixed remedies, for a human mediator to sign. Preprod demo, test USDM only.",
   "Capability": {
     "name": "tally-mediator",

@@ -1,0 +1,25 @@
+[Unit]
+Description=Tally app contract scheduler (Cardano preprod)
+After=network-online.target tally-app-services.service
+Wants=network-online.target tally-app-services.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tally-app/current
+Environment=CONTROL_DB_PATH=/home/ubuntu/tally-app/app-data/agent.sqlite
+Environment=TALLY_EDITION=app
+Environment=MARKETPLACE_REQUIRE_WALLET=on
+Environment=CARDANO_MODE=preprod
+Environment=CARDANO_ALLOW_NETWORK=true
+Environment=CARDANO_NETWORK=cardano-preprod
+Environment=TALLY_SECRETS_DIR=/home/ubuntu/tally-app-secrets
+EnvironmentFile=/home/ubuntu/tally-app/app.env
+ExecStart=/home/ubuntu/.bun/bin/bun run contracts:worker
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

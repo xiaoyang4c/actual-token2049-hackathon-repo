@@ -7,6 +7,9 @@ import {Amount, Countdown, Empty, ErrorNote, SimTag, StageTrack, StateTag, Tag, 
 import {ParallaxHero, Reveal, Stagger, StaggerItem} from '@/components/motion'
 import {Skeleton} from '@/components/ui/skeleton'
 import {Tabs, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {APP_EDITION} from '@/lib/edition'
+import {useAppSession} from '@/lib/app-session'
+import {deals} from '@/lib/deals'
 import {api, type ContractSummary, type MilestoneSummary} from '@/lib/api'
 import {dateTime, usdm} from '@/lib/format'
 import {useAsync} from '@/lib/useAsync'
@@ -34,13 +37,15 @@ function InkStat({label, value, suffix}: {label: string; value: number; suffix?:
 }
 
 export function DealsPage() {
-  const {lens} = useLens()
-  const contracts = useAsync(() => api.contracts({partyId: lens === 'all' ? undefined : lens}), `contracts-${lens}`)
+  const {lens: demoLens} = useLens()
+  const {session, me} = useAppSession()
+  const lens = APP_EDITION ? me?.entityId ?? '' : demoLens
+  const contracts = useAsync(() => APP_EDITION ? (session ? deals.contracts(session) : Promise.resolve([])) : api.contracts({partyId: lens === 'all' ? undefined : lens}), `contracts-${lens}-${APP_EDITION ? session?.token : 'demo'}`)
   const [filter, setFilter] = useState<Filter>('all')
 
   const rows = useMemo<Row[]>(() => (contracts.data ?? []).flatMap((contract) => contract.milestones.map((milestone) => ({contract, milestone}))), [contracts.data])
   const roleOf = (c: ContractSummary) => (lens === c.buyer.id ? 'buyer' : lens === c.seller.id ? 'seller' : null)
-  const yourMove = (r: Row) => acts(r) && lens !== 'all' && (r.milestone.next!.actor === roleOf(r.contract) || r.milestone.next!.actor === 'both')
+  const yourMove = (r: Row) => acts(r) && lens !== 'all' && (r.milestone.next!.actor === roleOf(r.contract) || r.milestone.next!.actor === 'both' || (APP_EDITION && r.milestone.next!.actor === 'either'))
 
   const open = rows.filter((r) => !r.milestone.terminal)
   const disputes = rows.filter((r) => r.milestone.inDispute)
@@ -55,7 +60,7 @@ export function DealsPage() {
     <div className="space-y-12">
       <section className="relative pb-6 pt-2 lg:pt-4">
         <ParallaxHero className="relative">
-          <div className="eyebrow mb-5 flex items-center gap-2"><span className="h-px w-6 bg-ink/40" aria-hidden />{lensName ? `Deals · ${lensName}` : 'Deals · all parties'}</div>
+          <div className="eyebrow mb-5 flex items-center gap-2"><span className="h-px w-6 bg-ink/40" aria-hidden />{APP_EDITION ? 'My deals' : lensName ? `Deals · ${lensName}` : 'Deals · all parties'}</div>
           <h1 className="display text-gradient max-w-[16ch] text-[40px] sm:text-[64px] lg:text-[76px]">Funds move when the evidence does.</h1>
           <p className="mt-6 max-w-[56ch] text-[15.5px] leading-relaxed text-ink-2">
             Every milestone has one party who has to act next, and a deadline. Money waits in a Masumi escrow on Cardano until the evidence named in the signed terms arrives.
@@ -88,7 +93,7 @@ export function DealsPage() {
 
         {contracts.error ? <ErrorNote>{contracts.error}</ErrorNote> : null}
         {contracts.loading && !contracts.data ? <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[150px] rounded-[16px] bg-white/60" />)}</div> : null}
-        {contracts.data && shown.length === 0 ? <Empty title="Nothing here">No milestones match this filter.</Empty> : null}
+        {contracts.data && shown.length === 0 ? <Empty title="Nothing here">{APP_EDITION && !rows.length ? <>Create your first deal with a verified counterparty. <Link to="/deals/new" className="font-medium underline">New deal</Link></> : 'No milestones match this filter.'}</Empty> : null}
 
         <Stagger as="ul" className="space-y-3.5" key={`${filter}-${lens}`}>
           {shown.map((r) => {
@@ -96,7 +101,7 @@ export function DealsPage() {
             const mine = yourMove(r)
             return (
               <StaggerItem as="li" key={m.id}>
-                <Link to={`/contracts/${c.id}`} className="group block">
+                <Link to={`${APP_EDITION ? '/deals' : '/contracts'}/${c.id}`} className="group block">
                   <SpotlightCard spotlightColor="rgba(255, 212, 0, 0.16)" className={cn('surface rounded-[16px] p-5 transition-[transform,box-shadow] duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_28px_60px_-28px_rgb(11_14_15/0.45)] sm:p-6', mine && 'ring-spin')}>
                     <div className="relative flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                       <div className="min-w-0 flex-1">

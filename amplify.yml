@@ -1,0 +1,24 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - curl -fsSL https://bun.sh/install | bash
+        - export PATH="$HOME/.bun/bin:$PATH"
+        - bun install --frozen-lockfile
+        - cd web
+        - bun install --frozen-lockfile
+        - cd ..
+    build:
+      commands:
+        - export PATH="$HOME/.bun/bin:$PATH"
+        - cd web
+        - bun run build
+  artifacts:
+    baseDirectory: web/dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+      - web/node_modules/**/*

@@ -213,3 +213,61 @@ describe("operator ui server", () => {
     }, "http://127.0.0.1:9")
   })
 })
+
+describe("app edition gate", () => {
+  test("forwards only app methods and public reads, with Bearer and CORS", async () => {
+    const seen: Array<{method: string; path: string; auth: string | null; cookie: string | null; privateHeader: string | null}> = []
+    const control = Bun.serve({port: 0, fetch(req) {
+      const url = new URL(req.url)
+      seen.push({method: req.method, path: url.pathname + url.search, auth: req.headers.get("authorization"), cookie: req.headers.get("cookie"), privateHeader: req.headers.get("x-private")})
+      return Response.json({ok: true})
+    }})
+    const app = "https://app.example"
+    const ui = startUi({port: 0, edition: "app", controlApiUrl: `http://127.0.0.1:${control.port}`, askOrigins: [app]})
+    try {
+      const origin = `http://127.0.0.1:${ui.port}`
+      const token = "Bearer " + "a".repeat(43)
+      const read = await fetch(`${origin}/reliability/app/contract?id=deal%2F1`, {headers: {authorization: token, origin: app, cookie: "secret=1", "x-private": "secret"}})
+      expect(read.status).toBe(200)
+      expect(read.headers.get("access-control-allow-origin")).toBe(app)
+      expect(seen[0]).toEqual({method: "GET", path: "/reliability/app/contract?id=deal%2F1", auth: token, cookie: null, privateHeader: null})
+      const preflight = await fetch(`${origin}/reliability/app/action`, {method: "OPTIONS", headers: {origin: app}})
+      expect(preflight.status).toBe(204)
+      expect(preflight.headers.get("access-control-allow-headers")).toBe("content-type, authorization")
+      expect((await fetch(`${origin}/reliability/app/action`, {method: "OPTIONS", headers: {origin: "https://other.example"}})).status).toBe(403)
+      await fetch(`${origin}/reliability/app/action`, {method: "POST", headers: {authorization: "Bearer invalid token"}, body: "{}"})
+      expect(seen[1]?.auth).toBeNull()
+      for (const route of ["profile/search", "profile", "anchors/company", "contracts/templates", "contracts/draft-templates", "contracts/draft"]) {
+        const res = await fetch(`${origin}/reliability/${route}?q=company`, {headers: {origin: app}})
+        expect(res.status).toBe(200)
+        expect(res.headers.get("access-control-allow-origin")).toBe(app)
+      }
+      const forwarded = seen.length
+      for (const path of ["/", "/index.html", "/app.js", "/tally.js", "/tally-views.js"]) expect((await fetch(origin + path)).status).toBe(404)
+      for (const path of ["/agent/state", "/audit", ...["contracts/list", "contracts", "contracts/terms", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload", "contracts/audit", "anchors/contract", "transactions", "receipts", "entities", "scores", "listings", "lifecycle", "kyc", "kyc/fixtures"].map((route) => `/reliability/${route}`)]) {
+        expect((await fetch(origin + path)).status).toBe(404)
+        expect((await fetch(origin + path, {method: "HEAD"})).status).toBe(404)
+      }
+      for (const path of ["tick", "ruling", "agree", "terminate", "operator", "mediation"]) {
+        expect((await fetch(`${origin}/reliability/app/${path}`, {method: "POST", body: "{}"})).status).toBe(405)
+      }
+      expect((await fetch(`${origin}/reliability/app/action`)).status).toBe(404)
+      expect((await fetch(`${origin}/reliability/app/contracts`, {method: "DELETE"})).status).toBe(405)
+      expect((await fetch(`${origin}/reliability/app/action`, {method: "POST", body: "x".repeat(1_500_001)})).status).toBe(413)
+      expect(seen).toHaveLength(forwarded)
+      expect((await fetch(`${origin}/reliability/account`, {headers: {authorization: token}})).status).toBe(200)
+    } finally {
+      ui.stop(true)
+      control.stop(true)
+    }
+  })
+
+  test("demo blocks the new app routes", async () => {
+    const ui = startUi({port: 0, edition: "demo", controlApiUrl: "http://127.0.0.1:9"})
+    try {
+      const origin = `http://127.0.0.1:${ui.port}`
+      expect((await fetch(`${origin}/reliability/app/me`)).status).toBe(404)
+      expect((await fetch(`${origin}/reliability/app/action`, {method: "POST", body: "{}"})).status).toBe(405)
+    } finally { ui.stop(true) }
+  })
+})

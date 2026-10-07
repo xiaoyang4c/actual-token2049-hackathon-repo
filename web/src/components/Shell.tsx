@@ -5,11 +5,13 @@ import {Brand, useLens} from '@/components/kit'
 import Waves from '@/components/reactbits/Waves'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Sheet, SheetContent, SheetTitle, SheetTrigger} from '@/components/ui/sheet'
+import {APP_EDITION} from '@/lib/edition'
+import {useAppSession} from '@/lib/app-session'
 import {api, type Party} from '@/lib/api'
 import {useAsync} from '@/lib/useAsync'
 import {cn} from '@/lib/utils'
 
-const NAV = [
+const DEMO_NAV = [
   {to: '/', label: 'Deals', icon: LayoutList, end: true},
   {to: '/mediation', label: 'Mediation', icon: Gavel},
   {to: '/companies', label: 'Companies', icon: Building2},
@@ -19,6 +21,20 @@ const NAV = [
   {to: '/operator', label: 'Operator', icon: TableProperties},
   {to: '/account', label: 'Account', icon: Wallet},
 ]
+
+const NAV = APP_EDITION ? [
+  {to: '/', label: 'My deals', icon: LayoutList, end: true},
+  {to: '/deals/new', label: 'New deal', icon: FilePenLine},
+  ...DEMO_NAV.filter(({to}) => !['/', '/mediation', '/operator'].includes(to)),
+] : DEMO_NAV
+
+function SignedIn() {
+  const {session, me, signOut} = useAppSession()
+  return <div className="space-y-2 px-1 text-[13px]">
+    <p className="text-ink-2">{session ? `Signed in as ${me?.displayName ?? 'your wallet account'}` : 'Sign in to see your deals'}</p>
+    {session ? <button type="button" onClick={() => void signOut()} className="font-medium text-ink underline underline-offset-4">Sign out</button> : <Link to="/account" className="font-medium underline underline-offset-4">Go to Account</Link>}
+  </div>
+}
 
 function Nav({onNavigate}: {onNavigate?: () => void}) {
   return (
@@ -76,7 +92,7 @@ function Environment() {
   return (
     <div className="surface-quiet rounded-[10px] p-3 text-[12px] leading-snug text-ink-3">
       <p className="flex items-center gap-2 font-medium text-ink-2"><span className="size-1.5 rounded-[1px] bg-blue" aria-hidden />Cardano preprod</p>
-      <p className="mt-1">Paper contracts on test USDM. Scores and fees use placeholder policies. KYC is mocked.</p>
+      <p className="mt-1">{APP_EDITION ? 'Preprod test funds only. Deals use test USDM. KYC is mocked.' : 'Paper contracts on test USDM. Scores and fees use placeholder policies. KYC is mocked.'}</p>
     </div>
   )
 }
@@ -88,7 +104,7 @@ export function Shell({children}: {children: ReactNode}) {
       <aside className="sticky top-0 hidden h-dvh flex-col gap-8 border-r border-white/60 bg-white/35 px-5 py-6 backdrop-blur-xl lg:flex">
         <Link to="/" aria-label="Tally home"><Brand /></Link>
         <Nav />
-        <LensPicker />
+        {APP_EDITION ? <SignedIn /> : <LensPicker />}
         <div className="mt-auto"><Environment /></div>
       </aside>
 
@@ -102,7 +118,7 @@ export function Shell({children}: {children: ReactNode}) {
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <Brand />
             <Nav onNavigate={() => setOpen(false)} />
-            <LensPicker />
+            {APP_EDITION ? <SignedIn /> : <LensPicker />}
             <div className="mt-auto"><Environment /></div>
           </SheetContent>
         </Sheet>

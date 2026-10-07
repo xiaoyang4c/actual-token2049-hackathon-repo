@@ -92,8 +92,8 @@ Not built: sign-in rate limits that survive a restart, a way to remove a wallet,
 | `TALLY_DEPOSIT_CONFIRMATIONS` | Both | Blocks before a deposit is credited. Default 3 |
 | `MARKETPLACE_REQUIRE_WALLET` | Control API | `on` makes every deal need a proven wallet |
 | `TALLY_SIGN_IN_DOMAIN` | Control API | Website named in the sign-in message. Default `tally-origins.vercel.app` |
-| `TALLY_WEB_ORIGINS` | UI server | Web app origins that may call the chat and account routes |
-| `VITE_TALLY_SERVER_URL` | Web app build | Server for the account routes |
+| `TALLY_WEB_ORIGINS` | UI server | Web app origins that may call chat, accounts, and app routes |
+| `VITE_TALLY_SERVER_URL` | Web app build | Server for account routes and app deal routes |
 
 Run the worker:
 
@@ -103,3 +103,91 @@ bun run deposits:worker
 ```
 
 Migration `017_wallet_accounts.sql` holds challenges, wallet proofs, sessions, deposits, and deposit submissions.
+
+## Signed-in app deals
+
+`VITE_TALLY_EDITION=app` builds the signed-in website.
+The demo remains a paper showcase with a "Viewing as" lens.
+The app shows only the session entity's own deals.
+Its Mediation and Operator routes are absent.
+Read [Two Amplify editions](amplify.md).
+
+Every `/reliability/app/*` route needs a live Bearer session.
+The server takes the caller's entity from that session.
+A party cannot read another deal's terms, audit, evidence, or anchors.
+Those requests return 404.
+An action with a different `partyId` returns 403.
+App requests cannot set `at` or move the paper clock.
+The app exposes no tick, ruling, two-sided agreement, or mutual termination route.
+Public company records and sandbox drafts remain readable.
+
+### Set up deal signing
+
+Pass mock KYC on Account.
+Select **Set up deal signing**.
+The wallet signs this exact message with CIP-30 `signData` or the browser wallet's `signMessage`:
+
+```text
+Tally deal key v1
+Account: <entityId>
+Site: <TALLY_SIGN_IN_DOMAIN>
+This creates your Tally deal signing key. It moves no funds. Sign this only on <domain>.
+```
+
+Both domain placeholders use the server's `TALLY_SIGN_IN_DOMAIN` value.
+The client reads it from `/reliability/app/me`.
+The message has no final newline.
+The client extracts the final 64 signature bytes from COSE_Sign1 (`58 40` plus the bytes).
+SHA-256 of those bytes supplies the Ed25519 seed.
+The same account, site, wallet key, and CIP-8 signing bytes produce the same deal key on another device.
+Keep the site domain stable after registration.
+A wallet implementation that encodes different protected signing headers can produce another key.
+Use the original wallet signing implementation in that case.
+
+The client registers only the public key and preprod payout address with `POST /reliability/app/party`.
+The payout is the extension's change address or the browser wallet's base address.
+The address must start with `addr_test1`.
+The app always checks that the entity proved this address.
+It makes that check even if the demo wallet gate is off.
+Repeating the same registration succeeds.
+A different key or address returns `party_exists`.
+Deal keys cannot be replaced in this build.
+Use the original wallet for later actions.
+
+The private deal key stays in browser memory for one action.
+The client clears its seed after the request.
+It never stores or sends the private key.
+A registered deal key is frozen into each contract's terms.
+The client signs the UTF-8 `termsBytes` from the session-gated terms route.
+For actions, it uses the engine's RFC 8785 canonical JSON and evidence SHA-256 hashes.
+Read [the canonical JSON specification](https://www.rfc-editor.org/rfc/rfc8785).
+
+This derivation has a trade-off.
+Anyone who gets the user to sign this exact message can derive the deal key.
+The message names the account and site to reduce this risk.
+Sign it only on that site.
+The derivation message moves no funds.
+The later signed deal action can instruct the escrow.
+
+### App readiness and limits
+
+Account shows wallet proof, mock KYC, and the registered deal key.
+It adds a deposit step in live mode.
+Paper deals simulate escrow and need no deposit.
+Live deals use real Cardano preprod transactions with test funds.
+No mainnet mode is supported.
+
+The app UI gate accepts only listed app methods.
+It forwards only a well-formed Bearer token and a server-set visitor address.
+It forwards no cookie or client identity header.
+Its app body limit is 1,500,000 bytes to allow base64 evidence.
+Each engine evidence item remains limited to 1 MiB.
+App reads and writes share the 300-request account read limit per visitor per 10 minutes.
+The existing account limits remain in place.
+
+The app server, contract worker, and deposit worker use a separate SQLite database.
+The app database has no showcase seed.
+Live contracts need `bun run contracts:worker`.
+The app deposit worker must use the app's dedicated preprod pool.
+Read [the server setup](../deploy/preprod/README.md#app-edition-server).
+Tier 1 two-sided outcome agreement, mutual termination, and inspector templates are not in the app yet.

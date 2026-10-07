@@ -6,7 +6,7 @@ import {sha256Hex} from '../../packages/reliability/src/contract-lifecycle/hashi
 import {EscrowRejectedError, type ContractEscrow, type EscrowRequest} from '../../packages/reliability/src/contract-lifecycle/ports';
 import type {Remedy} from '../../packages/reliability/src/contract-lifecycle/types';
 import {
-  acceptTerms, act, agreeOutcome, complyAll, createKit, INSPECTORS, inspectorWhitelist, labReport,
+  acceptTerms, act, agreeOutcome, complyAll, createKit, envOf, INSPECTORS, inspectorWhitelist, labReport,
   mediatorRuling, milestone, physicalDelivery, runUntil, settleTicks, terminate, type Kit,
 } from './contract-kit';
 import {PaperContractEscrow} from './contract-paper-escrow';
@@ -257,4 +257,28 @@ describe('action deadlines without a scheduler pass', () => {
       });
     }
   }
+});
+
+describe('app Tier 1 concession', () => {
+  test('the seller signs a full refund through the existing ruling rail; demo refuses it', async () => {
+    for (const edition of ['app', 'demo']) {
+      const kit = createKit({env: envOf([['TALLY_EDITION', edition]])});
+      try {
+        const id = await disputedPhysical(kit, {type: 'partial_release', sellerShareBps: 7000});
+        const mId = milestone(kit, id).id;
+        expect(() => act(kit, id, kit.buyerId, 'concede_refund', {milestoneId: mId})).toThrow(ContractError);
+        if (edition === 'demo') {
+          expect(() => act(kit, id, kit.sellerId, 'concede_refund', {milestoneId: mId})).toThrow(ContractError);
+          expect(milestone(kit, id).state).toBe('tier_1_negotiation');
+        } else {
+          act(kit, id, kit.sellerId, 'concede_refund', {milestoneId: mId});
+          await runUntil(kit, id, 'settled');
+          const result = milestone(kit, id);
+          expect(result.tranches.every((tranche) => tranche.chain.paidToSellerAtomic === '0')).toBe(true);
+          expect(result.tranches.reduce((sum, tranche) => sum + BigInt(tranche.chain.paidToBuyerAtomic ?? '0'), 0n)).toBe(BigInt(result.amountAtomic));
+          expect(result.dispute.obligations.every((obligation) => obligation.party === 'seller' && obligation.compliedAt !== null)).toBe(true);
+        }
+      } finally { kit.close(); }
+    }
+  });
 });

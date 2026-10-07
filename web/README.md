@@ -1,10 +1,19 @@
 # Tally web app
 
-A front end for Tally: deals, contracts, the mediation desk, company records, the Deal Desk, the
-Coworker chat, the Coworkers, the operator ledger, and the Account page. It reads the control API and never signs,
-funds or submits a contract action. It has two inputs. The Coworker chat is free and pays and stores nothing.
-The Account page signs in with a wallet, sends mock KYC, and sends live preprod deposits that the user's own
-wallet signs. Tally never holds a wallet key. Read [Wallet accounts](../docs/wallets.md).
+Tally has two web editions from the same source.
+`VITE_TALLY_EDITION=demo`, or an unset flag, keeps the public paper showcase.
+Its deal views remain read-only.
+Account signs in with a wallet, submits mock KYC, and sends live preprod test deposits.
+The Coworker chat remains a free read-only preview.
+
+`VITE_TALLY_EDITION=app` enables signed-in deals.
+My deals and New deal require a wallet session.
+Only the buyer and seller can read a deal's private details.
+The app hides the lens, Mediation, and Operator.
+Account adds deal signing setup and a readiness checklist.
+All funds are preprod test funds.
+Read [Wallet accounts](../docs/wallets.md) for derivation and its signing-message risk.
+Read [Two Amplify editions](../docs/amplify.md) for hosting.
 
 ## Run
 
@@ -31,7 +40,45 @@ its own origin.
 The tests cover outcomes that omit `fault`. The tests use a temporary database and remove it after the run.
 CI runs all three checks. Read the [Bun testing guide](https://bun.com/docs/test/writing-tests) for the test runner.
 
-## Views and routes
+## Run the app edition
+
+Set `CONTRACT_MEDIATOR_PUBLIC_KEY_HEX` to the mediator's raw Ed25519 public key first.
+Keep that variable available to the control API and contract worker.
+Start a separate app control API and UI gate before Vite:
+
+```sh
+TALLY_EDITION=app CONTROL_API_PORT=8797 CARDANO_AGENT_PORT=8799 CONTROL_DB_PATH=/tmp/tally-app/agent.sqlite TALLY_SIGN_IN_DOMAIN=localhost:5190 MARKETPLACE_REQUIRE_WALLET=on bun run services
+TALLY_EDITION=app UI_PORT=8798 CONTROL_API_URL=http://127.0.0.1:8797 TALLY_WEB_ORIGINS=http://localhost:5190 bun run ui/server.ts
+TALLY_EDITION=app CONTROL_DB_PATH=/tmp/tally-app/agent.sqlite bun run contracts:worker
+cd web && VITE_TALLY_EDITION=app VITE_TALLY_SERVER_URL=http://127.0.0.1:8798 VITE_COWORKER_ASK_URL=http://127.0.0.1:8798 bun run dev
+```
+
+Run each process in a separate terminal.
+These commands use paper escrow with test USDM and mock KYC.
+Do not seed the app database.
+The live preprod setup also needs the app deposit worker.
+
+App routes are under `/reliability/app/`.
+The client sends its Bearer token to the UI gate.
+New deal uses the existing sandbox draft for payouts, deadlines, and fees.
+It then creates a session-owned draft.
+The deal page supports milestone selection, frozen terms, evidence files, and role-valid actions.
+Each action derives a memory-only deal key with one wallet signing prompt.
+The client signs the engine's canonical bytes and refreshes after submission.
+The contract worker processes confirmations and deadlines.
+Tier 1 two-sided agreement, mutual termination, and inspector templates are not in the app yet.
+
+Run both builds:
+
+```sh
+cd web
+bun run test
+bun run lint
+bun run build
+VITE_TALLY_EDITION=app bun run build
+```
+
+## Demo views and routes
 
 | View | What it shows | Routes |
 | --- | --- | --- |
@@ -45,8 +92,8 @@ CI runs all three checks. Read the [Bun testing guide](https://bun.com/docs/test
 | Account | Wallet sign-in (Lace, Eternl, or a wallet created in the browser), mock KYC, and live preprod deposits. Read [Wallet accounts](../docs/wallets.md) | `wallets/challenge`, `wallets/verify`, `account`, `account/kyc`, `account/deposits/*` |
 | Operator | Transactions with receipts, outcomes and KYC that need attention, participants and scores, listings | `transactions`, `receipts`, `entities`, `scores`, `listings` |
 
-All control API routes are under `/reliability/`. Every route is GET except the account routes, which need a wallet
-session. `contracts/draft` runs `createContract`
+All demo control API routes are under `/reliability/`. Demo deal reads use GET. Account writes need a wallet session.
+App deal writes use POST with a session and, for terms and actions, an Ed25519 signature. `contracts/draft` runs `createContract`
 in an in-memory sandbox through `CoworkerTools.draftContract` and stores nothing.
 
 Coworker answers are untrusted model text. The chat renders them as Markdown with raw HTML skipped
@@ -63,25 +110,26 @@ for the white-to-gray theme. Type: Unbounded, Sora, JetBrains Mono.
 
 <https://tally-origins.vercel.app> is built from this repository. [`vercel.json`](../vercel.json) builds
 `web/` and routes `/reliability/*` and `/coworkers/ask` to [`api/demo.ts`](../api/demo.ts), a Vercel
-function on the Bun runtime. The function forwards allowlisted GET routes to the public EC2 demo.
-The website and its hosted Coworker therefore use the same contract IDs.
-`COWORKER_DEMO_URL` sets the read server. Its default matches the hosted chat address in `vercel.json`.
+function on the Bun runtime. It reads the EC2 showcase records at `https://13.210.42.0`.
+`COWORKER_DEMO_URL` overrides that HTTPS endpoint.
 The proxy uses [Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) with a five-second timeout.
+Retired server URLs are refused, including values left in hosting settings.
 
-The build runs [`api/_seed.ts`](../api/_seed.ts) to create a paper database for offline reads.
-It contains six showcase contracts and their settlement fingerprints. The build sends nothing to the chain.
-Each function instance uses the same fallback IDs.
-The build sets `VITE_COWORKER_ASK_URL=https://13-210-42-0.sslip.io`. The browser then sends the chat
-to the Coworker worker on the preprod server, which uses the Gemini model.
-That server must list this site in `TALLY_WEB_ORIGINS`. Read [the preprod server](../deploy/preprod/README.md#operator-ui).
-When the hosted Coworker is offline, the chat goes to this function. It answers without a model in the same request.
-The fallback accepts the fill-in format. Plain English gets the fill-in instructions.
+The build runs [`api/_seed.ts`](../api/_seed.ts) to create the paper database.
+It contains six showcase contracts and their settlement fingerprints.
+The build sends nothing to the chain. Each function instance uses the same fallback IDs.
 
-The build sets `VITE_TALLY_SERVER_URL` to the preprod server. The Account page calls the account routes there,
-with the wallet session token. The preprod UI server must list this site in `TALLY_WEB_ORIGINS`.
-`vercel.json` also sends security headers: a Content-Security-Policy that allows scripts from this site only
-and API calls to this site and the preprod server, `X-Frame-Options: DENY`, and `nosniff`.
-Add a new API host to `connect-src` before the web app calls it.
+Hosted chat and wallet accounts default to `https://13.210.42.0`.
+`VITE_COWORKER_ASK_URL` and `VITE_TALLY_SERVER_URL` override that endpoint in hosting settings.
+The preprod UI server must list this frontend in `TALLY_WEB_ORIGINS`.
+When the hosted Coworker is offline, the Vercel function answers without a model.
+Its fallback accepts the fill-in format. Plain English gets the fill-in instructions.
+
+The CSP in `vercel.json` permits this origin and `https://13.210.42.0`.
+Update `connect-src` when you configure another server.
+The config also sets `X-Frame-Options: DENY` and `nosniff`.
+Amplify uses its own API rewrites and security headers.
+Read [the two Amplify setups](../docs/amplify.md).
 
 Deploy production from `main`. Merge changes through a pull request.
 In the Vercel project, open **Settings > Environments > Production > Branch Tracking**.

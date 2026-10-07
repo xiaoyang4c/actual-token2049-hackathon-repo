@@ -1,3 +1,4 @@
+import {APP_EDITION} from '@/lib/edition'
 import {useMemo, useState} from 'react'
 import {AlertTriangle, Check, FlaskConical, Plus, RotateCcw, Trash2} from 'lucide-react'
 import {motion} from 'motion/react'
@@ -42,7 +43,7 @@ function Field({label, children, hint}: {label: string; children: React.ReactNod
   )
 }
 
-function Result({draft}: {draft: DraftResult}) {
+export function DraftPreview({draft}: {draft: DraftResult}) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
@@ -88,7 +89,7 @@ function Result({draft}: {draft: DraftResult}) {
                     </li>
                   ))}
                 </ul>
-                <p className="mt-1.5 text-[11px] text-ink-3">Seller / buyer, test USDM</p>
+                <p className="mt-1.5 text-[11px] text-ink-3">Seller / buyer, test USDM{APP_EDITION ? '. Two-sided outcome agreement is not built in the app yet.' : ''}</p>
               </div>
             </div>
           </Section></Reveal>
@@ -130,9 +131,9 @@ function Result({draft}: {draft: DraftResult}) {
         </div>
       </Reveal>
 
-      <Reveal><Section title="Create request" aside="POST /reliability/contracts">
+      {!APP_EDITION ? <Reveal><Section title="Create request" aside="POST /reliability/contracts">
         <pre className="mono max-h-80 overflow-auto rounded-[10px] bg-black/[0.035] p-4 text-[12px] leading-relaxed">{JSON.stringify(draft.createRequest, null, 2)}</pre>
-      </Section></Reveal>
+      </Section></Reveal> : null}
     </div>
   )
 }
@@ -284,7 +285,7 @@ export function DealDeskPage() {
       {error ? <ErrorNote>The engine rejected the draft: {error}</ErrorNote> : null}
       {templates.data && !draft ? <div className={busy ? 'hidden' : undefined}><Wizard key={round} templates={templates.data} onDraft={run} attempt={attempt} /></div> : null}
       {busy || (templates.loading && !templates.data) ? <Skeleton className="h-80 rounded-[16px] bg-white/70" /> : null}
-      {draft ? <Result draft={draft} /> : null}
+      {draft ? <DraftPreview draft={draft} /> : null}
     </div>
   )
 }
