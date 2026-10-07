@@ -15,7 +15,7 @@ import {
 } from '@/lib/account'
 import {isRecoveryPhrase, newRecoveryPhrase, normalizePhrase, walletFromPhrase} from '@/lib/cardano-keys'
 import {installedWallets, type InstalledWallet} from '@/lib/cip30'
-import {deviceWallet, forgetDeviceWallet, saveDeviceWallet, unlockDeviceWallet} from '@/lib/device-wallet'
+import {deviceWallet, forgetDeviceWallet, receiveAddressFor, saveDeviceWallet, unlockDeviceWallet} from '@/lib/device-wallet'
 import {cn} from '@/lib/utils'
 
 const USDM = '16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d'
@@ -46,6 +46,20 @@ function Choice<T extends string>({value, options, onChange}: {value: T; options
         </button>
       ))}
     </div>
+  )
+}
+
+/** A whole address with a copy button. It is never shortened, so a selected or copied address is always valid. */
+function ReceiveAddress({address}: {address: string}) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <span className="flex min-w-0 items-start gap-1.5 rounded-[8px] bg-black/[0.035] px-2.5 py-1.5">
+      <span className="mono min-w-0 select-all break-all text-[12px] text-ink">{address}</span>
+      <button type="button" aria-label="Copy receive address" className="shrink-0 rounded-[4px] p-0.5 text-ink-3 transition-colors hover:bg-black/[0.05] hover:text-ink"
+        onClick={() => { void navigator.clipboard?.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>
+        {copied ? <Check className="size-3.5 text-up" /> : <Copy className="size-3.5" />}
+      </button>
+    </span>
   )
 }
 
@@ -318,7 +332,7 @@ function Deposits({session, account, refresh}: {session: Session; account: Accou
       <div className="text-[12.5px] text-ink-3">
         <p>Or send test USDM or test ADA from any wallet app to the Tally deposit address. Send from a wallet that you signed in with, so Tally can credit it to you.</p>
         <p className="mt-1.5 flex flex-wrap items-center gap-2"><span className="text-ink-2">Deposit address</span><Hash value={view.depositAddress} n={14} /></p>
-        <p className="mt-1.5">Need test funds? Use the <a className="underline" href="https://dispenser.masumi.network" target="_blank" rel="noreferrer">Masumi dispenser <ExternalLink className="inline size-3" /></a> for your wallet address.</p>
+        <p className="mt-1.5">Need test funds? Use the <a className="underline" href="https://dispenser.masumi.network" target="_blank" rel="noreferrer">Masumi dispenser <ExternalLink className="inline size-3" /></a> with your receive address (<span className="mono">addr_test1…</span>), not the <span className="mono">stake_test1</span> address.</p>
       </div>
       {view.deposits.length || view.submissions.length ? (
         <ul className="divide-y divide-border rounded-[12px] border border-border bg-white">
@@ -468,14 +482,32 @@ export function AccountPage() {
             <Reveal delay={0.05}>
               <Section title="Wallets" aside={<button type="button" className="text-[12.5px] font-medium text-ink-2 hover:text-ink" onClick={() => setAdding(!adding)}>{adding ? 'Close' : 'Add a wallet'}</button>}>
                 <ul className="space-y-2.5">
-                  {account.wallets.map((wallet) => (
-                    <li key={wallet.address} className="flex flex-wrap items-center gap-2 text-[13px]">
-                      <Hash value={wallet.address} n={12} />
-                      <Tag tone="quiet">{wallet.credentialKind === 'stake' ? 'whole wallet' : 'one address'}</Tag>
-                      <span className="text-ink-3">{wallet.source === 'browser' ? 'browser wallet' : wallet.walletName ?? 'extension'}</span>
-                    </li>
-                  ))}
+                  {account.wallets.map((wallet) => {
+                    const receive = receiveAddressFor(wallet.address)
+                    return (
+                      <li key={wallet.address} className="space-y-1.5 text-[13px]">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Hash value={wallet.address} n={12} />
+                          <Tag tone="quiet">{wallet.credentialKind === 'stake' ? 'whole wallet' : 'one address'}</Tag>
+                          <span className="text-ink-3">{wallet.source === 'browser' ? 'browser wallet' : wallet.walletName ?? 'extension'}</span>
+                        </div>
+                        {receive ? (
+                          <div className="space-y-1">
+                            <p className="text-[11.5px] text-ink-3">Receive address. Send test ADA and test USDM here.</p>
+                            <ReceiveAddress address={receive} />
+                          </div>
+                        ) : null}
+                      </li>
+                    )
+                  })}
                 </ul>
+                {account.wallets.some((wallet) => wallet.credentialKind === 'stake') ? (
+                  <p className="mt-3 text-[11.5px] text-ink-3">
+                    A <span className="mono">stake_test1</span> address signs in for the whole wallet. It cannot receive funds.
+                    Send funds to a receive address that starts with <span className="mono">addr_test1</span>.
+                    Lace and Eternl show it on their Receive screen. Set the sending wallet to Preprod.
+                  </p>
+                ) : null}
                 {adding ? <div className="mt-5 border-t border-border pt-5"><WalletChoices session={session} onSignedIn={signedIn} profile={{}} /></div> : null}
                 <p className="mt-4 flex items-center gap-1.5 text-[11.5px] text-ink-3"><Copy className="size-3" />Account id <span className="mono">{account.entity.id}</span></p>
               </Section>
