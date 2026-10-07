@@ -434,11 +434,14 @@ async function main(): Promise<void> {
     now: () => Date.now(),
     log,
   });
-  // The website's free previews share the tools and the model, so they share its quota limits too.
+  // The website chat shares the tools and the model, so it shares its quota limits too.
   const askPort = env.COWORKER_ASK_PORT ? Number(env.COWORKER_ASK_PORT) : null;
   const ask = askPort ? startAskServer(new AskService({
     tools, provider, now: () => Date.now(), log,
-    limits: env.COWORKER_ASK_MODEL_PER_DAY ? {modelAnswersPerDay: Number(env.COWORKER_ASK_MODEL_PER_DAY)} : {},
+    limits: {
+      ...(env.COWORKER_ASK_MODEL_PER_DAY ? {modelAnswersPerDay: Number(env.COWORKER_ASK_MODEL_PER_DAY)} : {}),
+      ...(env.COWORKER_ASK_MODEL_PER_VISITOR ? {modelAnswersPerVisitorPerDay: Number(env.COWORKER_ASK_MODEL_PER_VISITOR)} : {}),
+    },
   }), askPort) : null;
   console.log(JSON.stringify({event: 'worker_started', coworkers: coworkers.map((item) => item.slug), provider: provider?.name ?? 'none', askPort}));
   const once = process.argv.includes('--once');

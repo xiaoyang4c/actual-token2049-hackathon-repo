@@ -4,8 +4,10 @@
  * routes from a paper database with the six showcase contracts and their
  * settlement fingerprints. The build seeds it once (api/_seed.ts), so every
  * instance serves the same ids; a cold start copies it to /tmp, the only
- * writable path. Nothing is sent to a chain. Ask a Coworker answers in the request itself, without a model, so
- * the fill-in format works and plain English gets the fill-in instructions.
+ * writable path. Nothing is sent to a chain. The web app sends the Coworker chat to the
+ * preprod Coworker worker first (VITE_COWORKER_ASK_URL). This function is its fallback: it
+ * answers in the request itself, without a model, so the fill-in format works and plain
+ * English gets the fill-in instructions.
  *
  * vercel.json routes /reliability/* and /coworkers/ask here and serves web/dist.
  */
@@ -50,9 +52,9 @@ export default {
       ready ??= open();
       const {store, ask} = await ready;
       if (url.pathname === '/coworkers/ask' && request.method === 'POST') {
-        const body = await request.json().catch(() => null) as {coworker?: unknown; text?: unknown}|null;
+        const body = await request.json().catch(() => null) as {coworker?: unknown; text?: unknown; history?: unknown}|null;
         const visitor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-        const submitted = ask.submit(body?.coworker, body?.text, visitor);
+        const submitted = ask.submit(body?.coworker, body?.text, visitor, body?.history);
         if (!submitted.ok) return json({error: submitted.error}, submitted.status);
         // Answer before responding: the next request may reach another instance.
         await ask.idle();

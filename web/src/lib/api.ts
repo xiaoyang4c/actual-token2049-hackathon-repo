@@ -2,7 +2,7 @@
  * Read client for the control API (/reliability/*) and the Coworker ask
  * server (/coworkers/ask). Every control API call is a GET; the Deal Desk
  * draft runs the engine in an in-memory sandbox and writes nothing. The only
- * POST is Ask a Coworker, a free preview that pays and stores nothing.
+ * POST is the Coworker chat, which is free and pays and stores nothing.
  */
 
 export interface Moment { ms: number; utc: string; singapore: string }
@@ -267,6 +267,8 @@ export type CoworkerSlug = 'deal-desk' | 'mediator' | 'trust-check'
 export interface AskJob {
   id: string
   coworker: CoworkerSlug
+  /** True when the server picked the Coworker for an `auto` message. */
+  routed?: boolean
   status: 'queued' | 'running' | 'done' | 'failed'
   position: number
   answer: string | null
@@ -354,6 +356,39 @@ async function read<T>(path: string, init?: RequestInit): Promise<T> {
 const q = (params: Record<string, string | number | undefined>) =>
   new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()
 
+/** One earlier chat message. The server keeps no conversation, so each message carries them. */
+export interface ChatEntry {
+  role: 'user' | 'assistant'
+  text: string
+  coworker?: CoworkerSlug
+}
+
+/** A queued answer and the server that holds it. */
+export type AskTicket = AskJob & {base: string}
+
+/**
+ * The Coworker worker's public address (the preprod server). Empty means the same origin:
+ * the Vite proxy in development, or ui/server.ts on the preprod server.
+ */
+const ASK_BASE = (import.meta.env.VITE_COWORKER_ASK_URL ?? '').replace(/\/$/, '')
+
+async function ask(coworker: CoworkerSlug | 'auto', text: string, history: ChatEntry[]): Promise<{job: AskTicket}> {
+  const send = async (base: string) => {
+    const {job} = await read<{job: AskJob}>(`${base}/coworkers/ask`, {
+      method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({coworker, text, history}),
+    })
+    return {job: {...job, base}}
+  }
+  if (!ASK_BASE) return send('')
+  try {
+    return await send(ASK_BASE)
+  } catch (error) {
+    // Unreachable or offline worker: this origin answers in the fill-in format (api/demo.ts on Vercel).
+    if (error instanceof ApiError && !/offline/i.test(error.message)) throw error
+    return send('')
+  }
+}
+
 export const api = {
   contracts: (filter: {partyId?: string; disputes?: boolean} = {}) =>
     read<ContractSummary[]>(`/reliability/contracts/list?${q({partyId: filter.partyId, disputes: filter.disputes ? 1 : undefined})}`),
@@ -369,10 +404,9 @@ export const api = {
   // The draft is a sandbox read: createContract runs in memory and nothing is stored.
   draft: (input: DraftInput) => read<DraftResult>(`/reliability/contracts/draft?${q({input: JSON.stringify(input)})}`),
 
-  // Ask a Coworker: a free preview answered by the Coworker worker.
-  ask: (coworker: CoworkerSlug, text: string) =>
-    read<{job: AskJob}>('/coworkers/ask', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({coworker, text})}),
-  askStatus: (id: string) => read<{job: AskJob}>(`/coworkers/ask?${q({id})}`, {cache: 'no-store'}),
+  // The Coworker chat: free, answered by the Coworker worker.
+  ask,
+  askStatus: (job: AskTicket) => read<{job: AskJob}>(`${job.base}/coworkers/ask?${q({id: job.id})}`, {cache: 'no-store'}),
 
   // Settlement anchors: fingerprints of final records on Cardano preprod.
   contractAnchors: (id: string) => read<ContractAnchors>(`/reliability/anchors/contract?${q({id})}`),
