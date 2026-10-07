@@ -1,0 +1,77 @@
+{
+  "browser": {
+    "report": {
+      "version": 1,
+      "network": "preprod",
+      "assetUnit": "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d",
+      "claim": {
+        "txHash": "1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52",
+        "recipient": "addr_test1qzt8grww0fvwn8j6e95ayeedfr706dg0pxhltrpmpxpnj6n6vv2u6sgysk32l3f0zj4cuj2crvh8773m8t4upsw0thfs36sckq",
+        "amountAtomic": "1000000"
+      },
+      "status": "verified",
+      "checks": {
+        "transaction": true,
+        "recipient": true,
+        "amount": true,
+        "confirmations": true
+      },
+      "minimumConfirmations": 3,
+      "confirmations": 1735,
+      "receivedAtomic": "1000000",
+      "observation": {
+        "txHash": "1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52",
+        "validContract": true,
+        "blockHash": "16781a007ddd8a29a1a9253d85885ccd01e846f678b004fb851d0f02f8cedc1b",
+        "blockHeight": 5263112,
+        "blockTime": 1791347791,
+        "recipientInputAtomic": "0",
+        "recipientOutputAtomic": "1000000",
+        "observedHeight": 5264846
+      }
+    },
+    "execution": {
+      "engine": "chainlink-cre",
+      "mode": "simulation",
+      "workflow": "tally-payment-evidence",
+      "sdkVersion": "1.22.0",
+      "donConsensus": false
+    },
+    "source": "Blockfrost",
+    "checkedAt": "2026-10-07T15:17:22.256Z",
+    "reportHash": "72008dd019c467029d6b15910e41a3e0a2ccc5ab72f84645963f959553191f6c",
+    "explorerUrl": "https://preprod.cardanoscan.io/transaction/1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52"
+  },
+  "separateCreCli": {
+    "version": 1,
+    "network": "preprod",
+    "assetUnit": "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d",
+    "claim": {
+      "txHash": "1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52",
+      "recipient": "addr_test1qzt8grww0fvwn8j6e95ayeedfr706dg0pxhltrpmpxpnj6n6vv2u6sgysk32l3f0zj4cuj2crvh8773m8t4upsw0thfs36sckq",
+      "amountAtomic": "1000000"
+    },
+    "status": "verified",
+    "checks": {
+      "transaction": true,
+      "recipient": true,
+      "amount": true,
+      "confirmations": true
+    },
+    "minimumConfirmations": 3,
+    "confirmations": 1736,
+    "receivedAtomic": "1000000",
+    "observation": {
+      "txHash": "1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52",
+      "validContract": true,
+      "blockHash": "16781a007ddd8a29a1a9253d85885ccd01e846f678b004fb851d0f02f8cedc1b",
+      "blockHeight": 5263112,
+      "blockTime": 1791347791,
+      "recipientInputAtomic": "0",
+      "recipientOutputAtomic": "1000000",
+      "observedHeight": 5264847
+    }
+  },
+  "cliExitCode": 0,
+  "independentExplorer": "https://preprod.adastat.net/transactions/1b0cdc319bd4c4799cc2e2713156d3cf8cf97327761a862dd7fa72008927ad52"
+}

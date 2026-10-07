@@ -1,0 +1,152 @@
+1
+00:00:00,552 --> 00:00:04,949
+Tally helps businesses trade with unfamiliar suppliers using agreed evidence rules
+
+2
+00:00:04,959 --> 00:00:06,463
+and verifiable records.
+
+3
+00:00:07,254 --> 00:00:11,053
+Start in the app, then explore the public demo with paper deals.
+
+4
+00:00:15,544 --> 00:00:17,924
+Open Companies and choose Highland Estates.
+
+5
+00:00:18,662 --> 00:00:21,639
+Four milestones show three disputes and one lost dispute.
+
+6
+00:00:22,375 --> 00:00:25,233
+Scroll to the completed trade and the delivery score.
+
+7
+00:00:25,980 --> 00:00:27,465
+These are paper records.
+
+8
+00:00:28,189 --> 00:00:32,787
+The reliability score is provisional: its policy is a placeholder, not a calibrated
+
+9
+00:00:32,797 --> 00:00:33,578
+credit rating.
+
+10
+00:00:35,541 --> 00:00:38,166
+Next, ask Trust Check about the same supplier.
+
+11
+00:00:38,875 --> 00:00:41,189
+Send company: highland-estates.
+
+12
+00:00:41,896 --> 00:00:44,753
+The Coworker reads Tally's tools and explains the record.
+
+13
+00:00:45,460 --> 00:00:47,912
+This structured request needs no AI model.
+
+14
+00:00:48,631 --> 00:00:50,611
+It is a free, read-only preview.
+
+15
+00:00:51,307 --> 00:00:53,609
+It makes no payment and saves no contract.
+
+16
+00:00:55,552 --> 00:00:58,487
+In Deal Desk, choose the physical goods template.
+
+17
+00:00:59,303 --> 00:01:03,829
+The coffee example is twelve hundred kilograms for four thousand test USDM. Agree
+
+18
+00:01:03,839 --> 00:01:07,264
+the evidence rules, named inspector, and remedy before funding.
+
+19
+00:01:08,079 --> 00:01:09,828
+Select Draft with the engine.
+
+20
+00:01:10,630 --> 00:01:15,163
+The preview calculates payouts for each outcome, deadlines, and dispute windows.
+
+21
+00:01:15,978 --> 00:01:18,282
+The sandbox sends no transaction.
+
+22
+00:01:20,552 --> 00:01:22,636
+Now inspect a settled paper deal.
+
+23
+00:01:23,440 --> 00:01:25,305
+Both parties signed the terms.
+
+24
+00:01:26,094 --> 00:01:31,832
+The agreed remedy lets the seller keep seventy percent: one thousand and fifty test USDM,
+with
+
+25
+00:01:31,842 --> 00:01:34,132
+four hundred and fifty refunded to the buyer.
+
+26
+00:01:34,947 --> 00:01:38,179
+This settlement is paper; it sends no chain transaction.
+
+27
+00:01:40,551 --> 00:01:44,399
+Payment verification uses a separate, real preproduction receipt.
+
+28
+00:01:45,212 --> 00:01:47,931
+Load the Masumi example and run a fresh check.
+
+29
+00:01:48,742 --> 00:01:53,071
+Beside it, an SSH terminal runs a separate Chainlink CRE command-line
+
+30
+00:01:53,081 --> 00:01:55,145
+simulation for the same transaction.
+
+31
+00:01:55,957 --> 00:01:58,932
+Watch the actual logs and successful completion.
+
+32
+00:01:59,743 --> 00:02:04,085
+Both checks compare the recipient, the exact one test USDM received, and
+
+33
+00:02:04,095 --> 00:02:05,723
+at least three confirmations.
+
+34
+00:02:06,534 --> 00:02:09,535
+This is a single-node simulation reading Blockfrost.
+
+35
+00:02:10,346 --> 00:02:13,514
+It has no oracle-network consensus or signature.
+
+36
+00:02:15,552 --> 00:02:20,400
+Finally, compare the same transaction hash and test USDM transfer in an independent
+
+37
+00:02:20,410 --> 00:02:22,353
+Cardano preproduction explorer.
+
+38
+00:02:23,169 --> 00:02:27,625
+Tally connects supplier assessment, agreed terms, and payment verification.
