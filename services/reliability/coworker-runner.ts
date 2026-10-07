@@ -45,7 +45,7 @@ export const FILL_IN_FORMATS: {[slug in CoworkerSlug]: string} = {
     'inspectors: lab-a, lab-b                (physical; optional)',
     'judge: lab-b                            (physical; optional)',
     'file sha256: <64 hex characters>        (digital; optional)',
-    'milestone: Lot 2 | 2500                 (repeat for more milestones)',
+    'milestone: Lot 2 | 2500                 (optional: only for a second lot; delete for one lot)',
   ].join('\n'),
   'mediator': ['contract: <contract id>', 'milestone: 0'].join('\n'),
   'trust-check': ['company: <company name or Tally id>', 'counterparty: <Tally id>   (optional)'].join('\n'),
@@ -102,6 +102,14 @@ export function readRemedy(value: string|undefined): {remedy?: DraftInput['remed
   return {remedy: type === 'partial_release' ? {type, sellerSharePercent: share} : {type}};
 }
 
+/** True when a milestone title names the item lot: equal, or the start of it ("Lot 1" for "Lot 1, 1,200 kg"). */
+function sameLot(milestone: string, item: string): boolean {
+  const norm = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim();
+  const a = norm(milestone);
+  const b = norm(item);
+  return a === b || b.startsWith(`${a},`) || b.startsWith(`${a} `) || a.startsWith(`${b},`) || a.startsWith(`${b} `);
+}
+
 export function readDealDesk(text: string): {input?: DraftInput; problems: string[]} {
   const fields = readFields(text);
   const problems: string[] = [];
@@ -117,7 +125,15 @@ export function readDealDesk(text: string): {input?: DraftInput; problems: strin
   }
   const item = first(fields, 'item', 'title');
   const amount = first(fields, 'amount', 'price');
-  if (item && amount) milestones.unshift({title: item, amount: amount.replace(/\s*(test\s*)?usdm\s*$/i, '')});
+  if (item && amount) {
+    const itemAmount = amount.replace(/\s*(test\s*)?usdm\s*$/i, '');
+    for (const milestone of milestones) {
+      if (sameLot(milestone.title, item)) {
+        problems.push(`milestone "${milestone.title} | ${milestone.amount}" repeats the item. Item and amount are already milestone 1. Delete the milestone line for a one-lot deal, or name a different lot (for example "Lot 2 | 2500")`);
+      }
+    }
+    milestones.unshift({title: item, amount: itemAmount});
+  }
   else if (!milestones.length) problems.push('item and amount');
   const deliverable: {[key: string]: unknown} = {};
   const put = (key: string, value: string|undefined, number = false) => {

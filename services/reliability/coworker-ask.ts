@@ -145,10 +145,20 @@ function readHistory(value: unknown, limits: AskLimits): ChatEntry[]|null {
  */
 export function fillInText(slug: CoworkerSlug, text: string, history: ChatEntry[]): string {
   if (!fillInProblems(slug, text).length) return text;
+  // Milestone lines repeat, so only the newest message that has them counts.
+  // Otherwise a corrected message would add its lots to the old ones.
+  const milestoneLine = /^\s*milestone\s*:.*$/gim;
+  let milestonesSeen = milestoneLine.test(text);
   const earlier: string[] = [];
   for (const entry of [...history].reverse()) {
-    if (entry.role === 'user') earlier.push(entry.text);
-    else if (entry.coworker !== slug) break;
+    if (entry.role === 'user') {
+      milestoneLine.lastIndex = 0;
+      const has = milestoneLine.test(entry.text);
+      earlier.push(milestonesSeen ? entry.text.replace(milestoneLine, '') : entry.text);
+      milestonesSeen ||= has;
+    } else if (entry.coworker !== slug) {
+      break;
+    }
   }
   if (!earlier.length) return text;
   const combined = [text, ...earlier].join('\n');

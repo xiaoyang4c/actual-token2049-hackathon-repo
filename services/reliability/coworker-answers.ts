@@ -140,6 +140,7 @@ export function renderDraft(draft: DraftResult): string {
     '',
     '**In short**',
     `- Contract type: ${plain(draft.template.id)}.`,
+    ...(several ? [`- Total: **${money(draft.total)}** in **${draft.milestones.length} milestones**. Each milestone is funded and paid on its own.`] : []),
     `- The buyer pays **${money(first?.amount)}** into escrow${several ? ' for the first milestone' : ''} by **${timeline.payBy.singapore}**.`,
     `- The seller delivers by **${timeline.deliverBy.singapore}**.`,
     `- If nobody disputes, the seller is paid around **${timeline.expectedPayoutIfNoDispute.singapore}**.`,
