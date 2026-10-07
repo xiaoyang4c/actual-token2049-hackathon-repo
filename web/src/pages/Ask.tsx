@@ -116,7 +116,7 @@ export function AskPage() {
   const pinned = COWORKERS.find((c) => c.slug === params.get('coworker'))?.slug
   const [target, setTarget] = useState<Target>(pinned ?? 'auto')
   const [messages, setMessages] = useState<Message[]>(loadChat)
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() => params.get('prompt')?.slice(0, 4000) ?? '')
   const busy = messages.some((m) => m.status === 'queued' || m.status === 'running')
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>())
   const list = useRef<HTMLDivElement>(null)

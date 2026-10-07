@@ -65,6 +65,7 @@ export function DealsPage() {
           <p className="mt-6 max-w-[56ch] text-[15.5px] leading-relaxed text-ink-2">
             Every milestone has one party who has to act next, and a deadline. Money waits in a Masumi escrow on Cardano until the evidence named in the signed terms arrives.
           </p>
+          {!APP_EDITION ? <Link to="/tutorial" className="mt-5 inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-blue underline underline-offset-4">New here? Follow the tutorial<ArrowUpRight className="size-4" /></Link> : null}
         </ParallaxHero>
       </section>
 

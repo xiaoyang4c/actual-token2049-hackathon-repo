@@ -1,6 +1,9 @@
 # Tally web app
 
 Tally has two web editions from the same source.
+The public `/tutorial` route explains the showcase, test account setup, mock KYC, deal signing, and a two-party paper rehearsal.
+The Tutorial link is visible in both editions.
+Its account setup button opens <https://main.d35ht8wka9lmbz.amplifyapp.com>.
 `VITE_TALLY_EDITION=demo`, or an unset flag, keeps the public paper showcase.
 Its deal views remain read-only.
 Account signs in with a wallet, submits mock KYC, and sends live preprod test deposits.
