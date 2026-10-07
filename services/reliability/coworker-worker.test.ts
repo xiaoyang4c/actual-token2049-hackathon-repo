@@ -425,6 +425,25 @@ describe('providers and parsing', () => {
     expect(provider.available()).toBe(true);
   });
 
+  test('a model that runs out of quota mid-answer: the answer starts again on the next model', async () => {
+    const urls: string[] = [];
+    const dailyQuota = {error: {code: 429, details: [{retryDelay: '3600s'}]}};
+    const call = {role: 'model', parts: [{functionCall: {id: 'c1', name: 'findEntities', args: {query: 'kopi'}}, thoughtSignature: 's'}]};
+    const fetcher = (async (url: string) => {
+      const model = url.includes('/models/model-a:') ? 'a' : 'b';
+      urls.push(model);
+      const turnsOnModel = urls.filter((item) => item === model).length;
+      if (model === 'a' && turnsOnModel === 2) return new Response(JSON.stringify(dailyQuota), {status: 429});
+      return new Response(JSON.stringify({candidates: [{content: turnsOnModel === 1 ? call : {role: 'model', parts: [{text: 'Kopi has 4 deals.'}]}}]}));
+    }) as unknown as typeof fetch;
+    const provider = new GeminiProvider('k', 'model-a,model-b', {fetch: fetcher});
+    let runs = 0;
+    const result = await runWithTools(provider, 'rules', 'who is kopi?', [{...tool, run: () => { runs++; return {ok: true, result: []}; }}]);
+    expect(result).toEqual({text: 'Kopi has 4 deals.', toolCalls: 1});
+    expect(urls).toEqual(['a', 'a', 'b', 'b']);
+    expect(runs).toBe(2);
+  });
+
   test('a conversation stays on the model that started it', async () => {
     const urls: string[] = [];
     const fetcher = (async (url: string) => {

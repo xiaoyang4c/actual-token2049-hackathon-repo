@@ -294,9 +294,26 @@ export interface RunnableTool extends ToolSpec {
   run(args: {[key: string]: unknown}): unknown;
 }
 
-/** Runs the model until it answers without a tool call. Tool errors go back to the model as data. */
+/**
+ * Runs the model until it answers without a tool call. If a model runs out of
+ * quota in the middle of an answer, the answer starts again on the next model.
+ * That is safe because every Coworker tool only reads (a draft uses a sandbox).
+ */
 export async function runWithTools(
   provider: ModelProvider, system: string, userText: string, tools: RunnableTool[], maxSteps = MAX_TOOL_STEPS,
+): Promise<{text: string; toolCalls: number}> {
+  for (let restart = 0; ; restart++) {
+    try {
+      return await converse(provider, system, userText, tools, maxSteps);
+    } catch (error) {
+      if (!(error instanceof QuotaError) || restart >= 2 || !provider.available()) throw error;
+    }
+  }
+}
+
+/** One conversation on one model. Tool errors go back to the model as data. */
+async function converse(
+  provider: ModelProvider, system: string, userText: string, tools: RunnableTool[], maxSteps: number,
 ): Promise<{text: string; toolCalls: number}> {
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   const specs: ToolSpec[] = tools.map(({name, description, parameters}) => ({name, description, parameters}));
