@@ -107,7 +107,7 @@ Invoice payments are paper. They record `settlementVerified: false`.
 
 ## Validation
 
-All 693 local tests pass under `packages`, `services`, and `ui`.
+All 723 local tests pass under `packages`, `services`, and `ui`.
 One intermittent failure appeared once in 13 full runs on 2026-10-07. It did not reproduce, and its test is not identified yet.
 The control and payment TypeScript checks pass.
 Lint passes.
