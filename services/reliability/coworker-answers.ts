@@ -55,7 +55,7 @@ export const PLAIN_WORDS: {readonly [name: string]: string} = {
   expired: 'expired',
   refunded: 'refunded',
   // Fees and obligations
-  whitelisted: 'approved (on the contract's list of inspectors)',
+  whitelisted: 'approved (named in the contract as an inspector)',
   loser_pays: 'the side that loses pays',
   authorize_refund: 'authorize the refund',
   authorize_withdrawal: 'authorize the payout',
