@@ -27,6 +27,37 @@ https://13.210.42.0 {
 	handle_path /app-api/* {
 		reverse_proxy 127.0.0.1:8798
 	}
+	# Read-only evidence API. Its process listens on loopback only.
+	@evidenceApi {
+		method GET
+		path /reliability/evidence/info /reliability/evidence/check
+	}
+	handle @evidenceApi {
+		reverse_proxy 127.0.0.1:8793
+	}
+	# The checker uses the same React component as the Vercel frontend.
+	@evidencePage {
+		method GET HEAD
+		path /evidence /evidence/
+	}
+	handle @evidencePage {
+		root * /srv/tally/chainlink-evidence/current/web/dist
+		rewrite * /evidence-standalone.html
+		file_server
+	}
+	handle /assets/* {
+		root * /srv/tally/chainlink-evidence/current/web/dist
+		file_server
+	}
+	# Add the checker link without restarting the existing backend services.
+	@evidenceNav {
+		method GET HEAD
+		path /render.js /styles.css
+	}
+	handle @evidenceNav {
+		root * /srv/tally/chainlink-evidence/current/ui
+		file_server
+	}
 	handle {
 		reverse_proxy 127.0.0.1:8791
 	}

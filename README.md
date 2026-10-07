@@ -228,3 +228,5 @@ bun run lint
 
 These checks cover shared code, marketplace code, contracts, the Coworker tools, and the UI.
 No CRE installation is required for these checks.
+
+Read [Chainlink evidence checker](docs/chainlink-evidence.md) for the read-only preprod payment checker.

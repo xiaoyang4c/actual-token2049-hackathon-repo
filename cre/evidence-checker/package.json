@@ -1,0 +1,8 @@
+{
+  "name": "tally-chainlink-evidence",
+  "private": true,
+  "type": "module",
+  "scripts": {"typecheck": "tsc --noEmit", "compile": "cre-compile main.ts"},
+  "dependencies": {"@chainlink/cre-sdk": "1.22.0", "zod": "3.25.76"},
+  "devDependencies": {"@types/bun": "latest", "typescript": "5.9.3"}
+}

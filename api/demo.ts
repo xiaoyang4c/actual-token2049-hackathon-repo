@@ -21,6 +21,7 @@ import {CoworkerTools} from '../services/reliability/coworker-tools';
 import {readHostedDemo} from '../services/reliability/coworker-demo';
 import {contractServiceFor} from '../services/reliability/contract-service';
 import {reliabilityRoutes} from '../services/reliability/index';
+import {createEvidenceProxyRoutes} from '../services/reliability/routes-evidence';
 
 process.env.CARDANO_MODE = 'simulated';
 process.env.CARDANO_ALLOW_NETWORK = 'false';
@@ -28,7 +29,9 @@ process.env.CARDANO_ALLOW_NETWORK = 'false';
 const SEED = join(process.cwd(), '.demo-data/demo.sqlite');
 const DATABASE = '/tmp/tally-demo.sqlite';
 const json = (body: unknown, status = 200) => Response.json(body, {status, headers: {'cache-control': 'no-store'}});
-const routes = new Map(reliabilityRoutes.filter((route) => route.method === 'GET').map((route) => [route.path, route]));
+// The evidence reads use their dedicated EC2 service.
+const evidenceRoutes = new Map(createEvidenceProxyRoutes(process.env.CHAINLINK_EVIDENCE_URL ?? 'https://13.210.42.0').map((route) => [route.path, route]));
+const routes = new Map(reliabilityRoutes.filter((route) => route.method === 'GET' && !evidenceRoutes.has(route.path)).map((route) => [route.path, route]));
 
 function open() {
   if (!existsSync(DATABASE)) copyFileSync(SEED, DATABASE);
@@ -51,6 +54,8 @@ export default {
       url.searchParams.delete('__path');
     }
     try {
+      const evidenceRoute = request.method === 'GET' ? evidenceRoutes.get(url.pathname) : undefined;
+      if (evidenceRoute) return await evidenceRoute.handler(request, url);
       const route = request.method === 'GET' ? routes.get(url.pathname) : undefined;
       if (route) {
         const hosted = await readHostedDemo(url, process.env.COWORKER_DEMO_URL ?? 'https://13.210.42.0');

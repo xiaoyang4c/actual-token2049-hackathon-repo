@@ -1,9 +1,12 @@
 node_modules/
+**/node_modules
 dist/
 .env
 *.env
 services/.data/
 .cre_build_tmp.js
+cre/evidence-checker/*.wasm
+cre/evidence-checker/main.js
 
 # impeccable-ignore-start
 **/.impeccable/config.local.json

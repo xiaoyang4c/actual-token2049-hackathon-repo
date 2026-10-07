@@ -1,5 +1,6 @@
 import {APP_EDITION} from './edition'
 import {serverUrl} from './server-url'
+import type {EvidenceInfo, EvidenceResult} from '../../../packages/evidence/src/protocol'
 
 /*
  * Read client for the control API (/reliability/*) and the Coworker ask
@@ -394,6 +395,9 @@ async function ask(coworker: CoworkerSlug | 'auto', text: string, history: ChatE
 }
 
 export const api = {
+  evidenceInfo: () => read<EvidenceInfo>('/reliability/evidence/info', {cache: 'no-store'}),
+  checkEvidence: (input: {txHash: string; recipient: string; amount: string}, signal: AbortSignal) =>
+    read<EvidenceResult>(`/reliability/evidence/check?${q(input)}`, {cache: 'no-store', signal}),
   contracts: (filter: {partyId?: string; disputes?: boolean} = {}) =>
     read<ContractSummary[]>(`/reliability/contracts/list?${q({partyId: filter.partyId, disputes: filter.disputes ? 1 : undefined})}`),
   contract: (id: string) => read<ContractView>(`/reliability/contracts?${q({id})}`),

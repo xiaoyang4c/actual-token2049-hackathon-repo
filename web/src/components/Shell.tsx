@@ -1,6 +1,6 @@
 import {useMemo, useState, type ReactNode} from 'react'
 import {Link, NavLink} from 'react-router-dom'
-import {BookOpen, Bot, Building2, FilePenLine, Gavel, LayoutList, Menu, MessageSquareText, TableProperties, Wallet} from 'lucide-react'
+import {BookOpen, Bot, Building2, FilePenLine, Gavel, LayoutList, Menu, MessageSquareText, ShieldCheck, TableProperties, Wallet} from 'lucide-react'
 import {Brand, useLens} from '@/components/kit'
 import Waves from '@/components/reactbits/Waves'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
@@ -17,6 +17,7 @@ const DEMO_NAV = [
   {to: '/companies', label: 'Companies', icon: Building2},
   {to: '/deal-desk', label: 'Deal Desk', icon: FilePenLine},
   {to: '/ask', label: 'Chat', icon: MessageSquareText},
+  {to: '/evidence', label: 'Payment evidence', icon: ShieldCheck},
   {to: '/tutorial', label: 'Tutorial', icon: BookOpen},
   {to: '/coworkers', label: 'Coworkers', icon: Bot},
   {to: '/operator', label: 'Operator', icon: TableProperties},

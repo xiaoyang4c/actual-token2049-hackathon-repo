@@ -7,6 +7,7 @@
 
 import {appRoutes} from './routes-app';
 import {accountRoutes} from './routes-account';
+import {evidenceRoutes} from './routes-evidence';
 import {laneAKycRoutes} from './routes-lane-a-kyc';
 import {laneARoutes} from './routes-lane-a';
 import {laneAContractRoutes} from './routes-lane-a-contracts';
@@ -29,4 +30,5 @@ export const reliabilityRoutes: ReliabilityRoute[] = [
   ...marketplaceRoutes,
   ...accountRoutes,
   ...appRoutes,
+  ...evidenceRoutes,
 ];

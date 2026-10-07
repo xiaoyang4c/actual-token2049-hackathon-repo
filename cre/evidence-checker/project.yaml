@@ -1,0 +1,5 @@
+demo-settings:
+  # The simulator requires an RPC entry. This workflow makes no EVM calls.
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://ethereum-sepolia-rpc.publicnode.com

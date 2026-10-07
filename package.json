@@ -28,7 +28,10 @@
     "simulate": "cd cre && cre workflow simulate agent-loop --target local-settings",
     "simulate:offline": "cd cre && cre workflow simulate agent-loop --target offline-settings",
     "simulate:live": "cd cre && cre workflow simulate agent-loop --target staging-settings",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "evidence:server": "bun run services/reliability/evidence-server.ts",
+    "evidence:typecheck": "cd cre/evidence-checker && bun run typecheck",
+    "evidence:compile": "cd cre/evidence-checker && bun run compile"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

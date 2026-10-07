@@ -1,0 +1,23 @@
+[Unit]
+Description=Tally Chainlink payment evidence checker (CRE simulation)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tally-chainlink/current
+Environment=CHAINLINK_CRE_BINARY=/home/ubuntu/tally-chainlink/bin/cre
+Environment=CHAINLINK_EVIDENCE_PROJECT=/home/ubuntu/tally-chainlink/current/cre/evidence-checker
+Environment=CHAINLINK_EVIDENCE_WASM=/home/ubuntu/tally-chainlink/current/cre/evidence-checker/main.wasm
+Environment=CHAINLINK_BLOCKFROST_KEY_FILE=/home/ubuntu/tally-secrets/blockfrost_preprod
+EnvironmentFile=-/home/ubuntu/tally-secrets/chainlink-evidence.env
+ExecStart=/home/ubuntu/.bun/bin/bun run services/reliability/evidence-server.ts
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ubuntu/.cre
+
+[Install]
+WantedBy=multi-user.target

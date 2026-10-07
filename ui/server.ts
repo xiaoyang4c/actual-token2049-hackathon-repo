@@ -51,12 +51,14 @@ const PROXY_PATHS = new Set([
   "/reliability/anchors/contract", "/reliability/anchors/company",
   // Deal Desk: templates and a sandboxed draft. Both GET, neither writes.
   "/reliability/contracts/draft-templates", "/reliability/contracts/draft",
+  "/reliability/evidence/info", "/reliability/evidence/check",
 ])
 
 /** The app edition exposes only these public read views. */
 const APP_PUBLIC_PATHS = new Set([
   "/reliability/profile/search", "/reliability/profile", "/reliability/anchors/company",
   "/reliability/contracts/templates", "/reliability/contracts/draft-templates", "/reliability/contracts/draft",
+  "/reliability/evidence/info", "/reliability/evidence/check",
 ])
 
 /** Explicit app methods. Operator and mediator routes never enter this set. */
@@ -157,11 +159,12 @@ const proxyAccount = async (controlApiUrl: string, req: Request, visitor: string
   }
 }
 
-const proxyGet = async (controlApiUrl: string, path: string) => {
+const proxyGet = async (controlApiUrl: string, path: string, visitor: string) => {
   try {
     const upstream = await fetch(`${controlApiUrl}${path}`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(2500),
+      headers: { "x-forwarded-for": visitor },
+      signal: AbortSignal.timeout(path.startsWith("/reliability/evidence/") ? 30_000 : 2500),
     })
     const body = await upstream.text()
     return new Response(body, {
@@ -209,7 +212,7 @@ export const startUi = (options?: { port?: number; controlApiUrl?: string; askUr
       } else if (url.pathname === ASK_PATH && (req.method === "POST" || req.method === "GET")) {
         res = withHeaders(await proxyAsk(askUrl, req, visitorOf(req, server.requestIP(req)?.address), url.search), corsFor(req, askOrigins))
       } else if ((req.method === "GET" || req.method === "HEAD") && publicPaths.has(url.pathname)) {
-        res = await proxyGet(controlApiUrl, url.pathname + url.search)
+        res = await proxyGet(controlApiUrl, url.pathname + url.search, visitorOf(req, server.requestIP(req)?.address))
         if (appEdition) res = withHeaders(res, corsFor(req, askOrigins))
         // HEAD gets the GET status and headers with no body.
         if (req.method === "HEAD") res = new Response(null, { status: res.status, headers: res.headers })
