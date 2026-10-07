@@ -226,11 +226,13 @@ export class CoworkerWorker {
   }
 
   /**
-   * Without a model: compute the whole answer now, before any payment. A
-   * request that is unreadable or that the engine rejects asks for input.
+   * Without a model, or while every model has used up its quota: compute the
+   * whole answer now, before any payment. A request that is unreadable or that
+   * the engine rejects asks for input.
    */
   private async prepare(coworker: WorkerCoworker, entry: JournalEntry, task: CoreTask): Promise<JournalEntry> {
-    if (this.deps.provider) return entry;
+    if (this.deps.provider?.available()) return entry;
+    if (this.deps.provider) this.deps.log({coworker: coworker.slug, taskId: entry.taskId, event: 'model_unavailable', using: 'fill-in'});
     const problems = fillInProblems(coworker.slug, entry.text);
     const answer = problems.length ? null : answerFillIn(coworker.slug, entry.text, this.deps.tools);
     if (answer?.kind === 'answer') return this.save(entry, 'starting', {answer: {text: answer.text, mode: answer.mode}});
@@ -376,6 +378,9 @@ function secret(directory: string, name: string): string|null {
   return existsSync(path) ? readFileSync(path, 'utf8').trim() : null;
 }
 
+/** Each model has its own free-tier quota (20 requests a day in October 2026), so the worker tries them in turn. */
+export const DEFAULT_GEMINI_MODELS = 'gemini-3.8-flash,gemini-3.5-flash,gemini-3.1-flash-lite';
+
 /** Builds the provider from COWORKER_MODEL_PROVIDER: none, gemini, or bedrock. */
 export function providerFromEnv(env: Record<string, string|undefined>, secretsDir: string): ModelProvider|null {
   const name = (env.COWORKER_MODEL_PROVIDER ?? 'none').trim().toLowerCase();
@@ -383,7 +388,7 @@ export function providerFromEnv(env: Record<string, string|undefined>, secretsDi
   if (name === 'gemini') {
     const key = secret(secretsDir, 'gemini_api_key');
     if (!key) throw new Error('COWORKER_MODEL_PROVIDER=gemini needs the gemini_api_key secret');
-    return new GeminiProvider(key, env.COWORKER_GEMINI_MODEL ?? 'gemini-3.8-flash');
+    return new GeminiProvider(key, env.COWORKER_GEMINI_MODEL ?? DEFAULT_GEMINI_MODELS);
   }
   if (name === 'bedrock') {
     const key = secret(secretsDir, 'bedrock_api_key');

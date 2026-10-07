@@ -58,6 +58,8 @@ export interface ModelReply {
 
 export interface ModelProvider {
   readonly name: 'gemini'|'bedrock';
+  /** False while every model has used up its quota. The worker then uses the fill-in path before payment. */
+  available(): boolean;
   reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply>;
 }
 
@@ -69,6 +71,14 @@ export class ModelError extends Error {
   }
 }
 
+/** The provider asked for a longer wait than a retry should take, such as a used-up daily quota. */
+export class QuotaError extends ModelError {
+  constructor(message: string, readonly retryAfterMs: number) {
+    super(message);
+    this.name = 'QuotaError';
+  }
+}
+
 type Json = {[key: string]: unknown};
 const record = (value: unknown): Json|null =>
   (typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Json : null);
@@ -77,6 +87,7 @@ export interface ProviderOptions {
   fetch?: typeof fetch;
   /** Waits between retries. Tests pass a fake. */
   sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
 }
 
 interface Http {
@@ -113,11 +124,15 @@ async function postJson(client: Http, url: string, headers: {[key: string]: stri
       if (!parsed) throw new ModelError(`${label} returned no JSON`);
       return parsed;
     }
+    const hinted = response ? retryDelayMs(await response.json().catch(() => null)) : null;
+    // A daily quota asks for a wait of hours. Retrying would only spend more of the next quota.
+    if (response?.status === 429 && hinted !== null && hinted > RETRY_MAX_DELAY_MS) {
+      throw new QuotaError(`${label} quota is used up for ${Math.ceil(hinted / 60_000)} minutes`, hinted);
+    }
     const problem = response ? `returned ${response.status}` : 'got no response';
     if ((response && !RETRY_STATUSES.has(response.status)) || attempt >= MODEL_ATTEMPTS) {
       throw new ModelError(`${label} ${problem}${attempt > 1 ? ` after ${attempt} tries` : ''}`);
     }
-    const hinted = response ? retryDelayMs(await response.json().catch(() => null)) : null;
     await client.sleep(Math.min(hinted ?? 2000 * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS));
   }
 }
@@ -141,19 +156,48 @@ function geminiSchema(schema: ParamSchema): Json {
 export class GeminiProvider implements ModelProvider {
   readonly name = 'gemini' as const;
   private readonly http: Http;
+  private readonly now: () => number;
+  private readonly models: string[];
+  /** The free tier counts requests per model per day, so a model with a used-up quota is skipped until it resets. */
+  private readonly usedUpUntil = new Map<string, number>();
 
-  constructor(private readonly apiKey: string, private readonly model: string, options: ProviderOptions = {}) {
+  /** `models` is a list, in order of preference, as an array or comma-separated. */
+  constructor(private readonly apiKey: string, models: string|string[], options: ProviderOptions = {}) {
     if (!apiKey.trim() || /\s/.test(apiKey)) throw new Error('missing or invalid Gemini API key');
-    if (!/^[a-z0-9.-]+$/.test(model)) throw new Error(`invalid Gemini model name ${model}`);
+    this.models = (Array.isArray(models) ? models : models.split(',')).map((model) => model.trim()).filter(Boolean);
+    if (!this.models.length) throw new Error('no Gemini model is configured');
+    for (const model of this.models) if (!/^[a-z0-9.-]+$/.test(model)) throw new Error(`invalid Gemini model name ${model}`);
     this.http = http(options);
+    this.now = options.now ?? Date.now;
+  }
+
+  available(): boolean {
+    return this.models.some((model) => (this.usedUpUntil.get(model) ?? 0) <= this.now());
   }
 
   async reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {
+    // A conversation stays on the model that started it: thought signatures belong to that model.
+    const started = turns.map((turn) => (turn.role === 'assistant' ? record(turn.raw)?.model : null)).find((model) => typeof model === 'string');
+    const choices = typeof started === 'string' ? [started] : this.models.filter((model) => (this.usedUpUntil.get(model) ?? 0) <= this.now());
+    for (const model of choices) {
+      try {
+        return await this.call(model, system, turns, tools);
+      } catch (error) {
+        if (!(error instanceof QuotaError)) throw error;
+        this.usedUpUntil.set(model, this.now() + error.retryAfterMs);
+        if (typeof started === 'string') throw error;
+      }
+    }
+    throw new ModelError('every configured Gemini model has used up its quota');
+  }
+
+  private async call(model: string, system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {
     const contents = turns.map((turn) => {
       if (turn.role === 'user') return {role: 'user', parts: [{text: turn.text}]};
       if (turn.role === 'assistant') {
         // Gemini 3 rejects a function call turn without its thought signature, so resend the original content.
-        if (record(turn.raw)?.role === 'model') return turn.raw;
+        const raw = record(turn.raw);
+        if (raw?.model === model && record(raw.content)?.role === 'model') return raw.content;
         return {role: 'model', parts: [...(turn.text ? [{text: turn.text}] : []), ...turn.calls.map((call) => ({functionCall: {name: call.name, args: call.args}}))]};
       }
       return {role: 'user', parts: turn.results.map((result) => ({
@@ -161,14 +205,14 @@ export class GeminiProvider implements ModelProvider {
       }))};
     });
     const body = await postJson(this.http,
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {'x-goog-api-key': this.apiKey},
       {
         systemInstruction: {parts: [{text: system}]},
         contents,
         tools: tools.length ? [{functionDeclarations: tools.map((tool) => ({name: tool.name, description: tool.description, parameters: geminiSchema(tool.parameters)}))}] : [],
         generationConfig: {temperature: 0.2, maxOutputTokens: 8192},
-      }, 'Gemini');
+      }, `Gemini ${model}`);
     const candidate = record(Array.isArray(body.candidates) ? body.candidates[0] : null);
     const parts = Array.isArray(record(candidate?.content)?.parts) ? (record(candidate?.content)?.parts as unknown[]) : [];
     if (!candidate) throw new ModelError('Gemini returned no candidate');
@@ -184,7 +228,7 @@ export class GeminiProvider implements ModelProvider {
       }
     });
     if (!text && !calls.length) throw new ModelError(`Gemini returned an empty answer (${String(candidate.finishReason ?? 'no reason')})`);
-    return {text, calls, raw: candidate.content};
+    return {text, calls, raw: {model, content: candidate.content}};
   }
 }
 
@@ -204,6 +248,10 @@ export class BedrockProvider implements ModelProvider {
     if (!/^[a-z]{2}-[a-z]+-\d$/.test(region)) throw new Error(`invalid AWS region ${region}`);
     if (!/^[a-zA-Z0-9.:-]+$/.test(modelId)) throw new Error(`invalid Bedrock model id ${modelId}`);
     this.http = http(options);
+  }
+
+  available(): boolean {
+    return true;
   }
 
   async reply(system: string, turns: ChatTurn[], tools: ToolSpec[]): Promise<ModelReply> {

@@ -77,11 +77,16 @@ The model is one setting, `COWORKER_MODEL_PROVIDER`, in [`tally-coworkers.servic
 | Value | Model | Secret file in `~/tally-secrets` |
 | --- | --- | --- |
 | `none` | No model. The Coworkers answer the fill-in format | none |
-| `gemini` | Google Gemini (`COWORKER_GEMINI_MODEL`) | `gemini_api_key` |
+| `gemini` | Google Gemini. `COWORKER_GEMINI_MODEL` is a comma-separated list, tried in order | `gemini_api_key` |
 | `bedrock` | Claude on Amazon Bedrock (`COWORKER_BEDROCK_MODEL_ID`, `COWORKER_BEDROCK_REGION`) with a Bedrock API key | `bedrock_api_key` |
 
 To switch, edit the line, then run `sudo systemctl daemon-reload && sudo systemctl restart tally-coworkers`.
 If a model call fails, a readable fill-in request still gets the fill-in answer.
+
+The Gemini free tier allows 20 requests a day for each model, and one answer takes 2 to 4 requests.
+Rate limits and overloaded servers are retried up to 4 times.
+A model whose daily quota is used up is skipped until it resets, and the next model in the list is used.
+While every model is used up, the worker answers in the fill-in format and checks the request before payment, as with `none`.
 
 ### Fill-in format
 

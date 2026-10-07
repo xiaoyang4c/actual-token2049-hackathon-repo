@@ -258,7 +258,12 @@ describe('Coworker worker: the paid Task flow', () => {
 class ScriptedProvider implements ModelProvider {
   readonly name = 'gemini' as const;
   calls: ChatTurn[][] = [];
+  up = true;
   constructor(private readonly replies: Array<ModelReply|Error>) {}
+
+  available(): boolean {
+    return this.up;
+  }
 
   async reply(system: string, turns: ChatTurn[]): Promise<ModelReply> {
     expect(system).toContain('Tally');
@@ -289,6 +294,25 @@ describe('Coworker worker: models', () => {
     expect(output?.ok).toBe(true);
     expect(output?.result.milestones[0]?.buyerWins.toSeller.display).toBe('2,800 test USDM');
     expect(env.journal.read('m1')?.answer).toEqual({text: 'Draft: the seller keeps 2,800 test USDM if the buyer wins.', mode: 'model'});
+    env.close();
+  });
+
+  test('while every model has used up its quota, a free-text request asks for the fill-in format before payment', async () => {
+    const provider = new ScriptedProvider([]);
+    provider.up = false;
+    const env = setup(provider);
+    env.core.addTask('m3', 'I am buying 1,200 kg of arabica for 4000 USDM.');
+    await env.make().runOnce();
+    expect(env.journal.read('m3')?.stage).toBe('input_requested');
+    expect(env.core.posted[0]?.body.status).toBe('INPUT_REQUIRED');
+    expect(env.mps.creates).toBe(0);
+    env.core.comment('m3', REQUEST);
+    await env.make().runOnce();
+    env.mps.lock('bi-m3');
+    await env.make().runOnce();
+    expect(env.journal.read('m3')?.answer?.mode).toBe('fill-in');
+    expect(env.journal.read('m3')?.stage).toBe('collecting');
+    expect(provider.calls).toHaveLength(0);
     env.close();
   });
 
@@ -368,13 +392,54 @@ describe('providers and parsing', () => {
     const overloaded = (async () => { calls++; return new Response('{}', {status: 503}); }) as unknown as typeof fetch;
     const noWait = {sleep: async () => {}};
     await expect(new GeminiProvider('k', 'gemini-3.8-flash', {fetch: overloaded, ...noWait}).reply('rules', [{role: 'user', text: 'hi'}], []))
-      .rejects.toThrow('Gemini returned 503 after 4 tries');
+      .rejects.toThrow('Gemini gemini-3.8-flash returned 503 after 4 tries');
     expect(calls).toBe(4);
     calls = 0;
     const invalid = (async () => { calls++; return new Response('{}', {status: 400}); }) as unknown as typeof fetch;
     await expect(new BedrockProvider('k', 'ap-southeast-2', 'au.anthropic.claude-sonnet-4-5-20250929-v1:0', {fetch: invalid, ...noWait})
       .reply('rules', [{role: 'user', text: 'hi'}], [])).rejects.toThrow('Bedrock returned 400');
     expect(calls).toBe(1);
+  });
+
+  test('a used-up daily quota is not retried: the next model answers, and the used-up one is skipped until it resets', async () => {
+    let now = T0;
+    const urls: string[] = [];
+    const dailyQuota = {error: {code: 429, status: 'RESOURCE_EXHAUSTED', details: [{'@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '3600s'}]}};
+    const fetcher = (async (url: string) => {
+      urls.push(url.replace(/^.*\/models\//, '').replace(/:generateContent$/, ''));
+      if (url.includes('/models/model-a:')) return new Response(JSON.stringify(dailyQuota), {status: 429});
+      if (url.includes('/models/model-b:') && urls.length > 3) return new Response(JSON.stringify(dailyQuota), {status: 429});
+      return new Response(JSON.stringify({candidates: [{content: {role: 'model', parts: [{text: 'OK'}]}}]}));
+    }) as unknown as typeof fetch;
+    const waits: number[] = [];
+    const provider = new GeminiProvider('k', 'model-a, model-b', {fetch: fetcher, now: () => now, sleep: async (ms) => { waits.push(ms); }});
+    const hi: ChatTurn[] = [{role: 'user', text: 'hi'}];
+    expect((await provider.reply('rules', hi, [])).raw).toEqual({model: 'model-b', content: {role: 'model', parts: [{text: 'OK'}]}});
+    expect(await provider.reply('rules', hi, [])).toMatchObject({text: 'OK'});
+    expect(urls).toEqual(['model-a', 'model-b', 'model-b']);
+    expect(waits).toEqual([]);
+    expect(provider.available()).toBe(true);
+    await expect(provider.reply('rules', hi, [])).rejects.toThrow('every configured Gemini model has used up its quota');
+    expect(provider.available()).toBe(false);
+    now += 3600_000;
+    expect(provider.available()).toBe(true);
+  });
+
+  test('a conversation stays on the model that started it', async () => {
+    const urls: string[] = [];
+    const fetcher = (async (url: string) => {
+      urls.push(url);
+      return new Response(JSON.stringify({candidates: [{content: {role: 'model', parts: [{text: 'done'}]}}]}));
+    }) as unknown as typeof fetch;
+    const provider = new GeminiProvider('k', ['model-a', 'model-b'], {fetch: fetcher});
+    const turns: ChatTurn[] = [
+      {role: 'user', text: 'hi'},
+      {role: 'assistant', text: '', calls: [{id: 'c1', name: 'findEntities', args: {}}], raw: {model: 'model-b', content: {role: 'model', parts: [{functionCall: {id: 'c1', name: 'findEntities', args: {}}, thoughtSignature: 's'}]}}},
+      {role: 'tool', results: [{callId: 'c1', name: 'findEntities', output: {ok: true, result: []}}]},
+    ];
+    await provider.reply('rules', turns, []);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('/models/model-b:generateContent');
   });
 
   test('Bedrock: Converse tool use with a bearer API key', async () => {
