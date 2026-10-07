@@ -56,7 +56,10 @@ Do not edit `cre/agent-loop` unless the task names that path.
 
 Do not edit `services/market-feed.ts` unless the task names that path.
 
-The operator UI is display-only. The operator UI is not a public site.
+The operator UI is display-only.
+
+A hosted copy at `https://13-210-42-0.sslip.io` is a public, read-only demo with paper data. The team agreed to this for judging.
+Its role views are lenses, not access control. Before real data or a launch, add sign-in, and keep the Mediation desk private.
 
 The operator UI reads `GET /reliability/*`. Lane C builds the UI against these routes.
 

@@ -1,9 +1,13 @@
 import { FIXTURE } from "./fixture.js"
 import { loadMarketplace, loadTransaction } from "./data.js"
 import { buildView } from "./model.js"
-import { deskTitle, renderDesk } from "./render.js"
+import { AREAS, deskTitle, renderDesk } from "./render.js"
+import {
+  loadCase, loadContract, loadContracts, loadProfile, loadRulingOptions, loadRulingPayload, searchCompanies,
+} from "./tally.js"
 
 const POLL_MS = 5000
+const THEME_KEY = "tally-theme"
 const app = document.querySelector("#app")
 let snapshot = FIXTURE
 let lastLive = null
@@ -14,18 +18,34 @@ let inspectedId = ""
 let lookupVersion = 0
 let pollRunning = false
 
+const startArea = new URL(location.href).searchParams.get("view")
+const tally = {
+  area: AREAS.includes(startArea) ? startArea : "deals",
+  operatorTab: "transactions",
+  contracts: [],
+  contractsLoaded: false,
+  contractsError: "",
+  party: "",
+  selected: "",
+  detail: null,
+  detailError: "",
+  mediation: { selected: null, caseFile: null, caseError: "", options: null, winner: "buyer", reason: "", payload: null, busy: false, error: "" },
+  companies: { query: "", results: [], selectedId: "", profile: null, busy: false, error: "" },
+}
+
 function paint() {
   const active = document.activeElement
   const focusId = active?.id
   const summaryId = active?.tagName === "SUMMARY" ? active.closest("details")?.id : null
-  const selection = active instanceof HTMLInputElement ? [active.selectionStart, active.selectionEnd] : null
+  const textField = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement
+  const selection = textField ? [active.selectionStart, active.selectionEnd] : null
   const disclosures = [...app.querySelectorAll("details[open]")].map((element) => element.id)
   const scroll = app.querySelector(".table-wrap")?.scrollLeft ?? 0
   const windowScroll = window.scrollY
   const view = buildView(snapshot, meta, controls)
   controls.page = view.page
-  document.title = deskTitle(view)
-  app.innerHTML = renderDesk(view, lookup, document.documentElement.dataset.theme)
+  document.title = deskTitle(view, tally.area, tally.operatorTab)
+  app.innerHTML = renderDesk(view, lookup, document.documentElement.dataset.theme, tally)
   for (const id of disclosures) {
     const detail = document.getElementById(id)
     if (detail instanceof HTMLDetailsElement) detail.open = true
@@ -36,8 +56,8 @@ function paint() {
     summaryId ? document.getElementById(summaryId)?.querySelector("summary") : null
   if (focus) {
     focus.focus({ preventScroll: true })
-    if (selection && focus instanceof HTMLInputElement) {
-      focus.setSelectionRange(...selection)
+    if (selection && (focus instanceof HTMLInputElement || focus instanceof HTMLTextAreaElement) && focus.type !== "radio") {
+      try { focus.setSelectionRange(...selection) } catch {}
     }
   }
   window.scrollTo({top: windowScroll, behavior: "instant"})
@@ -63,12 +83,30 @@ function mergeReceipt(target, receipt) {
   }
 }
 
+/** Contract views: the list every poll, and the open deal or case so its deadlines stay current. */
+async function refreshContracts() {
+  try {
+    tally.contracts = await loadContracts()
+    tally.contractsError = ""
+  } catch (error) {
+    tally.contractsError = `Contracts unavailable: ${error.message}`
+  }
+  // Show contracts as soon as they arrive; the marketplace collections load after them.
+  if (!tally.contractsLoaded) {
+    tally.contractsLoaded = true
+    paint()
+  }
+  if (tally.selected) await openDeal(tally.selected, false)
+  if (tally.mediation.selected) await openCase(tally.mediation.selected.id, tally.mediation.selected.milestone, false)
+}
+
 async function tick() {
   if (pollRunning) return
   pollRunning = true
   const currentVersion = lookupVersion
   const currentId = inspectedId
   try {
+    await refreshContracts()
     const next = await loadMarketplace()
     if (currentId) {
       const receipt = await loadTransaction(currentId)
@@ -106,6 +144,8 @@ async function inspect(id) {
     lastLive = next
     meta = { source: "connected", updatedAt: new Date().toISOString() }
     controls = { ...controls, tab: "transactions", selectedId: id.trim(), query: "", type: "", outcome: "", page: 0 }
+    tally.area = "operator"
+    tally.operatorTab = "transactions"
   } catch (error) {
     if (version === lookupVersion) lookup.error = error.message
   } finally {
@@ -117,19 +157,127 @@ async function inspect(id) {
   }
 }
 
+async function openDeal(id, focus = true) {
+  tally.selected = id
+  try {
+    const detail = await loadContract(id)
+    if (tally.selected !== id) return
+    tally.detail = detail
+    tally.detailError = ""
+  } catch (error) {
+    if (tally.selected === id) tally.detailError = `Deal unavailable: ${error.message}`
+  }
+  if (focus) {
+    paint()
+    document.getElementById("deal-detail")?.focus({ preventScroll: true })
+  }
+}
+
+async function openCase(id, milestone, focus = true) {
+  const mediation = tally.mediation
+  const changed = mediation.selected?.id !== id || mediation.selected?.milestone !== milestone
+  mediation.selected = { id, milestone }
+  if (changed) Object.assign(mediation, { caseFile: null, options: null, payload: null, error: "", reason: "" })
+  try {
+    const caseFile = await loadCase(id, milestone)
+    if (mediation.selected?.id !== id) return
+    mediation.caseFile = caseFile
+    mediation.caseError = ""
+    if (caseFile.canRuleNow) {
+      try { mediation.options = await loadRulingOptions(id, milestone) } catch (error) { mediation.options = { error: error.message } }
+    } else mediation.options = null
+  } catch (error) {
+    if (mediation.selected?.id === id) mediation.caseError = `Case unavailable: ${error.message}`
+  }
+  if (focus) {
+    paint()
+    document.getElementById("case-detail")?.focus({ preventScroll: true })
+  }
+}
+
+async function prepareRuling() {
+  const mediation = tally.mediation
+  if (!mediation.selected) return
+  if (!mediation.reason.trim()) {
+    mediation.error = "Write the reason first. The mediator signs it."
+    paint()
+    return
+  }
+  mediation.busy = true
+  mediation.error = ""
+  paint()
+  try {
+    mediation.payload = await loadRulingPayload(mediation.selected.id, mediation.selected.milestone, mediation.winner, mediation.reason.trim())
+  } catch (error) {
+    mediation.error = error.message
+  } finally {
+    mediation.busy = false
+    paint()
+  }
+}
+
+async function findCompanies() {
+  const companies = tally.companies
+  companies.busy = true
+  companies.error = ""
+  paint()
+  try {
+    companies.results = await searchCompanies(companies.query.trim())
+    if (!companies.results.length) companies.error = "No Tally record matches that name."
+  } catch (error) {
+    companies.error = error.message.endsWith("400") ? "Search with at least 2 characters." : error.message
+    companies.results = []
+  } finally {
+    companies.busy = false
+    paint()
+  }
+}
+
+async function openCompany(id) {
+  const companies = tally.companies
+  companies.selectedId = id
+  try {
+    companies.profile = await loadProfile(id)
+    companies.error = ""
+  } catch (error) {
+    companies.error = error.message
+  }
+  paint()
+  document.getElementById("company-detail")?.focus({ preventScroll: true })
+}
+
+function setArea(area) {
+  tally.area = area
+  const url = new URL(location.href)
+  url.searchParams.set("view", area)
+  history.replaceState(null, "", url)
+}
+
 app.addEventListener("click", (event) => {
   const button = event.target.closest("button")
   if (!button || button.disabled) return
   if (button.hasAttribute("data-theme-toggle")) {
     const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"
     document.documentElement.dataset.theme = theme
-    try { localStorage.setItem("reliability-theme", theme) } catch {}
+    try { localStorage.setItem(THEME_KEY, theme) } catch {}
     paint()
     return
   }
   if (button.hasAttribute("data-refresh")) { tick(); return }
-  if (button.hasAttribute("data-tab")) {
-    controls = { ...controls, tab: button.dataset.tab, query: "", page: 0 }
+  if (button.hasAttribute("data-area")) {
+    setArea(button.dataset.area)
+  } else if (button.hasAttribute("data-contract")) {
+    openDeal(button.dataset.contract)
+    return
+  } else if (button.hasAttribute("data-case")) {
+    openCase(button.dataset.case, Number(button.dataset.milestone))
+    return
+  } else if (button.hasAttribute("data-company")) {
+    openCompany(button.dataset.company)
+    return
+  } else if (button.hasAttribute("data-tab")) {
+    tally.operatorTab = button.dataset.tab
+    if (button.dataset.tab !== "contracts") controls = { ...controls, tab: button.dataset.tab, query: "", page: 0 }
   } else if (button.hasAttribute("data-type")) {
     controls = { ...controls, type: button.dataset.type, selectedId: undefined, page: 0 }
   } else if (button.hasAttribute("data-select-id")) {
@@ -145,23 +293,35 @@ app.addEventListener("click", (event) => {
 })
 
 app.addEventListener("input", (event) => {
-  if (event.target.id === "search") {
-    controls = { ...controls, query: event.target.value, selectedId: undefined, page: 0 }
+  const target = event.target
+  if (target.id === "search") {
+    controls = { ...controls, query: target.value, selectedId: undefined, page: 0 }
     paint()
-  } else if (event.target.id === "transaction-id") lookup.value = event.target.value
+  } else if (target.id === "transaction-id") lookup.value = target.value
+  else if (target.id === "ruling-reason") tally.mediation.reason = target.value
+  else if (target.id === "company-query") tally.companies.query = target.value
 })
 
 app.addEventListener("change", (event) => {
-  if (event.target.id === "outcome") {
-    controls = { ...controls, outcome: event.target.value, selectedId: undefined, page: 0 }
-    paint()
-  }
+  const target = event.target
+  if (target.id === "outcome") {
+    controls = { ...controls, outcome: target.value, selectedId: undefined, page: 0 }
+  } else if (target.id === "party") {
+    tally.party = target.value
+    tally.selected = ""
+    tally.detail = null
+  } else if (target.name === "winner") {
+    tally.mediation.winner = target.value
+    tally.mediation.payload = null
+  } else return
+  paint()
 })
 
 app.addEventListener("submit", (event) => {
-  if (event.target.id !== "lookup-form") return
   event.preventDefault()
-  inspect(lookup.value)
+  if (event.target.id === "lookup-form") inspect(lookup.value)
+  else if (event.target.id === "ruling-form") prepareRuling()
+  else if (event.target.id === "company-form") findCompanies()
 })
 
 async function loop() {

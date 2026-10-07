@@ -1,0 +1,116 @@
+import {describe, expect, test} from 'bun:test';
+import {buildView} from './model.js';
+import {deskTitle, renderDesk} from './render.js';
+import {
+  actionFor, dealsView, mediationQueue, partiesOf, readable, relative, signerText, stageOf, stateText, viewerRole,
+} from './tally.js';
+import {atomic, renderCompanies, renderDeals, renderMediation} from './tally-views.js';
+
+const NOW = Date.UTC(2026, 9, 7, 6, 0, 0);
+const HOUR = 3_600_000;
+const at = (ms: number) => ({ms, utc: new Date(ms).toISOString(), singapore: 'test SGT'});
+const money = (display: string) => ({atomic: '1', display});
+
+function milestone(state: string, next: {actor: string; action: string; dueAt: ReturnType<typeof at>|null}) {
+  return {
+    id: `m-${state}`, index: 0, title: `Lot <b>${state}</b>`, amount: money('4,000 test USDM'), state,
+    terminal: ['settled', 'cancelled', 'expired', 'refunded'].includes(state),
+    inDispute: state.startsWith('tier_'), tierReached: state.startsWith('tier_') ? Number(state[5]) : 0,
+    outcome: null, closedReason: null, next,
+  };
+}
+
+function contract(id: string, buyer: string, seller: string, milestones: unknown[]) {
+  return {
+    id, label: 'SIMULATED', mode: 'paper', templateId: 'physical-objective-spec', title: `<script>alert(1)</script>${id}`,
+    buyer: {id: buyer, displayName: `${buyer} Ltd`}, seller: {id: seller, displayName: `${seller} Co`},
+    total: money('4,000 test USDM'), createdAt: at(NOW), remedy: 'partial_release', milestones,
+  };
+}
+
+const CONTRACTS = [
+  contract('c1', 'kopi', 'highland', [milestone('in_inspection', {actor: 'buyer', action: 'Accept the delivery or dispute it', dueAt: at(NOW + 3 * HOUR)})]),
+  contract('c2', 'kopi', 'highland', [milestone('tier_3_mediation', {actor: 'mediator', action: 'Rule: name the winner', dueAt: at(NOW + 50 * HOUR)})]),
+  contract('c3', 'northwind', 'datacrate', [milestone('tier_1_negotiation', {actor: 'both', action: 'Sign one fixed outcome, or escalate', dueAt: at(NOW + 20 * HOUR)})]),
+  contract('c4', 'northwind', 'datacrate', [milestone('settled', {actor: 'none', action: 'Closed: ACCEPTED', dueAt: null})]),
+];
+
+function tally(extra = {}) {
+  return {
+    area: 'deals', operatorTab: 'transactions', contracts: CONTRACTS, contractsError: '', party: 'kopi', selected: '', detail: null, detailError: '',
+    mediation: {selected: null, caseFile: null, caseError: '', options: null, winner: 'buyer', reason: '', payload: null, busy: false, error: ''},
+    companies: {query: '', results: [], selectedId: '', profile: null, busy: false, error: ''},
+    ...extra,
+  };
+}
+
+describe('tally display models', () => {
+  test('stages, roles, and the next action from the viewer side', () => {
+    expect(stageOf('funded')).toEqual({step: 2, dispute: false});
+    expect(stageOf('tier_3_mediation')).toEqual({step: 3, dispute: true});
+    expect(stateText('accepted_pending_release')).toBe('Accepted, releases at unlock');
+    expect(viewerRole(CONTRACTS[0], 'kopi')).toBe('buyer');
+    expect(viewerRole(CONTRACTS[0], 'highland')).toBe('seller');
+    expect(viewerRole(CONTRACTS[0], 'someone')).toBeNull();
+    const next = {actor: 'buyer', action: 'Accept', dueAt: null};
+    expect(actionFor(next, 'buyer')).toEqual({mine: true, who: 'You', text: 'Accept'});
+    expect(actionFor(next, 'seller')).toEqual({mine: false, who: 'the buyer', text: 'Accept'});
+    expect(actionFor({actor: 'both', action: 'Agree', dueAt: null}, 'seller').mine).toBe(true);
+    expect(actionFor({actor: 'both', action: 'Agree', dueAt: null}, null).mine).toBe(false);
+  });
+
+  test('relative times and signer labels', () => {
+    expect(relative(NOW + 2 * 86_400_000 + 3 * HOUR, NOW)).toBe('in 2 d 3 h');
+    expect(relative(NOW - 5 * HOUR, NOW)).toBe('5 h ago');
+    expect(relative(NOW + 30_000, NOW)).toBe('now');
+    expect(relative(Number.NaN, NOW)).toBe('');
+    expect(signerText({signer: {namedJudge: true, whitelisted: true}})).toBe('Signed by the named judge');
+    expect(signerText({signer: null})).toBe('Unsigned');
+  });
+
+  test('deals per party, the mediation queue, and exact atomic amounts', () => {
+    expect(partiesOf(CONTRACTS).map((party) => party.id)).toEqual(['datacrate', 'highland', 'kopi', 'northwind']);
+    const kopi = dealsView(CONTRACTS, 'kopi', NOW);
+    expect(kopi.rows.map((row) => row.id)).toEqual(['c1', 'c2']);
+    expect(kopi.metrics).toEqual({open: 2, yourMove: 1, disputes: 1, settled: 0});
+    expect(kopi.dueSoon).toBe(1);
+    expect(dealsView(CONTRACTS, '', NOW).metrics.settled).toBe(1);
+    // Without a party: every milestone that waits on a party (the buyer in c1, both parties in c3).
+    expect(dealsView(CONTRACTS, '', NOW).metrics.yourMove).toBe(2);
+    expect(readable('{"verdict":"FAIL"}')).toBe('{\n  "verdict": "FAIL"\n}');
+    expect(readable('SEAL 42')).toBe('SEAL 42');
+    expect(mediationQueue(CONTRACTS).map((item) => item.contract.id)).toEqual(['c3', 'c2']);
+    expect(atomic('2275000000', 6)).toBe('2,275 test USDM');
+    expect(atomic('1', 6)).toBe('0.000001 test USDM');
+  });
+});
+
+describe('tally views render safely', () => {
+  test('my deals escape party text and mark the viewer move', () => {
+    const html = renderDeals(tally(), NOW);
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).not.toContain('<b>');
+    expect(html).toContain('Your move');
+    expect(html).toContain('SIMULATED');
+  });
+
+  test('the mediation desk lists disputes, most urgent first, and says it is a lens', () => {
+    const html = renderMediation(tally(), NOW);
+    expect(html).toContain('Mediator lens');
+    expect(html.indexOf('data-case="c3"')).toBeLessThan(html.indexOf('data-case="c2"'));
+    expect(html).toContain('Select a case');
+  });
+
+  test('companies and the desk shell use the Tally brand', () => {
+    expect(renderCompanies(tally())).toContain('Try “kopi”');
+    const view = buildView({}, {source: 'connected'}, {});
+    for (const area of ['deals', 'mediation', 'companies', 'operator']) {
+      const html = renderDesk(view, {}, 'light', tally({area}));
+      expect(html).toContain('aria-label="Tally home"');
+      expect(html).not.toContain('Reliability home');
+    }
+    expect(deskTitle(view, 'mediation')).toBe('Mediation desk · Tally');
+    expect(deskTitle(view, 'operator', 'contracts')).toBe('Contracts · Tally');
+  });
+});

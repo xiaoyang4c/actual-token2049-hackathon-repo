@@ -1,7 +1,25 @@
-# Reliability operator
+# Tally UI
 
-This local display shows the transaction reliability marketplace.
-It does not edit policy, accept offers, send orders, or change KYC.
+This read-only display shows Tally: escrowed deals, disputes, company records, and the marketplace.
+It does not edit policy, accept offers, send orders, sign, or change KYC.
+
+The hosted demo is <https://13-210-42-0.sslip.io>. It shows paper data only.
+
+## Areas
+
+| Area | For | Shows |
+| --- | --- | --- |
+| My deals | Buyers and sellers | Contracts and milestones, the stage of each, who acts next and by when, escrows, deadlines, history |
+| Mediation desk | The platform mediator | Disputes by urgency, the case file with signer status, what each ruling pays, and the bytes to sign |
+| Companies | Anyone checking a counterparty | Scores, terms decisions, and deal history, live and simulated apart |
+| Operator | The platform team | The marketplace ledger, participants, listings, and every contract |
+
+"Viewing as" in My deals is a lens, not sign-in. Anyone can choose any party.
+Before real data, add sign-in and show each party only its own deals. Keep the Mediation desk private.
+
+Every amount, deadline, payout, and score comes from the control API, which takes them from the contract engine.
+The UI formats them. It does not calculate them.
+Open an area directly with `/?view=deals`, `/?view=mediation`, `/?view=companies`, or `/?view=operator`.
 
 Start the services first. Then start the UI.
 

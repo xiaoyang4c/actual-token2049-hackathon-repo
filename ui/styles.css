@@ -1,31 +1,33 @@
 :root {
   color-scheme: light;
   --page: #ffffff;
-  --surface: #f6f8f7;
-  --text: #1d3029;
-  --muted: #637169;
-  --line: #e5eae7;
-  --accent: #17654c;
-  --selected: #eaf3ee;
-  --warning: #8d6510;
+  --surface: #f8f6f1;
+  --text: #14213d;
+  --muted: #5b6474;
+  --line: #e7e3da;
+  --accent: #14213d;
+  --selected: #fbf3e2;
+  --warning: #8a5a00;
   --danger: #a13e39;
   --on-accent: #ffffff;
-  --selection: #cce7d9;
-  --secondary: #55615a;
-  --placeholder: #718078;
-  --input-line: #d8dfdb;
-  --notice-line: #f1dc9e;
-  --notice: #fff6da;
+  --selection: #fbe3b8;
+  --secondary: #4a5466;
+  --placeholder: #7a8291;
+  --input-line: #d9d4c8;
+  --notice-line: #f2d9a6;
+  --notice: #fff7e6;
   --connection-notice: #fff2e9;
   --connection-line: #eed6c5;
-  --table-header: #fafcfb;
-  --badge: #f0f3f1;
+  --table-header: #fbfaf7;
+  --badge: #f1eee6;
   --danger-surface: #f9e7e4;
-  --timeline-line: #b3d4c0;
-  --accent-hover: #12543e;
+  --timeline-line: #e9c88a;
+  --accent-hover: #22335c;
   --success: #238653;
-  --pending: #b9861c;
-  --neutral: #87958c;
+  --pending: #c27c0e;
+  --neutral: #8a909c;
+  --amber: #f2a541;
+  --mine: #fff1d6;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
@@ -36,32 +38,34 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #111b16;
-  --surface: #19261f;
-  --text: #e3eee7;
-  --muted: #a4b7aa;
-  --line: #304238;
-  --accent: #83cda7;
-  --on-accent: #10251a;
-  --accent-hover: #a1dfbf;
-  --selected: #233c2f;
-  --warning: #e7c275;
+  --page: #0f1626;
+  --surface: #162036;
+  --text: #e8ebf2;
+  --muted: #a3acbf;
+  --line: #263252;
+  --accent: #f2a541;
+  --on-accent: #14213d;
+  --accent-hover: #f6bd6e;
+  --selected: #1f2b47;
+  --warning: #f2c46d;
   --danger: #f19b91;
-  --selection: #355c45;
-  --secondary: #b2c5b9;
-  --placeholder: #9eb2a5;
-  --input-line: #455d4e;
-  --notice-line: #68572d;
-  --notice: #302b1c;
+  --selection: #4a3a1c;
+  --secondary: #b9c1d3;
+  --placeholder: #8f99ad;
+  --input-line: #34426a;
+  --notice-line: #6b5426;
+  --notice: #2a2416;
   --connection-notice: #35271e;
   --connection-line: #6a4835;
-  --table-header: #19261f;
-  --badge: #293a30;
+  --table-header: #162036;
+  --badge: #222e4a;
   --danger-surface: #462925;
-  --timeline-line: #42694f;
+  --timeline-line: #6b5426;
   --success: #74c696;
-  --pending: #e7bd67;
-  --neutral: #9dafa2;
+  --pending: #f2c46d;
+  --neutral: #9aa3b5;
+  --amber: #f2a541;
+  --mine: #3a2e14;
 }
 
 * { box-sizing: border-box; }
@@ -87,8 +91,8 @@ small { display: block; font-size: 12px; color: var(--muted); line-height: 1.5; 
 .loading { padding: 48px 40px; color: var(--muted); }
 
 .app-header { height: 60px; padding: 0 40px; display: flex; align-items: center; gap: 48px; border-bottom: 1px solid var(--line); }
-.brand { display: inline-flex; gap: 20px; align-items: center; text-decoration: none; font-size: 19px; font-weight: 650; }
-.brand-mark { width: 33px; height: 33px; display: grid; place-items: center; border: 2px solid var(--accent); border-radius: 3px; font-size: 24px; line-height: 1; font-weight: 600; }
+.brand { display: inline-flex; gap: 10px; align-items: center; text-decoration: none; font-size: 19px; font-weight: 650; }
+.brand-svg { width: 46px; height: 30px; color: var(--text); }
 nav { display: flex; align-self: stretch; gap: 30px; }
 nav button { border: 0; border-bottom: 3px solid transparent; background: none; padding: 0 6px; font-weight: 500; }
 nav button[aria-current] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 650; }
@@ -221,6 +225,62 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
 #lookup-message { margin-top: 8px; margin-bottom: 0; }
 .app-footer { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; padding-top: 14px; }
 
+/* Tally views */
+.subnav { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; width: fit-content; margin-bottom: 8px; }
+.subnav button { border: 0; border-right: 1px solid var(--line); background: var(--surface); padding: 8px 16px; font-size: 13px; }
+.subnav button:last-child { border-right: 0; }
+.subnav button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.subnav-note { color: var(--secondary); margin-bottom: 14px; }
+.deal-list { display: flex; flex-direction: column; }
+.deal-card { border-top: 1px solid var(--line); padding: 14px 18px; }
+.deal-card:first-child { border-top: 0; }
+.toolbar + .deal-card { border-top: 1px solid var(--line); }
+.deal-selected { background: var(--selected); box-shadow: inset 3px 0 0 var(--amber); }
+.deal-open { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; }
+.deal-open:hover strong { color: var(--accent); text-decoration: underline; }
+.deal-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.deal-head strong { font-size: 15px; }
+.deal-milestone { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 8px; }
+.deal-milestone small { display: inline; }
+.next-action { font-size: 13px; color: var(--secondary); margin: 0; flex-basis: 100%; }
+.next-mine { background: var(--mine); border-left: 3px solid var(--amber); padding: 6px 10px; border-radius: 4px; color: var(--text); }
+.next-done { color: var(--muted); }
+.due { color: var(--muted); white-space: nowrap; }
+.party-picker { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; flex: 1; }
+.party-picker select { flex: 1; min-width: 0; }
+.steps { list-style: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; padding: 0; margin: 10px 0 12px; }
+.step { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; }
+.step > span { height: 5px; border-radius: 3px; background: var(--line); }
+.step-done > span { background: var(--accent); }
+.step-current { color: var(--text); font-weight: 650; }
+.step-current > span { background: var(--amber); }
+.step-dispute { color: var(--danger); font-weight: 650; }
+.step-dispute > span { background: var(--danger); }
+.detail-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.detail-top h2 { font-size: 20px; }
+.detail-section { border-top: 1px solid var(--line); padding: 14px 0; margin-top: 12px; }
+.mini-table { width: 100%; margin-top: 6px; }
+.mini-table th, .mini-table td { padding: 6px 8px; font-size: 12px; vertical-align: top; }
+.mini-table th:first-child, .mini-table td:first-child { padding-left: 0; }
+.mini-table small { display: block; }
+.options-table th[scope="row"] { color: var(--secondary); font-weight: 600; background: none; }
+.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.history { list-style: none; padding: 0; margin: 8px 0 0; font-size: 12px; }
+.history li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.history small { display: inline; }
+.evidence-list { list-style: none; padding: 0; margin: 0; }
+.evidence-list > li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.untrusted-label { font-size: 11px; color: var(--warning); margin-top: 6px; }
+.ruling-form { display: grid; gap: 10px; margin-top: 8px; }
+.ruling-form fieldset { border: 0; padding: 0; margin: 0; display: flex; gap: 18px; }
+.ruling-form legend { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.ruling-form label { font-size: 13px; }
+textarea { font: inherit; font-size: 13px; color: var(--text); background: var(--page); border: 1px solid var(--input-line); border-radius: 6px; padding: 8px 10px; width: 100%; resize: vertical; }
+.payload { margin-top: 14px; border: 1px solid var(--notice-line); background: var(--notice); padding: 12px; border-radius: 6px; }
+.status-successful .status-dot { background: var(--success); }
+.status-pending .status-dot { background: var(--pending); }
+#company-form { padding: 16px 18px; }
+
 @media (max-width: 1250px) {
   .app-header { gap: 30px; padding: 0 28px; }
   .main-shell { padding-left: 28px; padding-right: 28px; }
@@ -237,7 +297,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
 @media (max-width: 640px) {
   .app-header { height: auto; padding: 16px 16px 0; gap: 12px; flex-wrap: wrap; }
   .brand { font-size: 17px; gap: 10px; }
-  .brand-mark { width: 29px; height: 29px; font-size: 21px; }
+  .brand-svg { width: 40px; height: 26px; }
   .header-status { font-size: 11px; gap: 4px; }
   nav { order: 3; flex: 1 0 100%; gap: 14px; height: 46px; }
   nav button { padding: 0 8px; font-size: 13px; }
@@ -273,6 +333,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
   .lookup-section form > div { flex-wrap: wrap; }
   .lookup-section input { flex-basis: 100%; }
   .app-footer { flex-direction: column; gap: 4px; }
+  .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .deal-card { padding: 12px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   button { transition: background-color 120ms ease, color 120ms ease; }

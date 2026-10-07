@@ -20,6 +20,9 @@ const FILES: Record<string, string> = {
   "/fixture.js": "fixture.js",
   "/data.js": "data.js",
   "/audit.js": "audit.js",
+  "/tally.js": "tally.js",
+  "/tally-views.js": "tally-views.js",
+  "/favicon.svg": "favicon.svg",
 }
 
 const PROXY_PATHS = new Set([
@@ -27,6 +30,10 @@ const PROXY_PATHS = new Set([
   "/reliability/entities", "/reliability/scores", "/reliability/listings",
   "/reliability/transactions", "/reliability/receipts", "/reliability/lifecycle",
   "/reliability/kyc", "/reliability/kyc/fixtures",
+  // Tally contract views. All GET, all read-only.
+  "/reliability/contracts", "/reliability/contracts/list", "/reliability/contracts/templates",
+  "/reliability/contracts/case", "/reliability/contracts/ruling-options", "/reliability/contracts/ruling-payload",
+  "/reliability/profile", "/reliability/profile/search",
 ])
 
 const fileUrl = (name: string) => new URL(name, import.meta.url)

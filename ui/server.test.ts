@@ -46,7 +46,7 @@ describe("operator ui server", () => {
       const css = await fetch(`${origin}/styles.css`)
       expect(css.status).toBe(200)
 
-      for (const name of ["app.js", "model.js", "render.js", "format.js", "fixture.js", "data.js", "audit.js"]) {
+      for (const name of ["app.js", "model.js", "render.js", "format.js", "fixture.js", "data.js", "audit.js", "tally.js", "tally-views.js"]) {
         const module = await fetch(`${origin}/${name}`)
         expect(module.status).toBe(200)
         expect(module.headers.get("content-type")).toContain("javascript")
@@ -71,7 +71,12 @@ describe("operator ui server", () => {
         expect(await head.text()).toBe("")
       }
 
-      for (const name of ["entities", "scores", "listings", "transactions", "receipts", "lifecycle", "kyc", "kyc/fixtures"]) {
+      const favicon = await fetch(`${origin}/favicon.svg`)
+      expect(favicon.headers.get("content-type")).toContain("svg")
+
+      for (const name of ["entities", "scores", "listings", "transactions", "receipts", "lifecycle", "kyc", "kyc/fixtures",
+        "contracts", "contracts/list", "contracts/templates", "contracts/case", "contracts/ruling-options", "contracts/ruling-payload",
+        "profile", "profile/search"]) {
         const path = `/reliability/${name}`
         const query = new URLSearchParams({transactionId: "a/b & c", entityId: "entity-new", now: "2026-10-06T12:00:00Z"})
         const read = await fetch(`${origin}${path}?${query}`)
@@ -81,7 +86,8 @@ describe("operator ui server", () => {
         expect(await head.text()).toBe("")
       }
 
-      for (const path of ["/reliability/lifecycle/open", "/reliability/lifecycle/transition", "/reliability/kyc/checks"]) {
+      for (const path of ["/reliability/lifecycle/open", "/reliability/lifecycle/transition", "/reliability/kyc/checks",
+        "/reliability/contracts/action", "/reliability/contracts/ruling", "/reliability/contracts/sign", "/reliability/contracts/tick"]) {
         expect((await fetch(`${origin}${path}`, {method: "POST", body: "{}"})).status).toBe(405)
         expect((await fetch(`${origin}${path}`)).status).toBe(404)
       }

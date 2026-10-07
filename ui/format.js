@@ -1,5 +1,11 @@
 // Display formatting. Missing numbers and currencies stay missing.
 
+export function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character])
+}
+
 export function finite(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null
 }
