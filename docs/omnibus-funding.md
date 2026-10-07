@@ -19,10 +19,9 @@ One business cannot spend another business's credit.
 
 `PaperOmnibusFunding` uses the shared `AgentStore` connection.
 Migration `013_paper_omnibus_funding.sql` adds pools, deposits, and allocations.
-Migration `012` is allocated to the contract lifecycle in pull request #17.
-The funding scaffold is on main.
-The contract lifecycle remains in that open pull request.
+Migration `012` holds the contract lifecycle tables.
 The migration runner applies missing versions, including a lower version added later.
+A database that already has `013` gets `012` the next time the store opens.
 The existing escrow adapter and lifecycle routes keep their current behavior.
 There is no funding HTTP route.
 
