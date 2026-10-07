@@ -63,7 +63,7 @@ B2C evidence must establish delivery or service acceptance under the agreed term
 Use the natural logarithm for the value weight.
 
 $$
-w_j=\ln\!\left(1+\frac{v_j}{v_0}\right).
+w_j=\ln\left(1+\frac{v_j}{v_0}\right).
 $$
 
 The ratio inside the logarithm is dimensionless.
@@ -76,7 +76,7 @@ The proposed decay curve is:
 $$
 D_\lambda(n)=\frac{1}{1+\lambda n},
 \qquad
-W_j=a_j\,w_j\,D_\lambda(n_j).
+W_j=a_j\cdot w_j\cdot D_\lambda(n_j).
 $$
 
 The first eligible transaction has $n_j=0$ and no pair reduction.
@@ -133,14 +133,14 @@ The display mean and variance are:
 $$
 r=\frac{\alpha}{\alpha+\beta},
 \qquad
-\operatorname{Var}(\theta)=
+\mathrm{Var}(\theta)=
 \frac{\alpha\beta}{(\alpha+\beta)^2(\alpha+\beta+1)}.
 $$
 
 Policy decisions use the fifth percentile of the Beta distribution.
 
 $$
-L=F^{-1}_{\operatorname{Beta}(\alpha,\beta)}(0.05),
+L=F^{-1}_{\mathrm{Beta}(\alpha,\beta)}(0.05),
 \qquad
 \Pr(\theta\ge L\mid\mathcal H)=0.95.
 $$
@@ -184,7 +184,7 @@ Use the applicable category for each bound.
 Take both score snapshots before agreeing on the transaction terms.
 Do not price an agreement from the success event it later creates.
 
-A proposed fee curve for side $x\in\{b,s\}$ is:
+A proposed fee curve for side $x\in\lbrace b,s\rbrace$ is:
 
 $$
 f_x(L_x)=f_{x,\min}+
@@ -201,17 +201,17 @@ Its buyer and seller fields do not establish both participants' charged fees.
 For agreed principal $P$:
 
 $$
-\operatorname{Fee}_b=P\frac{f_b(L_b)}{10{,}000},
+\mathrm{Fee}_b=P\frac{f_b(L_b)}{10{,}000},
 \qquad
-\operatorname{Fee}_s=P\frac{f_s(L_s)}{10{,}000}.
+\mathrm{Fee}_s=P\frac{f_s(L_s)}{10{,}000}.
 $$
 
 If the buyer pays its fee in addition to principal, and the seller fee is deducted:
 
 $$
-\operatorname{BuyerTotal}=P+\operatorname{Fee}_b,
+\mathrm{BuyerTotal}=P+\mathrm{Fee}_b,
 \qquad
-\operatorname{SellerNet}=P-\operatorname{Fee}_s.
+\mathrm{SellerNet}=P-\mathrm{Fee}_s.
 $$
 
 This collection convention is a proposal.
@@ -230,7 +230,7 @@ d(L)=d_{\max}(1-L),\qquad p(L)=k(1-L),
 $$
 
 $$
-u(L)=\max\!\left(u_{\min},u_0(1-L)\right),
+u(L)=\max(u_{\min},u_0(1-L)),
 $$
 
 $$
@@ -247,7 +247,7 @@ The policy must specify rounding and which role controls each term.
 A proposed exposure limit is:
 
 $$
-E(L)=\min\!\left(E_{\max}L^\gamma,E_{\mathrm{KYC}}\right),
+E(L)=\min(E_{\max}L^\gamma,E_{\mathrm{KYC}}),
 \qquad\gamma>0.
 $$
 
