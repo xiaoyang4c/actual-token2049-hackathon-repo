@@ -38,6 +38,7 @@ Set these server variables. Use absolute paths for each file or directory.
 The workflow can also read `BLOCKFROST_API_KEY_PREPROD` from the server environment.
 Keep all keys on the server. Do not put keys in `VITE_*` variables.
 Use an existing CRE login or set `CRE_API_KEY` for non-interactive authentication.
+API key authentication requires [Chainlink deploy access approval](https://docs.chain.link/cre/reference/cli/authentication#api-key-authentication).
 
 Run `bun run evidence:server`. It binds to `127.0.0.1`.
 Run `bun run services` for the paper marketplace reads.
@@ -45,11 +46,20 @@ Run `bun run dev` from `web`. Open `http://localhost:5190/evidence`.
 
 ## Hosted demo
 
-The EC2 release is staged. Activation waits for CRE authentication.
-After activation, the checker uses `https://13-210-42-0.sslip.io/evidence`.
+The checker is active at [Tally evidence checker](https://13-210-42-0.sslip.io/evidence).
+The hosted browser checks passed on 2026-10-07.
+They covered the receipt, wrong amount, missing transaction, report download, and desktop and mobile layouts.
+
 The Caddy config exposes only the two evidence GET routes and the static UI files.
 The CRE service stays on loopback. Masumi and PostgreSQL stay private.
 The new service does not restart the payment workers or replace the control API.
+The service uses `/home/ubuntu/tally-chainlink/current` for its release.
+
+Caddy reads public assets from `/srv/tally/chainlink-evidence/current`.
+That directory contains only `web/dist`, `ui/render.js`, and `ui/styles.css`.
+Give Caddy read access to those files and traverse access to their directories.
+
+Keep the CRE login in `/home/ubuntu/.cre` with directory mode `700` and file mode `600`.
 Its optional environment file is `/home/ubuntu/tally-secrets/chainlink-evidence.env`.
 Use [the example file](../deploy/preprod/chainlink-evidence.env.example) for server-only API key settings.
 Protect the real file with mode `600`.

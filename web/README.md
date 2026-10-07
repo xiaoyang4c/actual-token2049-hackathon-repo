@@ -4,6 +4,8 @@ A front end for Tally: deals, contracts, the mediation desk, company records, th
 Coworker, the Coworkers and the operator ledger. It reads the control API and never signs, funds or
 submits a contract action. Ask a Coworker gives a free preview that pays and stores nothing.
 The evidence checker accepts payment details through a GET read.
+The hosted checker is at [Tally evidence checker](https://13-210-42-0.sslip.io/evidence).
+Read [Payment evidence](../docs/chainlink-evidence.md) for local setup and deployment limits.
 
 ## Run
 

@@ -24,12 +24,12 @@
 		path /evidence /evidence/
 	}
 	handle @evidencePage {
-		root * /home/ubuntu/tally-chainlink/current/web/dist
+		root * /srv/tally/chainlink-evidence/current/web/dist
 		rewrite * /evidence-standalone.html
 		file_server
 	}
 	handle /assets/* {
-		root * /home/ubuntu/tally-chainlink/current/web/dist
+		root * /srv/tally/chainlink-evidence/current/web/dist
 		file_server
 	}
 	# Add the checker link without restarting the existing backend services.
@@ -38,7 +38,7 @@
 		path /render.js /styles.css
 	}
 	handle @evidenceNav {
-		root * /home/ubuntu/tally-chainlink/current/ui
+		root * /srv/tally/chainlink-evidence/current/ui
 		file_server
 	}
 	handle {

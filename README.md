@@ -34,7 +34,7 @@ The demo is read-only. Its contracts are paper contracts, labelled SIMULATED.
 | Coworkers | Registered on the Masumi registry and approved in the TOKEN2049 workspace. The Task worker runs on the server. Paid Tasks complete with Masumi escrow on preprod, and the first collection is confirmed |
 | Settlement anchors | Built. Fingerprints of settled records, chained per company, for Cardano preprod. Posting waits for the team's go-ahead. Read [Settlement anchors](docs/settlement-anchors.md) |
 | Tally UI | Hosted publicly with six showcase contracts and Ask a Coworker (a free preview) |
-| Chainlink payment evidence | Built and tested through the UI. Read-only CRE simulation. No DON signature. EC2 activation waits for CRE authentication |
+| Chainlink payment evidence | Running at [the evidence checker](https://13-210-42-0.sslip.io/evidence). Read-only CRE simulation with live preprod data. No DON signature |
 | Scoring, pair decay, fees | Stubs. Read [Implementation status](docs/implementation-status.md) |
 | KYC | Mock provider |
 | Sign-in | Not built. Role views in the UI are lenses, not access control |
